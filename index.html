@@ -2264,6 +2264,16 @@
         const li = findTaskLi(lastTask.id);
         const dateBtn = li && li.querySelector('.date-btn');
         if (dateBtn) dateBtn.click(); // 날짜 지정 안 되는 보드(waiting)면 dateBtn 자체가 없어서 자연히 무시됨
+        return;
+      }
+      if (e.shiftKey && (e.key === 'e' || e.key === 'E')) {
+        e.preventDefault(); // 안 막으면 입력창에 대문자 E가 그대로 찍힘
+        const list = boards[boardId];
+        if (list.length === 0) return; // 그 보드에 할일이 하나도 없으면 무시
+        const lastTask = list[list.length - 1];
+        const li = findTaskLi(lastTask.id);
+        const urgentBtn = li && li.querySelector('.urgent-btn');
+        if (urgentBtn) urgentBtn.click(); // 방금 등록한 할일의 긴급 표시를 토글
       }
     });
   });
