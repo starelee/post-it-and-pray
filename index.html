@@ -1175,6 +1175,15 @@
     return document.querySelector('[data-tasklist="' + boardId + '"]');
   }
 
+  // Locates a task's <li> by id regardless of which board's list it's
+  // currently rendered under — a due-today/overdue scheduled task is
+  // rendered into today's list, not scheduled's, so looking it up via
+  // getListEl(its owning board) misses the element that's actually on
+  // screen.
+  function findTaskLi(id) {
+    return document.querySelector('.task-item[data-id="' + id + '"]');
+  }
+
   document.querySelectorAll('[data-collapse-toggle]').forEach(toggle => {
     const body = toggle.nextElementSibling;
     const arrow = toggle.querySelector('[data-toggle-arrow]');
@@ -1246,9 +1255,9 @@
 
     const today = todayStr();
     const tasks = boards.scheduled.slice().sort(byDueDate);
-    // Overdue, unchecked tasks only show under today's "oops, still here" —
-    // no need to also list them here.
-    const active = tasks.filter(t => !t.done && t.dueDate >= today);
+    // Unchecked tasks due today or earlier already show under today's list
+    // (as a normal item or under "oops, still here") — don't duplicate them.
+    const active = tasks.filter(t => !t.done && t.dueDate > today);
     const done = tasks.filter(t => t.done);
 
     if (active.length === 0 && done.length === 0) {
@@ -1470,7 +1479,7 @@
   }
 
   function openAddSubtaskRow(boardId, taskId, open) {
-    const li = getListEl(boardId).querySelector('[data-id="' + taskId + '"]');
+    const li = findTaskLi(taskId);
     if (!li) return;
     const toggle = li.querySelector('.add-subtask-toggle');
     const row = li.querySelector('.add-subtask-row');
@@ -1513,7 +1522,7 @@
 
   function startEditTask(boardId, id) {
     const task = boards[boardId].find(t => t.id === id);
-    const li = getListEl(boardId).querySelector('[data-id="' + id + '"]');
+    const li = findTaskLi(id);
     if (!task || !li) return;
     const textEl = li.querySelector('.task-text');
     if (!textEl) return;
@@ -1550,11 +1559,16 @@
     if (!task) return;
     task.done = !task.done;
 
-    const li = getListEl(boardId).querySelector('[data-id="' + id + '"]');
+    const li = findTaskLi(id);
     if (li) li.classList.toggle('done', task.done);
 
     saveBoards();
-    setTimeout(() => render(boardId), REORDER_DELAY);
+    setTimeout(() => {
+      render(boardId);
+      // A scheduled task due today/overdue is displayed inside today's
+      // list, not scheduled's — refresh both so it lands in the right one.
+      if (boardId === 'scheduled') render('today');
+    }, REORDER_DELAY);
   }
 
   function deleteTask(boardId, id) {
@@ -1631,7 +1645,8 @@
   function startEditSubtask(boardId, taskId, subId) {
     const task = boards[boardId].find(t => t.id === taskId);
     const sub = task && task.subtasks.find(s => s.id === subId);
-    const subLi = getListEl(boardId).querySelector('[data-id="' + taskId + '"] .subtask-list [data-id="' + subId + '"]');
+    const taskLi = findTaskLi(taskId);
+    const subLi = taskLi && taskLi.querySelector('.subtask-list [data-id="' + subId + '"]');
     if (!sub || !subLi) return;
     const chipEl = subLi.querySelector('.subtask-chip');
     if (!chipEl) return;
@@ -1671,7 +1686,8 @@
     if (!sub) return;
     sub.done = !sub.done;
 
-    const subLi = getListEl(boardId).querySelector('[data-id="' + taskId + '"] .subtask-list [data-id="' + subId + '"]');
+    const taskLi = findTaskLi(taskId);
+    const subLi = taskLi && taskLi.querySelector('.subtask-list [data-id="' + subId + '"]');
     if (subLi) subLi.classList.toggle('done', sub.done);
 
     saveBoards();
