@@ -588,6 +588,116 @@
     user-select: none;
   }
 
+  .divider-oops {
+    font-family: 'NostalgicMyoeunHeullim', 'Gaegu', cursive, sans-serif;
+    color: var(--urgent);
+    letter-spacing: 0.5px;
+    opacity: 0.85;
+  }
+
+  .date-btn {
+    flex: 0 0 auto;
+    background: none;
+    border: none;
+    font-size: 14px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 2px 3px;
+    opacity: 0.6;
+    transition: opacity 0.15s ease, transform 0.15s ease;
+  }
+
+  .date-btn:hover {
+    opacity: 1;
+    transform: scale(1.15);
+  }
+
+  .due-badge {
+    flex: 0 0 auto;
+    font-family: 'Gaegu', cursive, sans-serif;
+    font-size: 12px;
+    color: var(--ink-soft);
+    background: var(--tape-edge);
+    border-radius: 10px;
+    padding: 1px 7px;
+    white-space: nowrap;
+  }
+
+  .date-picker-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 0 0 28px;
+  }
+
+  .date-picker-row[hidden] {
+    display: none;
+  }
+
+  .date-picker-input {
+    font-family: 'Gaegu', cursive, sans-serif;
+    font-size: 13px;
+    color: var(--ink);
+    background: transparent;
+    border: 1px solid var(--input-line);
+    border-radius: 4px;
+    padding: 1px 4px;
+  }
+
+  .date-clear-btn {
+    background: none;
+    border: none;
+    font-family: 'Gaegu', cursive, sans-serif;
+    font-size: 12px;
+    color: var(--ink-soft);
+    cursor: pointer;
+    padding: 1px 2px;
+    opacity: 0.75;
+  }
+
+  .date-clear-btn[hidden] {
+    display: none;
+  }
+
+  .date-clear-btn:hover {
+    opacity: 1;
+    color: var(--accent);
+  }
+
+  .sticky-title-toggle {
+    display: flex;
+    align-items: baseline;
+    width: 100%;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0;
+    text-align: left;
+    color: var(--ink);
+  }
+
+  .toggle-arrow {
+    margin-left: auto;
+    font-size: 14px;
+    color: var(--ink-soft);
+  }
+
+  .collapsible-body[hidden] {
+    display: none;
+  }
+
+  .section-label {
+    font-family: 'NostalgicMyoeunHeullim', 'Gaegu', cursive, sans-serif;
+    font-size: 13px;
+    color: var(--ink-soft);
+    letter-spacing: 0.5px;
+    margin: 4px 0 2px;
+  }
+
+  .section-label:first-child {
+    margin-top: 0;
+  }
+
   .empty-hint {
     color: var(--ink-soft);
     font-family: 'NostalgicMyoeunHeullim', 'Gaegu', cursive, sans-serif;
@@ -666,7 +776,7 @@
         <div class="tape"></div>
         <h2 class="sticky-title">today's list <span class="flower">✿</span></h2>
 
-        <ul class="task-list" data-tasklist></ul>
+        <ul class="task-list" data-tasklist="today"></ul>
 
         <div class="add-row">
           <span class="plus">+</span>
@@ -685,7 +795,7 @@
           <div class="tape"></div>
           <h2 class="sticky-title">waiting... <span class="flower">⏳</span></h2>
 
-          <ul class="task-list" data-tasklist></ul>
+          <ul class="task-list" data-tasklist="waiting"></ul>
 
           <div class="add-row">
             <span class="plus">+</span>
@@ -701,19 +811,28 @@
 
         <div class="sticky" data-board="someday" style="--rot: -0.8deg; --paper: var(--paper-someday);">
           <div class="tape"></div>
-          <h2 class="sticky-title">someday... <span class="flower">🌙</span></h2>
+          <button class="sticky-title sticky-title-toggle" type="button" data-collapse-toggle>
+            someday... <span class="flower">🌙</span>
+            <span class="toggle-arrow" data-toggle-arrow>▸</span>
+          </button>
 
-          <ul class="task-list" data-tasklist></ul>
+          <div class="collapsible-body" data-collapse-body hidden>
+            <div class="section-label">📅 scheduled</div>
+            <ul class="task-list" data-tasklist="scheduled"></ul>
 
-          <div class="add-row">
-            <span class="plus">+</span>
-            <input
-              class="new-task-input"
-              data-newtask
-              placeholder="언젠가는..."
-              autocomplete="off"
-              maxlength="60"
-            />
+            <div class="section-label">🌙 someday</div>
+            <ul class="task-list" data-tasklist="someday"></ul>
+
+            <div class="add-row">
+              <span class="plus">+</span>
+              <input
+                class="new-task-input"
+                data-newtask
+                placeholder="언젠가는..."
+                autocomplete="off"
+                maxlength="60"
+              />
+            </div>
           </div>
         </div>
       </div>
@@ -729,17 +848,41 @@
   const SUPABASE_URL = 'https://ytnlgabrbrddfpjzzrrn.supabase.co';
   const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl0bmxnYWJyYnJkZGZwanp6cnJuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk1MzY1NzEsImV4cCI6MjEwNTExMjU3MX0.3H3oSigr6E649McUa8HFf9JYDbM1qIdZQGlJw6-WGro';
   const REORDER_DELAY = 300;
-  const BOARD_IDS = ['today', 'waiting', 'someday'];
+  const BOARD_IDS = ['today', 'waiting', 'someday', 'scheduled'];
+  // Boards a task can be manually moved between with the move buttons.
+  const MOVE_TARGET_IDS = ['today', 'waiting', 'someday'];
+  // Boards that support a due date (calendar icon). Assigning a date moves
+  // the task into `scheduled`; `waiting` never gets a date.
+  const DATE_ENABLED_IDS = ['today', 'someday'];
   const EMPTY_HINTS = {
     today: '오늘은 뭘 해볼까?',
     waiting: '기다리는 거 없음',
-    someday: '언젠가 해볼까'
+    someday: '언젠가 해볼까',
+    scheduled: '예정된 일 없음'
   };
   const BOARD_META = {
     today: { emoji: '✿', label: "today's list" },
     waiting: { emoji: '⏳', label: 'waiting...' },
-    someday: { emoji: '🌙', label: 'someday...' }
+    someday: { emoji: '🌙', label: 'someday...' },
+    scheduled: { emoji: '📅', label: 'scheduled...' }
   };
+
+  function todayStr() {
+    const d = new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return y + '-' + m + '-' + day;
+  }
+
+  function formatDueDate(dateStr) {
+    try {
+      const d = new Date(dateStr + 'T00:00:00');
+      return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    } catch (e) {
+      return dateStr;
+    }
+  }
 
   const dateEl = document.getElementById('dateText');
   const counterEl = document.getElementById('taskCounter');
@@ -760,7 +903,10 @@
   setDate();
 
   function updateCounter() {
-    const tasks = boards.today;
+    const today = todayStr();
+    const tasks = boards.today.concat(
+      boards.scheduled.filter(t => t.dueDate <= today)
+    );
     let done = 0;
     let praying = 0;
     tasks.forEach(task => {
@@ -798,15 +944,20 @@
   }
 
   function normalizeTasks(list) {
-    return list.map(t => ({
-      id: t.id,
-      text: t.text,
-      done: !!t.done,
-      urgent: !!t.urgent,
-      subtasks: Array.isArray(t.subtasks)
-        ? t.subtasks.map(s => ({ id: s.id, text: s.text, done: !!s.done }))
-        : []
-    }));
+    return list.map(t => {
+      const out = {
+        id: t.id,
+        text: t.text,
+        done: !!t.done,
+        urgent: !!t.urgent,
+        subtasks: Array.isArray(t.subtasks)
+          ? t.subtasks.map(s => ({ id: s.id, text: s.text, done: !!s.done }))
+          : []
+      };
+      if (typeof t.dueDate === 'string' && t.dueDate) out.dueDate = t.dueDate;
+      if (typeof t.from === 'string' && t.from) out.from = t.from;
+      return out;
+    });
   }
 
   function normalizeBoards(data) {
@@ -935,8 +1086,19 @@
   let boards = normalizeBoards(loadBoards());
 
   function getListEl(boardId) {
-    return document.querySelector('.sticky[data-board="' + boardId + '"] [data-tasklist]');
+    return document.querySelector('[data-tasklist="' + boardId + '"]');
   }
+
+  document.querySelectorAll('[data-collapse-toggle]').forEach(toggle => {
+    const body = toggle.parentElement.querySelector('[data-collapse-body]');
+    const arrow = toggle.querySelector('[data-toggle-arrow]');
+    if (!body) return;
+    toggle.addEventListener('click', () => {
+      const open = body.hidden;
+      body.hidden = !open;
+      if (arrow) arrow.textContent = open ? '▾' : '▸';
+    });
+  });
 
   function makeCheckSvg(iconClass) {
     const ns = 'http://www.w3.org/2000/svg';
@@ -955,7 +1117,14 @@
     updateCounter();
   }
 
+  function byDueDate(a, b) {
+    return (a.dueDate || '').localeCompare(b.dueDate || '');
+  }
+
   function render(boardId) {
+    if (boardId === 'today') return renderToday();
+    if (boardId === 'scheduled') return renderScheduled();
+
     const listEl = getListEl(boardId);
     if (!listEl) return;
     listEl.innerHTML = '';
@@ -979,6 +1148,75 @@
       divider.textContent = '─────────';
       listEl.appendChild(divider);
       done.forEach(t => listEl.appendChild(renderItem(boardId, t)));
+    }
+
+    updateCounter();
+  }
+
+  function renderScheduled() {
+    const listEl = getListEl('scheduled');
+    if (!listEl) return;
+    listEl.innerHTML = '';
+
+    const tasks = boards.scheduled.slice().sort(byDueDate);
+    const active = tasks.filter(t => !t.done);
+    const done = tasks.filter(t => t.done);
+
+    if (active.length === 0 && done.length === 0) {
+      const hint = document.createElement('li');
+      hint.className = 'empty-hint';
+      hint.textContent = EMPTY_HINTS.scheduled;
+      listEl.appendChild(hint);
+    }
+
+    active.forEach(t => listEl.appendChild(renderItem('scheduled', t)));
+
+    if (done.length > 0) {
+      const divider = document.createElement('li');
+      divider.className = 'divider';
+      divider.textContent = '─────────';
+      listEl.appendChild(divider);
+      done.forEach(t => listEl.appendChild(renderItem('scheduled', t)));
+    }
+  }
+
+  function renderToday() {
+    const listEl = getListEl('today');
+    if (!listEl) return;
+    listEl.innerHTML = '';
+
+    const today = todayStr();
+    const plain = boards.today;
+    const dueToday = boards.scheduled.filter(t => !t.done && t.dueDate === today).sort(byDueDate);
+    const oops = boards.scheduled.filter(t => !t.done && t.dueDate < today).sort(byDueDate);
+
+    const active = plain.filter(t => !t.done);
+    const done = plain.filter(t => t.done);
+
+    if (active.length === 0 && dueToday.length === 0 && done.length === 0 && oops.length === 0) {
+      const hint = document.createElement('li');
+      hint.className = 'empty-hint';
+      hint.textContent = EMPTY_HINTS.today;
+      listEl.appendChild(hint);
+    }
+
+    active.forEach(t => listEl.appendChild(renderItem('today', t)));
+    dueToday.forEach(t => listEl.appendChild(renderItem('scheduled', t)));
+
+    if (done.length > 0) {
+      const divider = document.createElement('li');
+      divider.className = 'divider';
+      divider.textContent = '─────────';
+      listEl.appendChild(divider);
+      done.forEach(t => listEl.appendChild(renderItem('today', t)));
+    }
+
+    if (oops.length > 0) {
+      const divider = document.createElement('li');
+      divider.className = 'divider divider-oops';
+      divider.textContent = 'oops, still here';
+      listEl.appendChild(divider);
+      oops.forEach(t => listEl.appendChild(renderItem('scheduled', t)));
     }
 
     updateCounter();
@@ -1012,6 +1250,14 @@
 
     row.appendChild(checkbox);
     row.appendChild(text);
+
+    if (task.dueDate) {
+      const badge = document.createElement('span');
+      badge.className = 'due-badge';
+      badge.textContent = '📅 ' + formatDueDate(task.dueDate);
+      row.appendChild(badge);
+    }
+
     li.appendChild(row);
 
     if (task.subtasks.length > 0) {
@@ -1040,7 +1286,18 @@
     controls.appendChild(urgentBtn);
     controls.appendChild(addToggle);
 
-    BOARD_IDS.filter(id => id !== boardId).forEach(otherId => {
+    const canDate = DATE_ENABLED_IDS.includes(boardId) || boardId === 'scheduled';
+    let dateBtn = null;
+    if (canDate) {
+      dateBtn = document.createElement('button');
+      dateBtn.className = 'date-btn';
+      dateBtn.type = 'button';
+      dateBtn.setAttribute('aria-label', task.dueDate ? '날짜 수정' : '날짜 지정');
+      dateBtn.textContent = '📅';
+      controls.appendChild(dateBtn);
+    }
+
+    MOVE_TARGET_IDS.filter(id => id !== boardId).forEach(otherId => {
       const moveBtn = document.createElement('button');
       moveBtn.className = 'move-btn';
       moveBtn.type = 'button';
@@ -1059,6 +1316,36 @@
     controls.appendChild(del);
 
     li.appendChild(controls);
+
+    if (canDate) {
+      const dateRow = document.createElement('div');
+      dateRow.className = 'date-picker-row';
+      dateRow.hidden = true;
+
+      const dateInput = document.createElement('input');
+      dateInput.className = 'date-picker-input';
+      dateInput.type = 'date';
+      if (task.dueDate) dateInput.value = task.dueDate;
+      dateInput.addEventListener('change', () => {
+        setDueDate(boardId, task.id, dateInput.value);
+      });
+
+      const clearBtn = document.createElement('button');
+      clearBtn.className = 'date-clear-btn';
+      clearBtn.type = 'button';
+      clearBtn.textContent = '날짜 지우기';
+      clearBtn.hidden = !task.dueDate;
+      clearBtn.addEventListener('click', () => setDueDate(boardId, task.id, ''));
+
+      dateRow.appendChild(dateInput);
+      dateRow.appendChild(clearBtn);
+      li.appendChild(dateRow);
+
+      dateBtn.addEventListener('click', () => {
+        dateRow.hidden = !dateRow.hidden;
+        if (!dateRow.hidden) dateInput.focus();
+      });
+    }
 
     const addSubRow = document.createElement('div');
     addSubRow.className = 'add-subtask-row';
@@ -1188,10 +1475,49 @@
     const idx = boards[fromBoardId].findIndex(t => t.id === id);
     if (idx === -1) return;
     const [task] = boards[fromBoardId].splice(idx, 1);
+    delete task.dueDate;
+    delete task.from;
     boards[toBoardId].push(task);
     saveBoards();
     render(fromBoardId);
     render(toBoardId);
+  }
+
+  // Assigning a date on a today/someday task moves it into `scheduled`;
+  // changing the date on an already-scheduled task keeps it there;
+  // clearing it sends it back to the board it came from.
+  function setDueDate(boardId, id, dateValue) {
+    const idx = boards[boardId].findIndex(t => t.id === id);
+    if (idx === -1) return;
+    const task = boards[boardId][idx];
+
+    if (boardId === 'scheduled') {
+      if (dateValue) {
+        task.dueDate = dateValue;
+        saveBoards();
+        render('today');
+        render('scheduled');
+      } else {
+        boards.scheduled.splice(idx, 1);
+        const backTo = task.from || 'today';
+        delete task.dueDate;
+        delete task.from;
+        boards[backTo].push(task);
+        saveBoards();
+        render('today');
+        render('scheduled');
+        render(backTo);
+      }
+    } else if (dateValue) {
+      boards[boardId].splice(idx, 1);
+      task.dueDate = dateValue;
+      task.from = boardId;
+      boards.scheduled.push(task);
+      saveBoards();
+      render(boardId);
+      render('today');
+      render('scheduled');
+    }
   }
 
   function addTask(boardId, text) {
