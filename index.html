@@ -7,6 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Gaegu:wght@400;700&family=Nanum+Pen+Script&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <style>
   @font-face {
     font-family: 'NostalgicMyoeunHeullim';
@@ -690,6 +691,9 @@
 (function () {
   const STORAGE_KEY = 'postit-todo-boards-v1';
   const OLD_STORAGE_KEY = 'postit-todo-tasks-v1';
+  const SUPABASE_URL = 'https://ytnlgabrbrddfpjzzrrn.supabase.co';
+  const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl0bmxnYWJyYnJkZGZwanp6cnJuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk1MzY1NzEsImV4cCI6MjEwNTExMjU3MX0.3H3oSigr6E649McUa8HFf9JYDbM1qIdZQGlJw6-WGro';
+  const CLOUD_ROW_ID = 'shared';
   const REORDER_DELAY = 300;
   const BOARD_IDS = ['today', 'waiting', 'someday'];
   const EMPTY_HINTS = {
@@ -778,6 +782,50 @@
       localStorage.setItem(STORAGE_KEY, JSON.stringify(boards));
     } catch (e) {
       /* storage unavailable — state just won't persist */
+    }
+    pushToCloud();
+  }
+
+  let cloudClient = null;
+  try {
+    if (window.supabase) {
+      cloudClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    }
+  } catch (e) {
+    /* cloud sync unavailable — app still works from localStorage */
+  }
+
+  function pushToCloud() {
+    if (!cloudClient) return;
+    cloudClient
+      .from('postit_data')
+      .upsert({ id: CLOUD_ROW_ID, data: boards, updated_at: new Date().toISOString() })
+      .then(() => {})
+      .catch(() => {});
+  }
+
+  async function initCloudSync() {
+    if (!cloudClient) return;
+    try {
+      const { data, error } = await cloudClient
+        .from('postit_data')
+        .select('data')
+        .eq('id', CLOUD_ROW_ID)
+        .maybeSingle();
+      if (error) throw error;
+      if (data && data.data) {
+        boards = normalizeBoards(data.data);
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(boards));
+        } catch (e) {
+          /* ignore */
+        }
+        renderAll();
+      } else {
+        pushToCloud();
+      }
+    } catch (e) {
+      /* offline or cloud unavailable — keep using local data */
     }
   }
 
@@ -1138,6 +1186,7 @@
   });
 
   renderAll();
+  initCloudSync();
 })();
 </script>
 
