@@ -201,6 +201,26 @@
     border-color: var(--accent);
   }
 
+  .theme-toggle {
+    margin: 8px 0 0;
+    background: none;
+    border: 1px solid var(--ink-soft);
+    border-radius: 12px;
+    padding: 3px 10px;
+    font-size: 13px;
+    line-height: 1.4;
+    color: var(--ink-soft);
+    cursor: pointer;
+    opacity: 0.85;
+    transition: opacity 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+  }
+
+  .theme-toggle:hover {
+    opacity: 1;
+    color: var(--accent);
+    border-color: var(--accent);
+  }
+
   .sticky {
     position: relative;
     width: min(320px, 86vw);
@@ -761,6 +781,7 @@
       <p class="date" id="dateText"></p>
       <p class="counter" id="taskCounter"></p>
       <div class="auth-row" id="authRow"></div>
+      <button class="theme-toggle" id="themeToggle" type="button" aria-label="테마 전환"></button>
     </div>
 
     <div class="board-row">
@@ -841,6 +862,7 @@
 (function () {
   const STORAGE_KEY = 'postit-todo-boards-v1';
   const OLD_STORAGE_KEY = 'postit-todo-tasks-v1';
+  const THEME_KEY = 'postit-theme';
   const SUPABASE_URL = 'https://ytnlgabrbrddfpjzzrrn.supabase.co';
   const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl0bmxnYWJyYnJkZGZwanp6cnJuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk1MzY1NzEsImV4cCI6MjEwNTExMjU3MX0.3H3oSigr6E649McUa8HFf9JYDbM1qIdZQGlJw6-WGro';
   const REORDER_DELAY = 300;
@@ -871,10 +893,18 @@
     return y + '-' + m + '-' + day;
   }
 
-  function formatDueDate(dateStr) {
+  const WEEKDAY_KO = ['일', '월', '화', '수', '목', '금', '토'];
+
+  function formatDueDateRelative(dateStr) {
     try {
       const d = new Date(dateStr + 'T00:00:00');
-      return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const diffDays = Math.round((d - today) / 86400000);
+      if (diffDays === 0) return '오늘';
+      if (diffDays === 1) return '내일';
+      if (diffDays === -1) return '어제';
+      return d.getDate() + WEEKDAY_KO[d.getDay()];
     } catch (e) {
       return dateStr;
     }
@@ -897,6 +927,45 @@
     }
   }
   setDate();
+
+  const themeToggleEl = document.getElementById('themeToggle');
+
+  function effectiveTheme() {
+    const explicit = document.documentElement.getAttribute('data-theme');
+    if (explicit === 'light' || explicit === 'dark') return explicit;
+    return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  }
+
+  function applyTheme(theme) {
+    if (theme === 'light' || theme === 'dark') {
+      document.documentElement.setAttribute('data-theme', theme);
+    } else {
+      document.documentElement.removeAttribute('data-theme');
+    }
+    if (themeToggleEl) {
+      themeToggleEl.textContent = effectiveTheme() === 'dark' ? '🌙 다크' : '☀️ 라이트';
+    }
+  }
+
+  let storedTheme = null;
+  try {
+    storedTheme = localStorage.getItem(THEME_KEY);
+  } catch (e) {
+    /* ignore */
+  }
+  applyTheme(storedTheme);
+
+  if (themeToggleEl) {
+    themeToggleEl.addEventListener('click', () => {
+      const next = effectiveTheme() === 'dark' ? 'light' : 'dark';
+      try {
+        localStorage.setItem(THEME_KEY, next);
+      } catch (e) {
+        /* ignore */
+      }
+      applyTheme(next);
+    });
+  }
 
   function updateCounter() {
     const today = todayStr();
@@ -1263,7 +1332,7 @@
     if (task.dueDate) {
       const badge = document.createElement('span');
       badge.className = 'due-badge';
-      badge.textContent = '📅 ' + formatDueDate(task.dueDate);
+      badge.textContent = formatDueDateRelative(task.dueDate);
       row.appendChild(badge);
     }
 
