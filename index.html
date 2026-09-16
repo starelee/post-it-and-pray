@@ -822,6 +822,12 @@
     task.subtasks.push({ id: Date.now(), text: trimmed, done: false });
     saveTasks();
     render();
+    focusSubtaskInput(taskId);
+  }
+
+  function focusSubtaskInput(taskId) {
+    const input = taskListEl.querySelector('[data-id="' + taskId + '"] .new-subtask-input');
+    if (input) input.focus();
   }
 
   newTaskInput.addEventListener('keydown', (e) => {
