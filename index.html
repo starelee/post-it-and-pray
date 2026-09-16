@@ -36,6 +36,9 @@
     --bezel-bot: #2c2a26;
     --bezel-highlight: rgba(255,255,255,0.08);
     --input-line: #d8c98f;
+    --legal-paper: #fffdf0;
+    --legal-line: rgba(90, 120, 180, 0.22);
+    --legal-margin: rgba(212, 61, 61, 0.4);
   }
 
   @media (prefers-color-scheme: dark) {
@@ -59,6 +62,9 @@
       --bezel-bot: #0a0a09;
       --bezel-highlight: rgba(255,255,255,0.05);
       --input-line: #524b34;
+      --legal-paper: #2e2a1c;
+      --legal-line: rgba(120, 150, 200, 0.16);
+      --legal-margin: rgba(255, 107, 107, 0.35);
     }
   }
 
@@ -82,6 +88,9 @@
     --bezel-bot: #0a0a09;
     --bezel-highlight: rgba(255,255,255,0.05);
     --input-line: #524b34;
+    --legal-paper: #2e2a1c;
+    --legal-line: rgba(120, 150, 200, 0.16);
+    --legal-margin: rgba(255, 107, 107, 0.35);
   }
 
   * { box-sizing: border-box; }
@@ -219,6 +228,149 @@
     opacity: 1;
     color: var(--accent);
     border-color: var(--accent);
+  }
+
+  .archive-flag {
+    margin: 8px 0 0;
+    background: none;
+    border: 1px solid var(--ink-soft);
+    border-radius: 12px;
+    padding: 3px 10px;
+    font-family: 'Gaegu', cursive, sans-serif;
+    font-size: 13px;
+    color: var(--ink-soft);
+    cursor: pointer;
+    opacity: 0.85;
+    transform: rotate(-1deg);
+    transition: opacity 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+  }
+
+  .archive-flag:hover {
+    opacity: 1;
+    color: var(--accent);
+    border-color: var(--accent);
+  }
+
+  .archive-panel {
+    width: 100%;
+    max-width: 700px;
+    max-height: 0;
+    overflow: hidden;
+    opacity: 0;
+    transform: translateY(-10px);
+    transition: max-height 0.35s ease, opacity 0.25s ease, transform 0.35s ease;
+  }
+
+  .archive-panel.open {
+    max-height: 2000px;
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  .archive-panel-inner {
+    position: relative;
+    background: var(--legal-paper);
+    background-image: repeating-linear-gradient(
+      to bottom,
+      transparent 0,
+      transparent 27px,
+      var(--legal-line) 27px,
+      var(--legal-line) 28px
+    );
+    border-radius: 4px;
+    box-shadow: 0 12px 24px -10px var(--paper-shadow);
+    padding: 20px 20px 20px 40px;
+    margin: 4px 0 4px;
+  }
+
+  .archive-panel-inner::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 30px;
+    width: 1px;
+    background: var(--legal-margin);
+  }
+
+  .archive-title {
+    font-family: 'NostalgicMyoeunHeullim', 'Nanum Pen Script', cursive;
+    font-size: 22px;
+    font-weight: 400;
+    margin: 0 0 10px;
+    color: var(--ink);
+  }
+
+  .archive-date-heading {
+    font-family: 'NostalgicMyoeunHeullim', 'Gaegu', cursive, sans-serif;
+    font-size: 14px;
+    color: var(--ink-soft);
+    letter-spacing: 0.4px;
+    margin: 10px 0 2px;
+  }
+
+  .archive-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 3px 0;
+    list-style: none;
+  }
+
+  .archive-item-text {
+    flex: 1;
+    font-family: 'NostalgicMyoeunHeullim', 'Gaegu', cursive, sans-serif;
+    font-size: 16px;
+    color: var(--ink-soft);
+    text-decoration: line-through;
+    text-decoration-color: var(--ink-soft);
+    word-break: break-word;
+  }
+
+  .archive-item-controls {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .archive-revive-btn {
+    background: none;
+    border: none;
+    font-family: 'Gaegu', cursive, sans-serif;
+    font-size: 13px;
+    color: var(--ink-soft);
+    cursor: pointer;
+    padding: 2px 4px;
+    opacity: 0.75;
+    transition: opacity 0.15s ease, color 0.15s ease;
+  }
+
+  .archive-revive-btn:hover {
+    opacity: 1;
+    color: var(--accent);
+  }
+
+  .archive-groups .task-list {
+    padding-left: 4px;
+  }
+
+  .back-btn {
+    flex: 0 0 auto;
+    background: none;
+    border: none;
+    font-size: 17px;
+    line-height: 1;
+    color: var(--ink);
+    cursor: pointer;
+    padding: 2px 4px;
+    opacity: 0.75;
+    transition: opacity 0.15s ease, transform 0.15s ease;
+  }
+
+  .back-btn:hover {
+    opacity: 1;
+    transform: translateX(-2px);
   }
 
   .sticky {
@@ -788,12 +940,20 @@
       <p class="counter" id="taskCounter"></p>
       <div class="auth-row" id="authRow"></div>
       <button class="theme-toggle" id="themeToggle" type="button" aria-label="테마 전환"></button>
+      <button class="archive-flag" id="archiveFlagBtn" type="button" aria-label="다 한 일 보기">📋 다 한 일</button>
+    </div>
+
+    <div class="archive-panel" id="archivePanel">
+      <div class="archive-panel-inner">
+        <h2 class="archive-title">다 한 일 📋</h2>
+        <div class="archive-groups" id="archiveGroups"></div>
+      </div>
     </div>
 
     <div class="board-row">
       <div class="sticky" data-board="today" style="--rot: -1.4deg;">
         <div class="tape"></div>
-        <h2 class="sticky-title">today's list <span class="flower">✿</span></h2>
+        <h2 class="sticky-title">gotta do... <span class="flower">✿</span></h2>
 
         <ul class="task-list" data-tasklist="today"></ul>
 
@@ -975,6 +1135,17 @@
     });
   }
 
+  const archiveFlagBtn = document.getElementById('archiveFlagBtn');
+  const archivePanelEl = document.getElementById('archivePanel');
+  const archiveGroupsEl = document.getElementById('archiveGroups');
+
+  function toggleArchivePanel() {
+    const open = !archivePanelEl.classList.contains('open');
+    archivePanelEl.classList.toggle('open', open);
+    if (open) renderArchive();
+  }
+  if (archiveFlagBtn) archiveFlagBtn.addEventListener('click', toggleArchivePanel);
+
   function updateCounter() {
     const today = todayStr();
     const tasks = boards.today.concat(
@@ -1029,6 +1200,11 @@
       };
       if (typeof t.dueDate === 'string' && t.dueDate) out.dueDate = t.dueDate;
       if (typeof t.from === 'string' && t.from) out.from = t.from;
+      if (out.done) {
+        // Legacy done tasks from before doneAt existed get today's grace
+        // period instead of being permanently excluded from the sweep.
+        out.doneAt = (typeof t.doneAt === 'string' && t.doneAt) ? t.doneAt : todayStr();
+      }
       return out;
     });
   }
@@ -1038,7 +1214,36 @@
     BOARD_IDS.forEach(id => {
       result[id] = normalizeTasks(Array.isArray(data[id]) ? data[id] : []);
     });
+    result.archive = normalizeTasks(Array.isArray(data.archive) ? data.archive : []);
+    migrateArchive(result);
     return result;
+  }
+
+  // Sweeps any task that's done and past its same-day grace period into
+  // boards.archive. Runs on every normalizeBoards call (initial load and
+  // cloud sync), so it covers both "opened the next day" and "another
+  // device synced in later" without a separate boot-time call site.
+  function migrateArchive(b) {
+    const today = todayStr();
+    function archiveOut(boardId, predicate) {
+      const keep = [];
+      b[boardId].forEach(t => {
+        if (t.done && predicate(t)) {
+          t.from = boardId;
+          b.archive.push(t);
+        } else {
+          keep.push(t);
+        }
+      });
+      b[boardId] = keep;
+    }
+    archiveOut('today', t => t.doneAt !== today);
+    archiveOut('scheduled', t => t.dueDate !== today || t.doneAt !== today);
+    archiveOut('someday', () => true);
+    b.waiting.forEach(t => {
+      t.done = false;
+      delete t.doneAt;
+    });
   }
 
   // Bumped on every local edit so an in-flight cloud fetch (see syncRow)
@@ -1184,15 +1389,26 @@
     return document.querySelector('.task-item[data-id="' + id + '"]');
   }
 
-  document.querySelectorAll('[data-collapse-toggle]').forEach(toggle => {
-    const body = toggle.nextElementSibling;
+  // Wires a collapse toggle button to a body element (used for the
+  // scheduled/someday sections present in the static HTML, and reused for
+  // the archive panel's dynamically-created month groups, which need to
+  // call this themselves at creation time since the querySelectorAll below
+  // only ever sees elements that exist at module-load time).
+  function wireCollapseToggle(toggle, body, defaultOpen) {
     const arrow = toggle.querySelector('[data-toggle-arrow]');
-    if (!body || !body.hasAttribute('data-collapse-body')) return;
+    body.hidden = !defaultOpen;
+    if (arrow) arrow.textContent = defaultOpen ? '▴' : '▾';
     toggle.addEventListener('click', () => {
       const open = body.hidden;
       body.hidden = !open;
       if (arrow) arrow.textContent = open ? '▴' : '▾';
     });
+  }
+
+  document.querySelectorAll('[data-collapse-toggle]').forEach(toggle => {
+    const body = toggle.nextElementSibling;
+    if (!body || !body.hasAttribute('data-collapse-body')) return;
+    wireCollapseToggle(toggle, body, false);
   });
 
   function makeCheckSvg(iconClass) {
@@ -1332,12 +1548,25 @@
     const row = document.createElement('div');
     row.className = 'task-row';
 
-    const checkbox = document.createElement('button');
-    checkbox.className = 'checkbox';
-    checkbox.type = 'button';
-    checkbox.setAttribute('aria-label', task.done ? '완료 취소' : '완료 표시');
-    checkbox.appendChild(makeCheckSvg());
-    checkbox.addEventListener('click', () => toggleTask(boardId, task.id));
+    // waiting has no "done" concept — its checkbox is replaced by an
+    // always-visible ← that sends the task back to today.
+    if (boardId === 'waiting') {
+      const backBtn = document.createElement('button');
+      backBtn.className = 'back-btn';
+      backBtn.type = 'button';
+      backBtn.setAttribute('aria-label', 'today로 되돌리기');
+      backBtn.textContent = '←';
+      backBtn.addEventListener('click', () => moveTask('waiting', 'today', task.id));
+      row.appendChild(backBtn);
+    } else {
+      const checkbox = document.createElement('button');
+      checkbox.className = 'checkbox';
+      checkbox.type = 'button';
+      checkbox.setAttribute('aria-label', task.done ? '완료 취소' : '완료 표시');
+      checkbox.appendChild(makeCheckSvg());
+      checkbox.addEventListener('click', () => toggleTask(boardId, task.id));
+      row.appendChild(checkbox);
+    }
 
     const text = document.createElement('span');
     text.className = 'task-text';
@@ -1350,7 +1579,6 @@
     line.className = 'strike-line';
     text.appendChild(line);
 
-    row.appendChild(checkbox);
     row.appendChild(text);
 
     let badge = null;
@@ -1400,7 +1628,10 @@
       controls.appendChild(dateBtn);
     }
 
-    MOVE_TARGET_IDS.filter(id => id !== boardId).forEach(otherId => {
+    MOVE_TARGET_IDS
+      .filter(id => id !== boardId)
+      .filter(id => !(boardId === 'waiting' && id === 'today')) // redundant with the always-visible ←
+      .forEach(otherId => {
       const moveBtn = document.createElement('button');
       moveBtn.className = 'move-btn';
       moveBtn.type = 'button';
@@ -1480,6 +1711,136 @@
     li.appendChild(addSubRow);
 
     return li;
+  }
+
+  function renderArchive() {
+    archiveGroupsEl.innerHTML = '';
+
+    const items = boards.archive.slice().sort((a, b) => {
+      if (a.doneAt !== b.doneAt) return (b.doneAt || '').localeCompare(a.doneAt || '');
+      return b.id - a.id;
+    });
+
+    if (items.length === 0) {
+      const hint = document.createElement('p');
+      hint.className = 'empty-hint';
+      hint.textContent = '아직 다 한 일 없음';
+      archiveGroupsEl.appendChild(hint);
+      return;
+    }
+
+    const curMonth = todayStr().slice(0, 7);
+    const byMonth = new Map();
+    items.forEach(t => {
+      const m = (t.doneAt || '').slice(0, 7);
+      if (!byMonth.has(m)) byMonth.set(m, []);
+      byMonth.get(m).push(t);
+    });
+
+    Array.from(byMonth.keys()).sort().reverse().forEach(month => {
+      const toggle = document.createElement('button');
+      toggle.className = 'sticky-title sticky-title-toggle';
+      toggle.type = 'button';
+      toggle.innerHTML = month + ' <span class="toggle-arrow" data-toggle-arrow>▾</span>';
+
+      const body = document.createElement('div');
+      body.className = 'collapsible-body';
+
+      const byDate = new Map();
+      byMonth.get(month).forEach(t => {
+        if (!byDate.has(t.doneAt)) byDate.set(t.doneAt, []);
+        byDate.get(t.doneAt).push(t);
+      });
+
+      const list = document.createElement('ul');
+      list.className = 'task-list';
+      Array.from(byDate.keys()).sort().reverse().forEach(dateStr => {
+        const d = new Date(dateStr + 'T00:00:00');
+        const heading = document.createElement('li');
+        heading.className = 'archive-date-heading';
+        heading.textContent = d.getDate() + '일 (' + WEEKDAY_KO[d.getDay()] + ')';
+        list.appendChild(heading);
+        byDate.get(dateStr).forEach(t => list.appendChild(renderArchivedItem(t)));
+      });
+      body.appendChild(list);
+
+      archiveGroupsEl.appendChild(toggle);
+      archiveGroupsEl.appendChild(body);
+      wireCollapseToggle(toggle, body, month === curMonth);
+    });
+  }
+
+  function renderArchivedItem(task) {
+    const li = document.createElement('li');
+    li.className = 'archive-item';
+    li.dataset.id = task.id;
+
+    const text = document.createElement('span');
+    text.className = 'archive-item-text';
+    text.textContent = task.text;
+    li.appendChild(text);
+
+    const controls = document.createElement('div');
+    controls.className = 'archive-item-controls';
+
+    const reviveBtn = document.createElement('button');
+    reviveBtn.className = 'archive-revive-btn';
+    reviveBtn.type = 'button';
+    reviveBtn.textContent = '↻ 다시 쓰기';
+
+    const dateRow = document.createElement('div');
+    dateRow.className = 'date-picker-row';
+    dateRow.hidden = true;
+    const dateInput = document.createElement('input');
+    dateInput.className = 'date-picker-input';
+    dateInput.type = 'date';
+    dateInput.addEventListener('change', () => {
+      if (dateInput.value) reviveTask(task, dateInput.value);
+    });
+    dateRow.appendChild(dateInput);
+
+    reviveBtn.addEventListener('click', () => {
+      dateRow.hidden = !dateRow.hidden;
+      if (!dateRow.hidden) dateInput.focus();
+    });
+
+    const del = document.createElement('button');
+    del.className = 'delete-btn';
+    del.type = 'button';
+    del.setAttribute('aria-label', '삭제');
+    del.textContent = '🗑️';
+    del.addEventListener('click', () => deleteArchivedTask(task.id));
+
+    controls.appendChild(reviveBtn);
+    controls.appendChild(del);
+    li.appendChild(controls);
+    li.appendChild(dateRow);
+    return li;
+  }
+
+  function reviveTask(archivedTask, dateValue) {
+    const clone = {
+      id: Date.now(),
+      text: archivedTask.text,
+      done: false,
+      urgent: !!archivedTask.urgent,
+      subtasks: (archivedTask.subtasks || []).map((s, i) => ({
+        id: Date.now() + i,
+        text: s.text,
+        done: !!s.done
+      })),
+      dueDate: dateValue
+    };
+    boards.scheduled.push(clone);
+    saveBoards();
+    render('today');
+    render('scheduled');
+  }
+
+  function deleteArchivedTask(id) {
+    boards.archive = boards.archive.filter(t => t.id !== id);
+    saveBoards();
+    renderArchive();
   }
 
   function openAddSubtaskRow(boardId, taskId, open) {
@@ -1562,17 +1923,43 @@
     const task = boards[boardId].find(t => t.id === id);
     if (!task) return;
     task.done = !task.done;
+    if (task.done) task.doneAt = todayStr();
+    else delete task.doneAt;
 
     const li = findTaskLi(id);
     if (li) li.classList.toggle('done', task.done);
 
     saveBoards();
+
+    const today = todayStr();
+    // `today` tasks (plain, or a scheduled task due today rendered inside
+    // today's list) get a same-day grace period before archiving; anything
+    // else archives immediately once the strikethrough animation finishes.
+    const gracedToday = boardId === 'today' || (boardId === 'scheduled' && task.dueDate === today);
+
     setTimeout(() => {
-      render(boardId);
-      // A scheduled task due today/overdue is displayed inside today's
-      // list, not scheduled's — refresh both so it lands in the right one.
-      if (boardId === 'scheduled') render('today');
+      if (task.done && !gracedToday) {
+        archiveNow(boardId, id);
+      } else {
+        render(boardId);
+        // A scheduled task due today/overdue is displayed inside today's
+        // list, not scheduled's — refresh both so it lands in the right one.
+        if (boardId === 'scheduled') render('today');
+      }
     }, REORDER_DELAY);
+  }
+
+  function archiveNow(boardId, id) {
+    const idx = boards[boardId].findIndex(t => t.id === id);
+    if (idx === -1) return;
+    const [task] = boards[boardId].splice(idx, 1);
+    delete task.dueDate;
+    task.from = boardId;
+    boards.archive.push(task);
+    saveBoards();
+    render(boardId);
+    if (boardId === 'scheduled') render('today');
+    if (archivePanelEl.classList.contains('open')) renderArchive();
   }
 
   function deleteTask(boardId, id) {
@@ -1587,6 +1974,12 @@
     const [task] = boards[fromBoardId].splice(idx, 1);
     delete task.dueDate;
     delete task.from;
+    if (toBoardId === 'waiting') {
+      // waiting has no done concept — defend against a done task landing
+      // there via a hover move-button from another board.
+      task.done = false;
+      delete task.doneAt;
+    }
     boards[toBoardId].push(task);
     saveBoards();
     render(fromBoardId);
