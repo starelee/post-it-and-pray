@@ -239,7 +239,7 @@
     line-height: 1;
     cursor: pointer;
     padding: 2px 3px;
-    opacity: 0.35;
+    opacity: 0.6;
     transition: opacity 0.15s ease, color 0.15s ease, transform 0.15s ease;
   }
 
@@ -312,6 +312,21 @@
     flex: 1;
     word-break: break-word;
     transition: color 0.3s ease 0.05s;
+    cursor: text;
+  }
+
+  .task-edit-input {
+    flex: 1;
+    font-family: 'NostalgicMyoeunHeullim', 'Gaegu', cursive, sans-serif;
+    font-size: 19px;
+    line-height: 1.3;
+    color: var(--ink);
+    background: transparent;
+    border: none;
+    border-bottom: 1px dashed var(--accent);
+    outline: none;
+    padding: 0;
+    min-width: 0;
   }
 
   .task-item.done .task-text {
@@ -352,6 +367,7 @@
     opacity: 0;
     margin-top: 0;
     padding-left: 28px;
+    padding-right: 2px;
     transition: max-height 0.15s ease, opacity 0.15s ease, margin-top 0.15s ease;
   }
 
@@ -364,18 +380,21 @@
 
   .delete-btn {
     flex: 0 0 auto;
+    margin-left: auto;
     background: none;
     border: none;
     color: var(--ink-soft);
-    font-size: 16px;
+    font-size: 14px;
     line-height: 1;
     cursor: pointer;
     padding: 2px 3px;
-    transition: color 0.15s ease;
+    opacity: 0.7;
+    transition: opacity 0.15s ease, transform 0.15s ease;
   }
 
   .delete-btn:hover {
-    color: var(--accent);
+    opacity: 1;
+    transform: scale(1.1);
   }
 
   .move-btn {
@@ -421,6 +440,18 @@
     cursor: pointer;
     padding: 1px 2px;
     word-break: break-word;
+  }
+
+  .subtask-edit-input {
+    font-family: 'NostalgicMyoeunHeullim', 'Gaegu', cursive, sans-serif;
+    font-size: 14px;
+    line-height: 1.3;
+    color: var(--ink-soft);
+    background: transparent;
+    border: none;
+    border-bottom: 1px dashed var(--accent);
+    outline: none;
+    padding: 1px 2px;
   }
 
   .subtask-item.done .subtask-chip {
@@ -796,22 +827,18 @@
     checkbox.appendChild(makeCheckSvg());
     checkbox.addEventListener('click', () => toggleTask(boardId, task.id));
 
-    const urgentBtn = document.createElement('button');
-    urgentBtn.className = 'urgent-btn';
-    urgentBtn.type = 'button';
-    urgentBtn.setAttribute('aria-label', task.urgent ? '긴급 해제' : '긴급 표시');
-    urgentBtn.textContent = '!';
-    urgentBtn.addEventListener('click', () => toggleUrgent(boardId, task.id));
-
     const text = document.createElement('span');
     text.className = 'task-text';
     text.textContent = task.text;
+    text.tabIndex = 0;
+    text.setAttribute('role', 'button');
+    text.setAttribute('aria-label', '내용 수정');
+    text.addEventListener('click', () => startEditTask(boardId, task.id));
     const line = document.createElement('span');
     line.className = 'strike-line';
     text.appendChild(line);
 
     row.appendChild(checkbox);
-    row.appendChild(urgentBtn);
     row.appendChild(text);
     li.appendChild(row);
 
@@ -825,21 +852,21 @@
     const controls = document.createElement('div');
     controls.className = 'task-controls';
 
+    const urgentBtn = document.createElement('button');
+    urgentBtn.className = 'urgent-btn';
+    urgentBtn.type = 'button';
+    urgentBtn.setAttribute('aria-label', task.urgent ? '긴급 해제' : '긴급 표시');
+    urgentBtn.textContent = '!';
+    urgentBtn.addEventListener('click', () => toggleUrgent(boardId, task.id));
+
     const addToggle = document.createElement('button');
     addToggle.className = 'add-subtask-toggle';
     addToggle.type = 'button';
     addToggle.setAttribute('aria-label', '하위 항목 추가');
     addToggle.textContent = '+';
 
-    const del = document.createElement('button');
-    del.className = 'delete-btn';
-    del.type = 'button';
-    del.setAttribute('aria-label', '삭제');
-    del.textContent = '×';
-    del.addEventListener('click', () => deleteTask(boardId, task.id));
-
+    controls.appendChild(urgentBtn);
     controls.appendChild(addToggle);
-    controls.appendChild(del);
 
     BOARD_IDS.filter(id => id !== boardId).forEach(otherId => {
       const moveBtn = document.createElement('button');
@@ -850,6 +877,14 @@
       moveBtn.addEventListener('click', () => moveTask(boardId, otherId, task.id));
       controls.appendChild(moveBtn);
     });
+
+    const del = document.createElement('button');
+    del.className = 'delete-btn';
+    del.type = 'button';
+    del.setAttribute('aria-label', '삭제');
+    del.textContent = '🗑️';
+    del.addEventListener('click', () => deleteTask(boardId, task.id));
+    controls.appendChild(del);
 
     li.appendChild(controls);
 
@@ -908,6 +943,10 @@
     chip.setAttribute('aria-label', sub.done ? '완료 취소' : '완료 표시');
     chip.textContent = '[' + sub.text + ']';
     chip.addEventListener('click', () => toggleSubtask(boardId, taskId, sub.id));
+    chip.addEventListener('dblclick', (e) => {
+      e.stopPropagation();
+      startEditSubtask(boardId, taskId, sub.id);
+    });
 
     const del = document.createElement('button');
     del.className = 'subtask-delete-btn';
@@ -919,6 +958,40 @@
     li.appendChild(chip);
     li.appendChild(del);
     return li;
+  }
+
+  function startEditTask(boardId, id) {
+    const task = boards[boardId].find(t => t.id === id);
+    const li = getListEl(boardId).querySelector('[data-id="' + id + '"]');
+    if (!task || !li) return;
+    const textEl = li.querySelector('.task-text');
+    if (!textEl) return;
+
+    const input = document.createElement('input');
+    input.className = 'task-edit-input';
+    input.type = 'text';
+    input.value = task.text;
+    input.maxLength = 60;
+    textEl.replaceWith(input);
+    input.focus();
+    input.select();
+
+    const commit = () => {
+      const trimmed = input.value.trim();
+      if (trimmed) task.text = trimmed;
+      saveBoards();
+      render(boardId);
+    };
+
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        input.blur();
+      } else if (e.key === 'Escape') {
+        input.value = task.text;
+        input.blur();
+      }
+    });
+    input.addEventListener('blur', commit);
   }
 
   function toggleTask(boardId, id) {
@@ -963,6 +1036,42 @@
     task.urgent = !task.urgent;
     saveBoards();
     render(boardId);
+  }
+
+  function startEditSubtask(boardId, taskId, subId) {
+    const task = boards[boardId].find(t => t.id === taskId);
+    const sub = task && task.subtasks.find(s => s.id === subId);
+    const subLi = getListEl(boardId).querySelector('[data-id="' + taskId + '"] .subtask-list [data-id="' + subId + '"]');
+    if (!sub || !subLi) return;
+    const chipEl = subLi.querySelector('.subtask-chip');
+    if (!chipEl) return;
+
+    const input = document.createElement('input');
+    input.className = 'subtask-edit-input';
+    input.type = 'text';
+    input.value = sub.text;
+    input.maxLength = 60;
+    input.size = Math.max(2, sub.text.length);
+    chipEl.replaceWith(input);
+    input.focus();
+    input.select();
+
+    const commit = () => {
+      const trimmed = input.value.trim();
+      if (trimmed) sub.text = trimmed;
+      saveBoards();
+      render(boardId);
+    };
+
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        input.blur();
+      } else if (e.key === 'Escape') {
+        input.value = sub.text;
+        input.blur();
+      }
+    });
+    input.addEventListener('blur', commit);
   }
 
   function toggleSubtask(boardId, taskId, subId) {
