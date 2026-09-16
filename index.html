@@ -694,6 +694,7 @@
   const SUPABASE_URL = 'https://ytnlgabrbrddfpjzzrrn.supabase.co';
   const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl0bmxnYWJyYnJkZGZwanp6cnJuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk1MzY1NzEsImV4cCI6MjEwNTExMjU3MX0.3H3oSigr6E649McUa8HFf9JYDbM1qIdZQGlJw6-WGro';
   const CLOUD_ROW_ID = 'shared';
+  const CLOUD_MIGRATED_KEY = 'postit-cloud-migrated-v1';
   const REORDER_DELAY = 300;
   const BOARD_IDS = ['today', 'waiting', 'someday'];
   const EMPTY_HINTS = {
@@ -806,6 +807,26 @@
 
   async function initCloudSync() {
     if (!cloudClient) return;
+
+    // First time this browser talks to the cloud: this device's local data is
+    // the source of truth, so push it up rather than risk an empty or
+    // different shared row silently overwriting it.
+    let alreadyMigrated = false;
+    try {
+      alreadyMigrated = localStorage.getItem(CLOUD_MIGRATED_KEY) === '1';
+    } catch (e) {
+      /* ignore */
+    }
+    if (!alreadyMigrated) {
+      pushToCloud();
+      try {
+        localStorage.setItem(CLOUD_MIGRATED_KEY, '1');
+      } catch (e) {
+        /* ignore */
+      }
+      return;
+    }
+
     try {
       const { data, error } = await cloudClient
         .from('postit_data')
