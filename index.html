@@ -157,6 +157,15 @@
     letter-spacing: 0.5px;
   }
 
+  .counter {
+    margin: 3px 0 0;
+    font-family: 'Gaegu', cursive, sans-serif;
+    font-size: 13px;
+    color: var(--ink-soft);
+    opacity: 0.75;
+    letter-spacing: 0.4px;
+  }
+
   .sticky {
     position: relative;
     width: min(320px, 86vw);
@@ -613,6 +622,7 @@
       <h1 class="logo">post it <span class="pray">and pray</span></h1>
       <p class="tagline">오늘도 대충 해봅시다 ☁️</p>
       <p class="date" id="dateText"></p>
+      <p class="counter" id="taskCounter"></p>
     </div>
 
     <div class="board-row">
@@ -694,6 +704,7 @@
   };
 
   const dateEl = document.getElementById('dateText');
+  const counterEl = document.getElementById('taskCounter');
 
   function setDate() {
     try {
@@ -709,6 +720,13 @@
     }
   }
   setDate();
+
+  function updateCounter() {
+    const tasks = boards.today;
+    const done = tasks.filter(task => task.done).length;
+    const praying = tasks.filter(task => !task.done).length;
+    counterEl.textContent = done + ' done · ' + praying + ' praying';
+  }
 
   function seedToday() {
     return [
@@ -783,6 +801,7 @@
 
   function renderAll() {
     BOARD_IDS.forEach(render);
+    updateCounter();
   }
 
   function render(boardId) {
@@ -810,6 +829,8 @@
       listEl.appendChild(divider);
       done.forEach(t => listEl.appendChild(renderItem(boardId, t)));
     }
+
+    updateCounter();
   }
 
   function renderItem(boardId, task) {
