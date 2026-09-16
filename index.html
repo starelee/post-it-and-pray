@@ -432,11 +432,43 @@
     color: var(--accent);
   }
 
+  .add-subtask-toggle[hidden] {
+    display: none;
+  }
+
+  .add-subtask-toggle {
+    display: block;
+    background: none;
+    border: none;
+    color: var(--ink-soft);
+    font-size: 15px;
+    line-height: 1;
+    cursor: pointer;
+    margin: 3px 0 0 28px;
+    padding: 2px 4px;
+    opacity: 0;
+    transition: opacity 0.15s ease;
+  }
+
+  .task-item:hover .add-subtask-toggle,
+  .task-item:focus-within .add-subtask-toggle {
+    opacity: 0.6;
+  }
+
+  .add-subtask-toggle:hover {
+    opacity: 1;
+    color: var(--accent);
+  }
+
   .add-subtask-row {
     display: flex;
     align-items: center;
     gap: 6px;
     padding: 3px 0 0 28px;
+  }
+
+  .add-subtask-row[hidden] {
+    display: none;
   }
 
   .add-subtask-row .plus {
@@ -706,8 +738,15 @@
       li.appendChild(subList);
     }
 
+    const addToggle = document.createElement('button');
+    addToggle.className = 'add-subtask-toggle';
+    addToggle.type = 'button';
+    addToggle.setAttribute('aria-label', '하위 항목 추가');
+    addToggle.textContent = '+';
+
     const addSubRow = document.createElement('div');
     addSubRow.className = 'add-subtask-row';
+    addSubRow.hidden = true;
     const plus = document.createElement('span');
     plus.className = 'plus';
     plus.textContent = '+';
@@ -723,11 +762,31 @@
         subInput.value = '';
       }
     });
+    subInput.addEventListener('blur', () => {
+      if (!subInput.value.trim()) openAddSubtaskRow(task.id, false);
+    });
+    addToggle.addEventListener('click', () => openAddSubtaskRow(task.id, true));
+
     addSubRow.appendChild(plus);
     addSubRow.appendChild(subInput);
+    li.appendChild(addToggle);
     li.appendChild(addSubRow);
 
     return li;
+  }
+
+  function openAddSubtaskRow(taskId, open) {
+    const li = taskListEl.querySelector('[data-id="' + taskId + '"]');
+    if (!li) return;
+    const toggle = li.querySelector('.add-subtask-toggle');
+    const row = li.querySelector('.add-subtask-row');
+    if (!toggle || !row) return;
+    row.hidden = !open;
+    toggle.hidden = open;
+    if (open) {
+      const input = row.querySelector('.new-subtask-input');
+      if (input) input.focus();
+    }
   }
 
   function renderSubtaskItem(taskId, sub) {
@@ -822,12 +881,7 @@
     task.subtasks.push({ id: Date.now(), text: trimmed, done: false });
     saveTasks();
     render();
-    focusSubtaskInput(taskId);
-  }
-
-  function focusSubtaskInput(taskId) {
-    const input = taskListEl.querySelector('[data-id="' + taskId + '"] .new-subtask-input');
-    if (input) input.focus();
+    openAddSubtaskRow(taskId, true);
   }
 
   newTaskInput.addEventListener('keydown', (e) => {
