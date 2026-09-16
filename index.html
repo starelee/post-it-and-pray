@@ -167,6 +167,40 @@
     letter-spacing: 0.4px;
   }
 
+  .auth-row {
+    margin: 8px 0 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-height: 20px;
+  }
+
+  .auth-user {
+    font-family: 'Gaegu', cursive, sans-serif;
+    font-size: 12px;
+    color: var(--ink-soft);
+  }
+
+  .auth-btn {
+    font-family: 'Gaegu', cursive, sans-serif;
+    font-size: 12px;
+    color: var(--ink-soft);
+    background: none;
+    border: 1px solid var(--ink-soft);
+    border-radius: 12px;
+    padding: 3px 10px;
+    cursor: pointer;
+    opacity: 0.85;
+    transition: opacity 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+  }
+
+  .auth-btn:hover {
+    opacity: 1;
+    color: var(--accent);
+    border-color: var(--accent);
+  }
+
   .sticky {
     position: relative;
     width: min(320px, 86vw);
@@ -624,6 +658,7 @@
       <p class="tagline">오늘도 대충 해봅시다 ☁️</p>
       <p class="date" id="dateText"></p>
       <p class="counter" id="taskCounter"></p>
+      <div class="auth-row" id="authRow"></div>
     </div>
 
     <div class="board-row">
@@ -694,7 +729,6 @@
   const SUPABASE_URL = 'https://ytnlgabrbrddfpjzzrrn.supabase.co';
   const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl0bmxnYWJyYnJkZGZwanp6cnJuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk1MzY1NzEsImV4cCI6MjEwNTExMjU3MX0.3H3oSigr6E649McUa8HFf9JYDbM1qIdZQGlJw6-WGro';
   const CLOUD_ROW_ID = 'shared';
-  const CLOUD_MIGRATED_KEY = 'postit-cloud-migrated-v1';
   const REORDER_DELAY = 300;
   const BOARD_IDS = ['today', 'waiting', 'someday'];
   const EMPTY_HINTS = {
@@ -802,42 +836,31 @@
     /* cloud sync unavailable — app still works from localStorage */
   }
 
+  let activeRowId = null;
+
   function pushToCloud() {
     if (!cloudClient) return;
     cloudClient
       .from('postit_data')
-      .upsert({ id: CLOUD_ROW_ID, data: boards, updated_at: new Date().toISOString() })
+      .upsert({ id: activeRowId, data: boards, updated_at: new Date().toISOString() })
       .then(() => {})
       .catch(() => {});
   }
 
-  async function initCloudSync() {
+  // Syncs `boards` with a single cloud row. The cloud's own existence (not a
+  // per-device flag) decides direction: if the row already exists anywhere,
+  // it's the source of truth and we pull it down; only a row that has never
+  // been created gets seeded from whatever this device currently has. That
+  // way a brand-new device can never clobber real data that's already synced —
+  // it always adopts it instead.
+  async function syncRow(rowId) {
     if (!cloudClient) return;
-
-    // First time this browser talks to the cloud: this device's local data is
-    // the source of truth, so push it up rather than risk an empty or
-    // different shared row silently overwriting it.
-    let alreadyMigrated = false;
-    try {
-      alreadyMigrated = localStorage.getItem(CLOUD_MIGRATED_KEY) === '1';
-    } catch (e) {
-      /* ignore */
-    }
-    if (!alreadyMigrated) {
-      pushToCloud();
-      try {
-        localStorage.setItem(CLOUD_MIGRATED_KEY, '1');
-      } catch (e) {
-        /* ignore */
-      }
-      return;
-    }
-
+    activeRowId = rowId;
     try {
       const { data, error } = await cloudClient
         .from('postit_data')
         .select('data')
-        .eq('id', CLOUD_ROW_ID)
+        .eq('id', rowId)
         .maybeSingle();
       if (error) throw error;
       if (data && data.data) {
@@ -854,6 +877,55 @@
     } catch (e) {
       /* offline or cloud unavailable — keep using local data */
     }
+  }
+
+  const authRowEl = document.getElementById('authRow');
+
+  function renderAuthUI(user) {
+    if (!authRowEl) return;
+    authRowEl.innerHTML = '';
+    if (!cloudClient) return;
+
+    if (user) {
+      const span = document.createElement('span');
+      span.className = 'auth-user';
+      span.textContent = user.email || '로그인됨';
+
+      const btn = document.createElement('button');
+      btn.className = 'auth-btn';
+      btn.type = 'button';
+      btn.textContent = '로그아웃';
+      btn.addEventListener('click', () => cloudClient.auth.signOut());
+
+      authRowEl.appendChild(span);
+      authRowEl.appendChild(btn);
+    } else {
+      const btn = document.createElement('button');
+      btn.className = 'auth-btn';
+      btn.type = 'button';
+      btn.textContent = 'Google로 로그인';
+      btn.addEventListener('click', () => {
+        cloudClient.auth.signInWithOAuth({
+          provider: 'google',
+          options: { redirectTo: window.location.href }
+        });
+      });
+      authRowEl.appendChild(btn);
+    }
+  }
+
+  async function handleAuthChange(session) {
+    const user = session && session.user ? session.user : null;
+    renderAuthUI(user);
+    const nextRowId = user ? user.id : CLOUD_ROW_ID;
+    if (nextRowId === activeRowId) return;
+    await syncRow(nextRowId);
+  }
+
+  if (cloudClient) {
+    cloudClient.auth.onAuthStateChange((_event, session) => {
+      handleAuthChange(session);
+    });
   }
 
   let boards = normalizeBoards(loadBoards());
@@ -1214,7 +1286,6 @@
   });
 
   renderAll();
-  initCloudSync();
 })();
 </script>
 
