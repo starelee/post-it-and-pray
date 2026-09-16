@@ -240,26 +240,25 @@
 
   .archive-flag {
     position: absolute;
-    top: -14px;
-    right: 14px;
+    top: -22px;
+    right: 18px;
     z-index: 5;
-    width: 26px;
-    height: 20px;
+    width: 18px;
+    height: 34px;
     padding: 0;
     border: none;
     background: var(--urgent);
-    clip-path: polygon(0 0, 100% 0, 100% 100%, 12% 100%, 0 65%);
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.18);
+    box-shadow: 1px 2px 4px rgba(0, 0, 0, 0.2);
     cursor: pointer;
     opacity: 0.9;
-    transform-origin: bottom right;
-    transform: rotate(-22deg);
+    transform-origin: center bottom;
+    transform: rotate(-4deg);
     transition: opacity 0.15s ease, transform 0.15s ease;
   }
 
   .archive-flag:hover {
     opacity: 1;
-    transform: rotate(-22deg) translateY(-2px);
+    transform: rotate(-4deg) translateY(-2px);
   }
 
   /* On narrow (stacked) layouts the flag reads as attached to the "gotta
@@ -340,6 +339,26 @@
     font-weight: 400;
     margin: 0 0 10px;
     color: var(--ink);
+  }
+
+  .archive-close-btn {
+    position: absolute;
+    top: 10px;
+    right: 14px;
+    background: none;
+    border: none;
+    font-size: 15px;
+    line-height: 1;
+    color: var(--ink-soft);
+    cursor: pointer;
+    padding: 4px;
+    opacity: 0.7;
+    transition: opacity 0.15s ease, color 0.15s ease;
+  }
+
+  .archive-close-btn:hover {
+    opacity: 1;
+    color: var(--accent);
   }
 
   .archive-date-group {
@@ -1006,6 +1025,7 @@
     <div class="board-wrap">
       <div class="archive-panel" id="archivePanel">
         <div class="archive-panel-inner">
+          <button class="archive-close-btn" id="archiveCloseBtn" type="button" aria-label="닫기">✕</button>
           <h2 class="archive-title">done 📋</h2>
           <div class="archive-groups" id="archiveGroups"></div>
         </div>
@@ -1212,6 +1232,13 @@
     if (open) renderArchive();
   }
   archiveFlagBtns.forEach(btn => btn.addEventListener('click', toggleArchivePanel));
+
+  const archiveCloseBtn = document.getElementById('archiveCloseBtn');
+  if (archiveCloseBtn) {
+    archiveCloseBtn.addEventListener('click', () => {
+      archivePanelEl.classList.remove('open');
+    });
+  }
 
   function updateCounter() {
     const today = todayStr();
