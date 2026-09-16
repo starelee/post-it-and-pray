@@ -312,6 +312,21 @@
     flex: 1;
     word-break: break-word;
     transition: color 0.3s ease 0.05s;
+    cursor: text;
+  }
+
+  .task-edit-input {
+    flex: 1;
+    font-family: 'NostalgicMyoeunHeullim', 'Gaegu', cursive, sans-serif;
+    font-size: 19px;
+    line-height: 1.3;
+    color: var(--ink);
+    background: transparent;
+    border: none;
+    border-bottom: 1px dashed var(--accent);
+    outline: none;
+    padding: 0;
+    min-width: 0;
   }
 
   .task-item.done .task-text {
@@ -421,6 +436,18 @@
     cursor: pointer;
     padding: 1px 2px;
     word-break: break-word;
+  }
+
+  .subtask-edit-input {
+    font-family: 'NostalgicMyoeunHeullim', 'Gaegu', cursive, sans-serif;
+    font-size: 14px;
+    line-height: 1.3;
+    color: var(--ink-soft);
+    background: transparent;
+    border: none;
+    border-bottom: 1px dashed var(--accent);
+    outline: none;
+    padding: 1px 2px;
   }
 
   .subtask-item.done .subtask-chip {
@@ -806,6 +833,10 @@
     const text = document.createElement('span');
     text.className = 'task-text';
     text.textContent = task.text;
+    text.tabIndex = 0;
+    text.setAttribute('role', 'button');
+    text.setAttribute('aria-label', '내용 수정');
+    text.addEventListener('click', () => startEditTask(boardId, task.id));
     const line = document.createElement('span');
     line.className = 'strike-line';
     text.appendChild(line);
@@ -908,6 +939,10 @@
     chip.setAttribute('aria-label', sub.done ? '완료 취소' : '완료 표시');
     chip.textContent = '[' + sub.text + ']';
     chip.addEventListener('click', () => toggleSubtask(boardId, taskId, sub.id));
+    chip.addEventListener('dblclick', (e) => {
+      e.stopPropagation();
+      startEditSubtask(boardId, taskId, sub.id);
+    });
 
     const del = document.createElement('button');
     del.className = 'subtask-delete-btn';
@@ -919,6 +954,40 @@
     li.appendChild(chip);
     li.appendChild(del);
     return li;
+  }
+
+  function startEditTask(boardId, id) {
+    const task = boards[boardId].find(t => t.id === id);
+    const li = getListEl(boardId).querySelector('[data-id="' + id + '"]');
+    if (!task || !li) return;
+    const textEl = li.querySelector('.task-text');
+    if (!textEl) return;
+
+    const input = document.createElement('input');
+    input.className = 'task-edit-input';
+    input.type = 'text';
+    input.value = task.text;
+    input.maxLength = 60;
+    textEl.replaceWith(input);
+    input.focus();
+    input.select();
+
+    const commit = () => {
+      const trimmed = input.value.trim();
+      if (trimmed) task.text = trimmed;
+      saveBoards();
+      render(boardId);
+    };
+
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        input.blur();
+      } else if (e.key === 'Escape') {
+        input.value = task.text;
+        input.blur();
+      }
+    });
+    input.addEventListener('blur', commit);
   }
 
   function toggleTask(boardId, id) {
@@ -963,6 +1032,42 @@
     task.urgent = !task.urgent;
     saveBoards();
     render(boardId);
+  }
+
+  function startEditSubtask(boardId, taskId, subId) {
+    const task = boards[boardId].find(t => t.id === taskId);
+    const sub = task && task.subtasks.find(s => s.id === subId);
+    const subLi = getListEl(boardId).querySelector('[data-id="' + taskId + '"] .subtask-list [data-id="' + subId + '"]');
+    if (!sub || !subLi) return;
+    const chipEl = subLi.querySelector('.subtask-chip');
+    if (!chipEl) return;
+
+    const input = document.createElement('input');
+    input.className = 'subtask-edit-input';
+    input.type = 'text';
+    input.value = sub.text;
+    input.maxLength = 60;
+    input.size = Math.max(2, sub.text.length);
+    chipEl.replaceWith(input);
+    input.focus();
+    input.select();
+
+    const commit = () => {
+      const trimmed = input.value.trim();
+      if (trimmed) sub.text = trimmed;
+      saveBoards();
+      render(boardId);
+    };
+
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        input.blur();
+      } else if (e.key === 'Escape') {
+        input.value = sub.text;
+        input.blur();
+      }
+    });
+    input.addEventListener('blur', commit);
   }
 
   function toggleSubtask(boardId, taskId, subId) {
