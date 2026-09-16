@@ -728,7 +728,6 @@
   const OLD_STORAGE_KEY = 'postit-todo-tasks-v1';
   const SUPABASE_URL = 'https://ytnlgabrbrddfpjzzrrn.supabase.co';
   const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl0bmxnYWJyYnJkZGZwanp6cnJuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk1MzY1NzEsImV4cCI6MjEwNTExMjU3MX0.3H3oSigr6E649McUa8HFf9JYDbM1qIdZQGlJw6-WGro';
-  const CLOUD_ROW_ID = 'shared';
   const REORDER_DELAY = 300;
   const BOARD_IDS = ['today', 'waiting', 'someday'];
   const EMPTY_HINTS = {
@@ -824,7 +823,8 @@
     } catch (e) {
       /* storage unavailable — state just won't persist */
     }
-    pushToCloud();
+    // Guests (activeRowId === null) stay local-only — no cloud write at all.
+    if (activeRowId) pushToCloud();
   }
 
   let cloudClient = null;
@@ -836,10 +836,12 @@
     /* cloud sync unavailable — app still works from localStorage */
   }
 
+  // null = guest, local-only. A real value = signed-in user id, synced to
+  // that user's own cloud row.
   let activeRowId = null;
 
   function pushToCloud() {
-    if (!cloudClient) return;
+    if (!cloudClient || !activeRowId) return;
     cloudClient
       .from('postit_data')
       .upsert({ id: activeRowId, data: boards, updated_at: new Date().toISOString() })
@@ -847,12 +849,10 @@
       .catch(() => {});
   }
 
-  // Syncs `boards` with a single cloud row. The cloud's own existence (not a
-  // per-device flag) decides direction: if the row already exists anywhere,
-  // it's the source of truth and we pull it down; only a row that has never
-  // been created gets seeded from whatever this device currently has. That
-  // way a brand-new device can never clobber real data that's already synced —
-  // it always adopts it instead.
+  // Syncs `boards` with the signed-in user's own cloud row. If that row
+  // already exists, it's the source of truth and we pull it down; if it
+  // doesn't exist yet (first login), whatever's currently on screen —
+  // including pre-login guest data — gets pushed up as the initial migration.
   async function syncRow(rowId) {
     if (!cloudClient) return;
     activeRowId = rowId;
@@ -917,9 +917,13 @@
   async function handleAuthChange(session) {
     const user = session && session.user ? session.user : null;
     renderAuthUI(user);
-    const nextRowId = user ? user.id : CLOUD_ROW_ID;
-    if (nextRowId === activeRowId) return;
-    await syncRow(nextRowId);
+    if (user) {
+      if (activeRowId === user.id) return;
+      await syncRow(user.id);
+    } else {
+      // Logged out (or never logged in): guest mode, local-only, no cloud sync.
+      activeRowId = null;
+    }
   }
 
   if (cloudClient) {
