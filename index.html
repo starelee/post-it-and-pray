@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>오늘도 대충 해봅시다</title>
+<title>post it and pray</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Gaegu:wght@400;700&family=Nanum+Pen+Script&display=swap" rel="stylesheet">
@@ -24,6 +24,8 @@
     --ink: #4a4034;
     --ink-soft: #b3a98f;
     --accent: #e2727e;
+    --urgent: #d43d3d;
+    --urgent-bg: rgba(212, 61, 61, 0.1);
     --tape: rgba(255, 255, 255, 0.6);
     --tape-edge: rgba(255, 255, 255, 0.25);
     --divider: #cdbd7c;
@@ -43,6 +45,8 @@
       --ink: #ecdfc2;
       --ink-soft: #756c54;
       --accent: #e8919b;
+      --urgent: #ff6b6b;
+      --urgent-bg: rgba(255, 107, 107, 0.14);
       --tape: rgba(255, 255, 255, 0.14);
       --tape-edge: rgba(255, 255, 255, 0.05);
       --divider: #5c5537;
@@ -62,6 +66,8 @@
     --ink: #ecdfc2;
     --ink-soft: #756c54;
     --accent: #e8919b;
+    --urgent: #ff6b6b;
+    --urgent-bg: rgba(255, 107, 107, 0.14);
     --tape: rgba(255, 255, 255, 0.14);
     --tape-edge: rgba(255, 255, 255, 0.05);
     --divider: #5c5537;
@@ -102,11 +108,26 @@
     text-align: center;
   }
 
-  .tagline {
-    font-family: 'NostalgicMyoeunHeullim', 'Nanum Pen Script', cursive;
-    font-size: clamp(26px, 5vw, 36px);
+  .logo {
+    font-family: 'Gaegu', cursive, sans-serif;
+    font-size: clamp(28px, 6vw, 42px);
+    font-weight: 700;
     margin: 0;
     color: var(--ink);
+    transform: rotate(-2deg);
+  }
+
+  .logo .pray {
+    font-style: italic;
+    display: inline-block;
+    transform: rotate(3deg);
+  }
+
+  .tagline {
+    font-family: 'NostalgicMyoeunHeullim', 'Nanum Pen Script', cursive;
+    font-size: clamp(14px, 2.6vw, 17px);
+    margin: 6px 0 0;
+    color: var(--ink-soft);
   }
 
   .date {
@@ -172,11 +193,44 @@
   }
 
   .task-item {
-    display: flex;
-    align-items: center;
-    gap: 10px;
     padding: 7px 0;
     position: relative;
+  }
+
+  .task-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .task-item.urgent .task-row {
+    background: var(--urgent-bg);
+    border-radius: 4px;
+    margin: -2px -6px;
+    padding: 2px 6px;
+  }
+
+  .urgent-btn {
+    flex: 0 0 auto;
+    background: none;
+    border: none;
+    color: var(--ink-soft);
+    font-size: 15px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 2px 3px;
+    opacity: 0.35;
+    transition: opacity 0.15s ease, color 0.15s ease, transform 0.15s ease;
+  }
+
+  .urgent-btn:hover {
+    opacity: 1;
+    transform: scale(1.1);
+  }
+
+  .task-item.urgent .urgent-btn {
+    color: var(--urgent);
+    opacity: 1;
   }
 
   .checkbox {
@@ -244,6 +298,16 @@
     color: var(--ink-soft);
   }
 
+  .task-item.urgent .task-text {
+    color: var(--urgent);
+    font-weight: 700;
+  }
+
+  .task-item.urgent.done .task-text {
+    color: var(--ink-soft);
+    font-weight: 400;
+  }
+
   .strike-line {
     position: absolute;
     left: 0;
@@ -279,6 +343,119 @@
 
   .delete-btn:hover {
     color: var(--accent);
+  }
+
+  .subtask-list {
+    list-style: none;
+    margin: 4px 0 0;
+    padding: 0 0 0 28px;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .subtask-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 3px 0;
+    position: relative;
+  }
+
+  .subtask-checkbox {
+    flex: 0 0 auto;
+    width: 15px;
+    height: 15px;
+    border: 2px solid var(--ink-soft);
+    border-radius: 2px 4px 3px 5px;
+    background: transparent;
+    cursor: pointer;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+
+  .subtask-item.done .subtask-checkbox {
+    border-color: var(--ink-soft);
+  }
+
+  .subtask-check-icon {
+    width: 10px;
+    height: 10px;
+    overflow: visible;
+  }
+
+  .subtask-item .subtask-check-icon .check-path {
+    stroke-width: 4;
+  }
+
+  .subtask-item.done .subtask-check-icon .check-path {
+    stroke-dashoffset: 0;
+  }
+
+  .subtask-text {
+    position: relative;
+    font-family: 'NostalgicMyoeunHeullim', 'Gaegu', cursive, sans-serif;
+    font-size: 15px;
+    line-height: 1.25;
+    flex: 1;
+    color: var(--ink-soft);
+    word-break: break-word;
+  }
+
+  .subtask-item.done .subtask-text {
+    text-decoration: line-through;
+    text-decoration-color: var(--ink-soft);
+  }
+
+  .subtask-delete-btn {
+    flex: 0 0 auto;
+    background: none;
+    border: none;
+    color: var(--ink-soft);
+    font-size: 14px;
+    line-height: 1;
+    cursor: pointer;
+    opacity: 0;
+    padding: 1px 3px;
+    transition: opacity 0.15s ease, color 0.15s ease;
+  }
+
+  .subtask-item:hover .subtask-delete-btn,
+  .subtask-item:focus-within .subtask-delete-btn {
+    opacity: 1;
+  }
+
+  .subtask-delete-btn:hover {
+    color: var(--accent);
+  }
+
+  .add-subtask-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 0 0 28px;
+  }
+
+  .add-subtask-row .plus {
+    font-size: 14px;
+  }
+
+  .new-subtask-input {
+    flex: 1;
+    border: none;
+    background: transparent;
+    font-family: 'NostalgicMyoeunHeullim', 'Gaegu', cursive, sans-serif;
+    font-size: 14px;
+    color: var(--ink-soft);
+    outline: none;
+  }
+
+  .new-subtask-input::placeholder {
+    color: var(--ink-soft);
+    opacity: 0.7;
   }
 
   .divider {
@@ -357,6 +534,7 @@
 
   <div class="screen">
     <div class="header">
+      <h1 class="logo">post it <span class="pray">and pray</span></h1>
       <p class="tagline">오늘도 대충 해봅시다 ☁️</p>
       <p class="date" id="dateText"></p>
     </div>
@@ -414,11 +592,23 @@
       /* fall through to seed data */
     }
     return [
-      { id: 1, text: '빨래 돌리기', done: false },
-      { id: 2, text: '메일 보내기', done: true },
-      { id: 3, text: '산책', done: false },
-      { id: 4, text: '뭐라도 읽기', done: false }
+      { id: 1, text: '빨래 돌리기', done: false, urgent: false, subtasks: [] },
+      { id: 2, text: '메일 보내기', done: true, urgent: false, subtasks: [] },
+      { id: 3, text: '산책', done: false, urgent: false, subtasks: [] },
+      { id: 4, text: '뭐라도 읽기', done: false, urgent: false, subtasks: [] }
     ];
+  }
+
+  function normalizeTasks(list) {
+    return list.map(t => ({
+      id: t.id,
+      text: t.text,
+      done: !!t.done,
+      urgent: !!t.urgent,
+      subtasks: Array.isArray(t.subtasks)
+        ? t.subtasks.map(s => ({ id: s.id, text: s.text, done: !!s.done }))
+        : []
+    }));
   }
 
   function saveTasks() {
@@ -429,12 +619,12 @@
     }
   }
 
-  let tasks = loadTasks();
+  let tasks = normalizeTasks(loadTasks());
 
-  function makeCheckSvg() {
+  function makeCheckSvg(iconClass) {
     const ns = 'http://www.w3.org/2000/svg';
     const svg = document.createElementNS(ns, 'svg');
-    svg.setAttribute('class', 'check-icon');
+    svg.setAttribute('class', iconClass || 'check-icon');
     svg.setAttribute('viewBox', '0 0 24 24');
     const path = document.createElementNS(ns, 'path');
     path.setAttribute('class', 'check-path');
@@ -469,8 +659,11 @@
 
   function renderItem(task) {
     const li = document.createElement('li');
-    li.className = 'task-item' + (task.done ? ' done' : '');
+    li.className = 'task-item' + (task.done ? ' done' : '') + (task.urgent ? ' urgent' : '');
     li.dataset.id = task.id;
+
+    const row = document.createElement('div');
+    row.className = 'task-row';
 
     const checkbox = document.createElement('button');
     checkbox.className = 'checkbox';
@@ -478,6 +671,13 @@
     checkbox.setAttribute('aria-label', task.done ? '완료 취소' : '완료 표시');
     checkbox.appendChild(makeCheckSvg());
     checkbox.addEventListener('click', () => toggleTask(task.id));
+
+    const urgentBtn = document.createElement('button');
+    urgentBtn.className = 'urgent-btn';
+    urgentBtn.type = 'button';
+    urgentBtn.setAttribute('aria-label', task.urgent ? '긴급 해제' : '긴급 표시');
+    urgentBtn.textContent = '!';
+    urgentBtn.addEventListener('click', () => toggleUrgent(task.id));
 
     const text = document.createElement('span');
     text.className = 'task-text';
@@ -492,6 +692,66 @@
     del.setAttribute('aria-label', '삭제');
     del.textContent = '×';
     del.addEventListener('click', () => deleteTask(task.id));
+
+    row.appendChild(checkbox);
+    row.appendChild(urgentBtn);
+    row.appendChild(text);
+    row.appendChild(del);
+    li.appendChild(row);
+
+    if (task.subtasks.length > 0) {
+      const subList = document.createElement('ul');
+      subList.className = 'subtask-list';
+      task.subtasks.forEach(sub => subList.appendChild(renderSubtaskItem(task.id, sub)));
+      li.appendChild(subList);
+    }
+
+    const addSubRow = document.createElement('div');
+    addSubRow.className = 'add-subtask-row';
+    const plus = document.createElement('span');
+    plus.className = 'plus';
+    plus.textContent = '+';
+    const subInput = document.createElement('input');
+    subInput.className = 'new-subtask-input';
+    subInput.type = 'text';
+    subInput.placeholder = '하위 항목 추가...';
+    subInput.autocomplete = 'off';
+    subInput.maxLength = 60;
+    subInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        addSubtask(task.id, subInput.value);
+        subInput.value = '';
+      }
+    });
+    addSubRow.appendChild(plus);
+    addSubRow.appendChild(subInput);
+    li.appendChild(addSubRow);
+
+    return li;
+  }
+
+  function renderSubtaskItem(taskId, sub) {
+    const li = document.createElement('li');
+    li.className = 'subtask-item' + (sub.done ? ' done' : '');
+    li.dataset.id = sub.id;
+
+    const checkbox = document.createElement('button');
+    checkbox.className = 'subtask-checkbox';
+    checkbox.type = 'button';
+    checkbox.setAttribute('aria-label', sub.done ? '완료 취소' : '완료 표시');
+    checkbox.appendChild(makeCheckSvg('subtask-check-icon'));
+    checkbox.addEventListener('click', () => toggleSubtask(taskId, sub.id));
+
+    const text = document.createElement('span');
+    text.className = 'subtask-text';
+    text.textContent = sub.text;
+
+    const del = document.createElement('button');
+    del.className = 'subtask-delete-btn';
+    del.type = 'button';
+    del.setAttribute('aria-label', '삭제');
+    del.textContent = '×';
+    del.addEventListener('click', () => deleteSubtask(taskId, sub.id));
 
     li.appendChild(checkbox);
     li.appendChild(text);
@@ -520,7 +780,46 @@
   function addTask(text) {
     const trimmed = text.trim();
     if (!trimmed) return;
-    tasks.push({ id: Date.now(), text: trimmed, done: false });
+    tasks.push({ id: Date.now(), text: trimmed, done: false, urgent: false, subtasks: [] });
+    saveTasks();
+    render();
+  }
+
+  function toggleUrgent(id) {
+    const task = tasks.find(t => t.id === id);
+    if (!task) return;
+    task.urgent = !task.urgent;
+    saveTasks();
+    render();
+  }
+
+  function toggleSubtask(taskId, subId) {
+    const task = tasks.find(t => t.id === taskId);
+    if (!task) return;
+    const sub = task.subtasks.find(s => s.id === subId);
+    if (!sub) return;
+    sub.done = !sub.done;
+
+    const subLi = taskListEl.querySelector('[data-id="' + taskId + '"] .subtask-list [data-id="' + subId + '"]');
+    if (subLi) subLi.classList.toggle('done', sub.done);
+
+    saveTasks();
+  }
+
+  function deleteSubtask(taskId, subId) {
+    const task = tasks.find(t => t.id === taskId);
+    if (!task) return;
+    task.subtasks = task.subtasks.filter(s => s.id !== subId);
+    saveTasks();
+    render();
+  }
+
+  function addSubtask(taskId, text) {
+    const trimmed = text.trim();
+    if (!trimmed) return;
+    const task = tasks.find(t => t.id === taskId);
+    if (!task) return;
+    task.subtasks.push({ id: Date.now(), text: trimmed, done: false });
     saveTasks();
     render();
   }
