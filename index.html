@@ -806,7 +806,7 @@
 
           <button class="sticky-title sticky-title-toggle" type="button" data-collapse-toggle>
             scheduled <span class="flower">📅</span>
-            <span class="toggle-arrow" data-toggle-arrow>▸</span>
+            <span class="toggle-arrow" data-toggle-arrow>▾</span>
           </button>
           <div class="collapsible-body" data-collapse-body hidden>
             <ul class="task-list" data-tasklist="scheduled"></ul>
@@ -814,7 +814,7 @@
 
           <button class="sticky-title sticky-title-toggle sticky-title-toggle-spaced" type="button" data-collapse-toggle>
             someday... <span class="flower">🌙</span>
-            <span class="toggle-arrow" data-toggle-arrow>▸</span>
+            <span class="toggle-arrow" data-toggle-arrow>▾</span>
           </button>
           <div class="collapsible-body" data-collapse-body hidden>
             <ul class="task-list" data-tasklist="someday"></ul>
@@ -1092,7 +1092,7 @@
     toggle.addEventListener('click', () => {
       const open = body.hidden;
       body.hidden = !open;
-      if (arrow) arrow.textContent = open ? '▾' : '▸';
+      if (arrow) arrow.textContent = open ? '▴' : '▾';
     });
   });
 
