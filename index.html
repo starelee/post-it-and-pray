@@ -213,7 +213,7 @@
   }
 
   .task-item {
-    padding: 7px 0;
+    padding: 5px 0;
     position: relative;
   }
 
@@ -343,26 +343,56 @@
     width: 104%;
   }
 
+  .task-controls {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    max-height: 0;
+    overflow: hidden;
+    opacity: 0;
+    margin-top: 0;
+    padding-left: 28px;
+    transition: max-height 0.15s ease, opacity 0.15s ease, margin-top 0.15s ease;
+  }
+
+  .task-item:hover .task-controls,
+  .task-item:focus-within .task-controls {
+    max-height: 26px;
+    opacity: 1;
+    margin-top: 4px;
+  }
+
   .delete-btn {
     flex: 0 0 auto;
     background: none;
     border: none;
     color: var(--ink-soft);
-    font-size: 18px;
+    font-size: 16px;
     line-height: 1;
     cursor: pointer;
-    opacity: 0;
-    padding: 2px 4px;
-    transition: opacity 0.15s ease, color 0.15s ease;
-  }
-
-  .task-item:hover .delete-btn,
-  .task-item:focus-within .delete-btn {
-    opacity: 1;
+    padding: 2px 3px;
+    transition: color 0.15s ease;
   }
 
   .delete-btn:hover {
     color: var(--accent);
+  }
+
+  .move-btn {
+    flex: 0 0 auto;
+    background: none;
+    border: none;
+    font-size: 14px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 2px 3px;
+    opacity: 0.6;
+    transition: opacity 0.15s ease, transform 0.15s ease;
+  }
+
+  .move-btn:hover {
+    opacity: 1;
+    transform: scale(1.15);
   }
 
   .subtask-list {
@@ -426,22 +456,16 @@
   }
 
   .add-subtask-toggle {
-    display: block;
+    flex: 0 0 auto;
     background: none;
     border: none;
     color: var(--ink-soft);
     font-size: 15px;
     line-height: 1;
     cursor: pointer;
-    margin: 3px 0 0 28px;
     padding: 2px 4px;
-    opacity: 0;
-    transition: opacity 0.15s ease;
-  }
-
-  .task-item:hover .add-subtask-toggle,
-  .task-item:focus-within .add-subtask-toggle {
     opacity: 0.6;
+    transition: opacity 0.15s ease, color 0.15s ease;
   }
 
   .add-subtask-toggle:hover {
@@ -632,6 +656,11 @@
     waiting: '기다리는 거 없음',
     someday: '언젠가 해볼까'
   };
+  const BOARD_META = {
+    today: { emoji: '✿', label: "today's list" },
+    waiting: { emoji: '⏳', label: 'waiting...' },
+    someday: { emoji: '🌙', label: 'someday...' }
+  };
 
   const dateEl = document.getElementById('dateText');
 
@@ -781,17 +810,9 @@
     line.className = 'strike-line';
     text.appendChild(line);
 
-    const del = document.createElement('button');
-    del.className = 'delete-btn';
-    del.type = 'button';
-    del.setAttribute('aria-label', '삭제');
-    del.textContent = '×';
-    del.addEventListener('click', () => deleteTask(boardId, task.id));
-
     row.appendChild(checkbox);
     row.appendChild(urgentBtn);
     row.appendChild(text);
-    row.appendChild(del);
     li.appendChild(row);
 
     if (task.subtasks.length > 0) {
@@ -801,11 +822,36 @@
       li.appendChild(subList);
     }
 
+    const controls = document.createElement('div');
+    controls.className = 'task-controls';
+
     const addToggle = document.createElement('button');
     addToggle.className = 'add-subtask-toggle';
     addToggle.type = 'button';
     addToggle.setAttribute('aria-label', '하위 항목 추가');
     addToggle.textContent = '+';
+
+    const del = document.createElement('button');
+    del.className = 'delete-btn';
+    del.type = 'button';
+    del.setAttribute('aria-label', '삭제');
+    del.textContent = '×';
+    del.addEventListener('click', () => deleteTask(boardId, task.id));
+
+    controls.appendChild(addToggle);
+    controls.appendChild(del);
+
+    BOARD_IDS.filter(id => id !== boardId).forEach(otherId => {
+      const moveBtn = document.createElement('button');
+      moveBtn.className = 'move-btn';
+      moveBtn.type = 'button';
+      moveBtn.setAttribute('aria-label', BOARD_META[otherId].label + '로 이동');
+      moveBtn.textContent = BOARD_META[otherId].emoji;
+      moveBtn.addEventListener('click', () => moveTask(boardId, otherId, task.id));
+      controls.appendChild(moveBtn);
+    });
+
+    li.appendChild(controls);
 
     const addSubRow = document.createElement('div');
     addSubRow.className = 'add-subtask-row';
@@ -832,7 +878,6 @@
 
     addSubRow.appendChild(plus);
     addSubRow.appendChild(subInput);
-    li.appendChild(addToggle);
     li.appendChild(addSubRow);
 
     return li;
@@ -892,6 +937,16 @@
     boards[boardId] = boards[boardId].filter(t => t.id !== id);
     saveBoards();
     render(boardId);
+  }
+
+  function moveTask(fromBoardId, toBoardId, id) {
+    const idx = boards[fromBoardId].findIndex(t => t.id === id);
+    if (idx === -1) return;
+    const [task] = boards[fromBoardId].splice(idx, 1);
+    boards[toBoardId].push(task);
+    saveBoards();
+    render(fromBoardId);
+    render(toBoardId);
   }
 
   function addTask(boardId, text) {
