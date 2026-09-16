@@ -1236,8 +1236,11 @@
     if (!listEl) return;
     listEl.innerHTML = '';
 
+    const today = todayStr();
     const tasks = boards.scheduled.slice().sort(byDueDate);
-    const active = tasks.filter(t => !t.done);
+    // Overdue, unchecked tasks only show under today's "oops, still here" —
+    // no need to also list them here.
+    const active = tasks.filter(t => !t.done && t.dueDate >= today);
     const done = tasks.filter(t => t.done);
 
     if (active.length === 0 && done.length === 0) {
