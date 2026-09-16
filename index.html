@@ -19,6 +19,8 @@
     --bg-top: #e9ecdf;
     --bg-bot: #dfe3d3;
     --paper: #fff6c8;
+    --paper-waiting: #ffe1ac;
+    --paper-someday: #dbe2f7;
     --paper-shadow: rgba(70, 60, 20, 0.28);
     --paper-contact: rgba(70, 60, 20, 0.16);
     --ink: #4a4034;
@@ -40,6 +42,8 @@
       --bg-top: #23261f;
       --bg-bot: #1a1c17;
       --paper: #3a3320;
+      --paper-waiting: #4a3a1f;
+      --paper-someday: #2c3350;
       --paper-shadow: rgba(0, 0, 0, 0.5);
       --paper-contact: rgba(0, 0, 0, 0.35);
       --ink: #ecdfc2;
@@ -61,6 +65,8 @@
     --bg-top: #23261f;
     --bg-bot: #1a1c17;
     --paper: #3a3320;
+    --paper-waiting: #4a3a1f;
+    --paper-someday: #2c3350;
     --paper-shadow: rgba(0, 0, 0, 0.5);
     --paper-contact: rgba(0, 0, 0, 0.35);
     --ink: #ecdfc2;
@@ -110,6 +116,12 @@
     justify-content: center;
     align-items: flex-start;
     gap: 30px 22px;
+  }
+
+  .side-col {
+    display: flex;
+    flex-direction: column;
+    gap: 30px;
   }
 
   .header {
@@ -567,39 +579,41 @@
         </div>
       </div>
 
-      <div class="sticky" data-board="waiting" style="--rot: 1.2deg;">
-        <div class="tape"></div>
-        <h2 class="sticky-title">waiting... <span class="flower">⏳</span></h2>
+      <div class="side-col">
+        <div class="sticky" data-board="waiting" style="--rot: 1.2deg; --paper: var(--paper-waiting);">
+          <div class="tape"></div>
+          <h2 class="sticky-title">waiting... <span class="flower">⏳</span></h2>
 
-        <ul class="task-list" data-tasklist></ul>
+          <ul class="task-list" data-tasklist></ul>
 
-        <div class="add-row">
-          <span class="plus">+</span>
-          <input
-            class="new-task-input"
-            data-newtask
-            placeholder="기다리는 거..."
-            autocomplete="off"
-            maxlength="60"
-          />
+          <div class="add-row">
+            <span class="plus">+</span>
+            <input
+              class="new-task-input"
+              data-newtask
+              placeholder="기다리는 거..."
+              autocomplete="off"
+              maxlength="60"
+            />
+          </div>
         </div>
-      </div>
 
-      <div class="sticky" data-board="someday" style="--rot: -0.8deg;">
-        <div class="tape"></div>
-        <h2 class="sticky-title">someday... <span class="flower">🌙</span></h2>
+        <div class="sticky" data-board="someday" style="--rot: -0.8deg; --paper: var(--paper-someday);">
+          <div class="tape"></div>
+          <h2 class="sticky-title">someday... <span class="flower">🌙</span></h2>
 
-        <ul class="task-list" data-tasklist></ul>
+          <ul class="task-list" data-tasklist></ul>
 
-        <div class="add-row">
-          <span class="plus">+</span>
-          <input
-            class="new-task-input"
-            data-newtask
-            placeholder="언젠가는..."
-            autocomplete="off"
-            maxlength="60"
-          />
+          <div class="add-row">
+            <span class="plus">+</span>
+            <input
+              class="new-task-input"
+              data-newtask
+              placeholder="언젠가는..."
+              autocomplete="off"
+              maxlength="60"
+            />
+          </div>
         </div>
       </div>
     </div>
