@@ -2244,10 +2244,53 @@
     const boardId = input.closest('.sticky').dataset.board;
     input.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') {
-        addTask(boardId, input.value);
-        input.value = '';
+        if (e.shiftKey) {
+          const list = boards[boardId];
+          if (list.length === 0) return; // 그 보드에 할일이 하나도 없으면 무시
+          const lastTask = list[list.length - 1]; // 배열 맨 끝 = 가장 최근에 등록된 항목
+          addSubtask(boardId, lastTask.id, input.value);
+          input.value = '';
+        } else {
+          addTask(boardId, input.value);
+          input.value = '';
+        }
+        return;
+      }
+      if (e.shiftKey && (e.key === 'd' || e.key === 'D')) {
+        e.preventDefault(); // 안 막으면 입력창에 대문자 D가 그대로 찍힘
+        const list = boards[boardId];
+        if (list.length === 0) return; // 그 보드에 할일이 하나도 없으면 무시
+        const lastTask = list[list.length - 1];
+        const li = findTaskLi(lastTask.id);
+        const dateBtn = li && li.querySelector('.date-btn');
+        if (dateBtn) dateBtn.click(); // 날짜 지정 안 되는 보드(waiting)면 dateBtn 자체가 없어서 자연히 무시됨
       }
     });
+  });
+
+  // n/w/s: 어떤 입력창에도 포커스가 없을 때만 각 보드의 새 항목 입력창으로 포커스 이동.
+  const SHORTCUT_BOARD_IDS = { n: 'today', w: 'waiting', s: 'someday' };
+
+  document.addEventListener('keydown', (e) => {
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    const active = document.activeElement;
+    const tag = active && active.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+
+    const boardId = SHORTCUT_BOARD_IDS[e.key];
+    if (!boardId) return;
+
+    const input = document.querySelector('.sticky[data-board="' + boardId + '"] [data-newtask]');
+    if (!input) return;
+
+    // someday 입력창은 기본 접힘 섹션 안에 있음 — 접혀 있으면 기존 토글을 눌러서 펼침
+    const body = input.closest('[data-collapse-body]');
+    if (body && body.hidden && body.previousElementSibling) {
+      body.previousElementSibling.click();
+    }
+
+    e.preventDefault();
+    input.focus();
   });
 
   renderAll();
