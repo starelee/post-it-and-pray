@@ -1254,9 +1254,11 @@
     listEl.innerHTML = '';
 
     const today = todayStr();
-    const tasks = boards.scheduled.slice().sort(byDueDate);
-    // Unchecked tasks due today or earlier already show under today's list
-    // (as a normal item or under "oops, still here") — don't duplicate them.
+    // Tasks due today live entirely inside today's list (active or done) —
+    // never here, checked or not.
+    const tasks = boards.scheduled.filter(t => t.dueDate !== today).sort(byDueDate);
+    // Unchecked tasks overdue from before today already show under today's
+    // "oops, still here" — don't duplicate them.
     const active = tasks.filter(t => !t.done && t.dueDate > today);
     const done = tasks.filter(t => t.done);
 
@@ -1286,12 +1288,13 @@
     const today = todayStr();
     const plain = boards.today;
     const dueToday = boards.scheduled.filter(t => !t.done && t.dueDate === today).sort(byDueDate);
+    const doneToday = boards.scheduled.filter(t => t.done && t.dueDate === today).sort(byDueDate);
     const oops = boards.scheduled.filter(t => !t.done && t.dueDate < today).sort(byDueDate);
 
     const active = plain.filter(t => !t.done);
     const done = plain.filter(t => t.done);
 
-    if (active.length === 0 && dueToday.length === 0 && done.length === 0 && oops.length === 0) {
+    if (active.length === 0 && dueToday.length === 0 && done.length === 0 && doneToday.length === 0 && oops.length === 0) {
       const hint = document.createElement('li');
       hint.className = 'empty-hint';
       hint.textContent = EMPTY_HINTS.today;
@@ -1301,12 +1304,13 @@
     active.forEach(t => listEl.appendChild(renderItem('today', t)));
     dueToday.forEach(t => listEl.appendChild(renderItem('scheduled', t)));
 
-    if (done.length > 0) {
+    if (done.length > 0 || doneToday.length > 0) {
       const divider = document.createElement('li');
       divider.className = 'divider';
       divider.textContent = '─────────';
       listEl.appendChild(divider);
       done.forEach(t => listEl.appendChild(renderItem('today', t)));
+      doneToday.forEach(t => listEl.appendChild(renderItem('scheduled', t)));
     }
 
     if (oops.length > 0) {
