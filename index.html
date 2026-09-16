@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>오늘도 대충 해봅시다</title>
+<title>post it and pray</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Gaegu:wght@400;700&family=Nanum+Pen+Script&display=swap" rel="stylesheet">
@@ -102,11 +102,26 @@
     text-align: center;
   }
 
-  .tagline {
-    font-family: 'NostalgicMyoeunHeullim', 'Nanum Pen Script', cursive;
-    font-size: clamp(26px, 5vw, 36px);
+  .logo {
+    font-family: 'Gaegu', cursive, sans-serif;
+    font-size: clamp(28px, 6vw, 42px);
+    font-weight: 700;
     margin: 0;
     color: var(--ink);
+    transform: rotate(-2deg);
+  }
+
+  .logo .pray {
+    font-style: italic;
+    display: inline-block;
+    transform: rotate(3deg);
+  }
+
+  .tagline {
+    font-family: 'NostalgicMyoeunHeullim', 'Nanum Pen Script', cursive;
+    font-size: clamp(14px, 2.6vw, 17px);
+    margin: 6px 0 0;
+    color: var(--ink-soft);
   }
 
   .date {
@@ -357,6 +372,7 @@
 
   <div class="screen">
     <div class="header">
+      <h1 class="logo">post it <span class="pray">and pray</span></h1>
       <p class="tagline">오늘도 대충 해봅시다 ☁️</p>
       <p class="date" id="dateText"></p>
     </div>
