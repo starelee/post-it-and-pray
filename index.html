@@ -231,40 +231,82 @@
   }
 
   .archive-flag {
-    margin: 8px 0 0;
-    background: none;
-    border: 1px solid var(--ink-soft);
-    border-radius: 12px;
-    padding: 3px 10px;
+    position: absolute;
+    top: -10px;
+    right: -10px;
+    z-index: 5;
+    width: 66px;
+    height: 22px;
+    line-height: 22px;
+    padding: 0;
+    border: none;
+    background: linear-gradient(
+      to right,
+      var(--accent) 0 22%,
+      var(--legal-paper) 22% 78%,
+      var(--accent) 78% 100%
+    );
+    clip-path: polygon(0 0, 100% 0, 100% 100%, 12% 100%, 0 65%);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.18);
     font-family: 'Gaegu', cursive, sans-serif;
-    font-size: 13px;
-    color: var(--ink-soft);
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--ink);
     cursor: pointer;
-    opacity: 0.85;
-    transform: rotate(-1deg);
-    transition: opacity 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+    opacity: 0.9;
+    transform: rotate(6deg);
+    transition: opacity 0.15s ease, transform 0.15s ease;
   }
 
   .archive-flag:hover {
     opacity: 1;
-    color: var(--accent);
-    border-color: var(--accent);
+    transform: rotate(6deg) translateY(-1px);
+  }
+
+  /* On narrow (stacked) layouts the flag reads as attached to the "gotta
+     do" card since it's the top card either way; at desktop width, once
+     waiting sits beside today rather than under it, the flag moves to
+     waiting instead. */
+  .archive-flag-desktop {
+    display: none;
+  }
+
+  @media (min-width: 700px) {
+    .archive-flag-mobile {
+      display: none;
+    }
+    .archive-flag-desktop {
+      display: block;
+    }
+  }
+
+  .board-wrap {
+    position: relative;
+    width: 100%;
+    display: flex;
+    justify-content: center;
   }
 
   .archive-panel {
-    width: 100%;
-    max-width: 700px;
+    position: absolute;
+    top: 0;
+    left: 50%;
+    z-index: 100;
+    width: min(700px, 94vw);
     max-height: 0;
     overflow: hidden;
     opacity: 0;
-    transform: translateY(-10px);
+    pointer-events: none;
+    transform: translateX(-50%) translateY(-10px);
     transition: max-height 0.35s ease, opacity 0.25s ease, transform 0.35s ease;
   }
 
   .archive-panel.open {
-    max-height: 2000px;
+    max-height: 90vh;
+    overflow-y: auto;
     opacity: 1;
-    transform: translateY(0);
+    pointer-events: auto;
+    transform: translateX(-50%) translateY(0);
   }
 
   .archive-panel-inner {
@@ -940,18 +982,19 @@
       <p class="counter" id="taskCounter"></p>
       <div class="auth-row" id="authRow"></div>
       <button class="theme-toggle" id="themeToggle" type="button" aria-label="테마 전환"></button>
-      <button class="archive-flag" id="archiveFlagBtn" type="button" aria-label="다 한 일 보기">📋 다 한 일</button>
     </div>
 
-    <div class="archive-panel" id="archivePanel">
-      <div class="archive-panel-inner">
-        <h2 class="archive-title">다 한 일 📋</h2>
-        <div class="archive-groups" id="archiveGroups"></div>
+    <div class="board-wrap">
+      <div class="archive-panel" id="archivePanel">
+        <div class="archive-panel-inner">
+          <h2 class="archive-title">다 한 일 📋</h2>
+          <div class="archive-groups" id="archiveGroups"></div>
+        </div>
       </div>
-    </div>
 
-    <div class="board-row">
+      <div class="board-row">
       <div class="sticky" data-board="today" style="--rot: -1.4deg;">
+        <button class="archive-flag archive-flag-mobile" type="button" aria-label="다 한 일 보기">다한일</button>
         <div class="tape"></div>
         <h2 class="sticky-title">gotta do... <span class="flower">✿</span></h2>
 
@@ -971,6 +1014,7 @@
 
       <div class="side-col">
         <div class="sticky" data-board="waiting" style="--rot: 1.2deg; --paper: var(--paper-waiting);">
+          <button class="archive-flag archive-flag-desktop" type="button" aria-label="다 한 일 보기">다한일</button>
           <div class="tape"></div>
           <h2 class="sticky-title">waiting... <span class="flower">⏳</span></h2>
 
@@ -1018,6 +1062,7 @@
             </div>
           </div>
         </div>
+      </div>
       </div>
     </div>
   </div>
@@ -1135,7 +1180,10 @@
     });
   }
 
-  const archiveFlagBtn = document.getElementById('archiveFlagBtn');
+  // Two flag buttons exist (one stuck to the today card, one to waiting) —
+  // only one is visible at a time per the mobile/desktop media query, both
+  // drive the same panel.
+  const archiveFlagBtns = document.querySelectorAll('.archive-flag');
   const archivePanelEl = document.getElementById('archivePanel');
   const archiveGroupsEl = document.getElementById('archiveGroups');
 
@@ -1144,7 +1192,7 @@
     archivePanelEl.classList.toggle('open', open);
     if (open) renderArchive();
   }
-  if (archiveFlagBtn) archiveFlagBtn.addEventListener('click', toggleArchivePanel);
+  archiveFlagBtns.forEach(btn => btn.addEventListener('click', toggleArchivePanel));
 
   function updateCounter() {
     const today = todayStr();
@@ -1713,12 +1761,27 @@
     return li;
   }
 
+  // Today-done tasks stay visible in today's list during their grace
+  // period (see toggleTask), but should still show up in the archive right
+  // away rather than waiting for tomorrow's sweep — read them live off
+  // their real board instead of copying them, so there's a single source
+  // of truth until the sweep actually moves them into boards.archive.
+  function collectArchiveEntries() {
+    const today = todayStr();
+    const archived = boards.archive.map(t => ({ task: t, source: 'archive' }));
+    const liveToday = boards.today.filter(t => t.done).map(t => ({ task: t, source: 'today' }));
+    const liveScheduledToday = boards.scheduled
+      .filter(t => t.done && t.dueDate === today)
+      .map(t => ({ task: t, source: 'scheduled' }));
+    return archived.concat(liveToday, liveScheduledToday);
+  }
+
   function renderArchive() {
     archiveGroupsEl.innerHTML = '';
 
-    const items = boards.archive.slice().sort((a, b) => {
-      if (a.doneAt !== b.doneAt) return (b.doneAt || '').localeCompare(a.doneAt || '');
-      return b.id - a.id;
+    const items = collectArchiveEntries().sort((a, b) => {
+      if (a.task.doneAt !== b.task.doneAt) return (b.task.doneAt || '').localeCompare(a.task.doneAt || '');
+      return b.task.id - a.task.id;
     });
 
     if (items.length === 0) {
@@ -1731,10 +1794,10 @@
 
     const curMonth = todayStr().slice(0, 7);
     const byMonth = new Map();
-    items.forEach(t => {
-      const m = (t.doneAt || '').slice(0, 7);
+    items.forEach(entry => {
+      const m = (entry.task.doneAt || '').slice(0, 7);
       if (!byMonth.has(m)) byMonth.set(m, []);
-      byMonth.get(m).push(t);
+      byMonth.get(m).push(entry);
     });
 
     Array.from(byMonth.keys()).sort().reverse().forEach(month => {
@@ -1747,9 +1810,10 @@
       body.className = 'collapsible-body';
 
       const byDate = new Map();
-      byMonth.get(month).forEach(t => {
-        if (!byDate.has(t.doneAt)) byDate.set(t.doneAt, []);
-        byDate.get(t.doneAt).push(t);
+      byMonth.get(month).forEach(entry => {
+        const d = entry.task.doneAt;
+        if (!byDate.has(d)) byDate.set(d, []);
+        byDate.get(d).push(entry);
       });
 
       const list = document.createElement('ul');
@@ -1760,7 +1824,7 @@
         heading.className = 'archive-date-heading';
         heading.textContent = d.getDate() + '일 (' + WEEKDAY_KO[d.getDay()] + ')';
         list.appendChild(heading);
-        byDate.get(dateStr).forEach(t => list.appendChild(renderArchivedItem(t)));
+        byDate.get(dateStr).forEach(entry => list.appendChild(renderArchivedItem(entry)));
       });
       body.appendChild(list);
 
@@ -1770,7 +1834,8 @@
     });
   }
 
-  function renderArchivedItem(task) {
+  function renderArchivedItem(entry) {
+    const task = entry.task;
     const li = document.createElement('li');
     li.className = 'archive-item';
     li.dataset.id = task.id;
@@ -1809,7 +1874,17 @@
     del.type = 'button';
     del.setAttribute('aria-label', '삭제');
     del.textContent = '🗑️';
-    del.addEventListener('click', () => deleteArchivedTask(task.id));
+    del.addEventListener('click', () => {
+      // A today/scheduled entry here is still live on its real board (see
+      // collectArchiveEntries) — delete it there; only entries already
+      // swept into boards.archive get deleted from that array.
+      if (entry.source === 'archive') {
+        deleteArchivedTask(task.id);
+      } else {
+        deleteTask(entry.source, task.id);
+        renderArchive();
+      }
+    });
 
     controls.appendChild(reviveBtn);
     controls.appendChild(del);
