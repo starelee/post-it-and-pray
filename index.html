@@ -22,7 +22,7 @@
     --paper-shadow: rgba(70, 60, 20, 0.28);
     --paper-contact: rgba(70, 60, 20, 0.16);
     --ink: #4a4034;
-    --ink-soft: #b3a98f;
+    --ink-soft: #8a8068;
     --accent: #e2727e;
     --urgent: #d43d3d;
     --urgent-bg: rgba(212, 61, 61, 0.1);
@@ -104,6 +104,14 @@
     padding: 32px 20px 24px;
   }
 
+  .board-row {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: flex-start;
+    gap: 30px 22px;
+  }
+
   .header {
     text-align: center;
   }
@@ -146,12 +154,12 @@
     box-shadow:
       0 18px 30px -12px var(--paper-shadow),
       0 3px 6px var(--paper-contact);
-    transform: rotate(-1.4deg);
+    transform: rotate(var(--rot, -1.4deg));
     transition: transform 0.25s ease, box-shadow 0.25s ease;
   }
 
   .sticky:hover, .sticky:focus-within {
-    transform: rotate(-0.6deg) translateY(-5px);
+    transform: rotate(calc(var(--rot, -1.4deg) * 0.4)) translateY(-5px);
     box-shadow:
       0 26px 34px -14px var(--paper-shadow),
       0 4px 8px var(--paper-contact);
@@ -347,67 +355,36 @@
 
   .subtask-list {
     list-style: none;
-    margin: 4px 0 0;
+    margin: 5px 0 0;
     padding: 0 0 0 28px;
     display: flex;
-    flex-direction: column;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 2px;
   }
 
   .subtask-item {
-    display: flex;
+    display: inline-flex;
     align-items: center;
-    gap: 8px;
-    padding: 3px 0;
     position: relative;
   }
 
-  .subtask-checkbox {
-    flex: 0 0 auto;
-    width: 15px;
-    height: 15px;
-    border: 2px solid var(--ink-soft);
-    border-radius: 2px 4px 3px 5px;
-    background: transparent;
-    cursor: pointer;
-    padding: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    -webkit-appearance: none;
-    appearance: none;
-  }
-
-  .subtask-item.done .subtask-checkbox {
-    border-color: var(--ink-soft);
-  }
-
-  .subtask-check-icon {
-    width: 10px;
-    height: 10px;
-    overflow: visible;
-  }
-
-  .subtask-item .subtask-check-icon .check-path {
-    stroke-width: 4;
-  }
-
-  .subtask-item.done .subtask-check-icon .check-path {
-    stroke-dashoffset: 0;
-  }
-
-  .subtask-text {
-    position: relative;
+  .subtask-chip {
+    background: none;
+    border: none;
     font-family: 'NostalgicMyoeunHeullim', 'Gaegu', cursive, sans-serif;
-    font-size: 15px;
-    line-height: 1.25;
-    flex: 1;
+    font-size: 14px;
+    line-height: 1.3;
     color: var(--ink-soft);
+    cursor: pointer;
+    padding: 1px 2px;
     word-break: break-word;
   }
 
-  .subtask-item.done .subtask-text {
+  .subtask-item.done .subtask-chip {
     text-decoration: line-through;
     text-decoration-color: var(--ink-soft);
+    opacity: 0.6;
   }
 
   .subtask-delete-btn {
@@ -415,11 +392,11 @@
     background: none;
     border: none;
     color: var(--ink-soft);
-    font-size: 14px;
+    font-size: 12px;
     line-height: 1;
     cursor: pointer;
     opacity: 0;
-    padding: 1px 3px;
+    padding: 1px 2px 1px 0;
     transition: opacity 0.15s ease, color 0.15s ease;
   }
 
@@ -432,11 +409,43 @@
     color: var(--accent);
   }
 
+  .add-subtask-toggle[hidden] {
+    display: none;
+  }
+
+  .add-subtask-toggle {
+    display: block;
+    background: none;
+    border: none;
+    color: var(--ink-soft);
+    font-size: 15px;
+    line-height: 1;
+    cursor: pointer;
+    margin: 3px 0 0 28px;
+    padding: 2px 4px;
+    opacity: 0;
+    transition: opacity 0.15s ease;
+  }
+
+  .task-item:hover .add-subtask-toggle,
+  .task-item:focus-within .add-subtask-toggle {
+    opacity: 0.6;
+  }
+
+  .add-subtask-toggle:hover {
+    opacity: 1;
+    color: var(--accent);
+  }
+
   .add-subtask-row {
     display: flex;
     align-items: center;
     gap: 6px;
     padding: 3px 0 0 28px;
+  }
+
+  .add-subtask-row[hidden] {
+    display: none;
   }
 
   .add-subtask-row .plus {
@@ -539,21 +548,59 @@
       <p class="date" id="dateText"></p>
     </div>
 
-    <div class="sticky">
-      <div class="tape"></div>
-      <h2 class="sticky-title">today's list <span class="flower">✿</span></h2>
+    <div class="board-row">
+      <div class="sticky" data-board="today" style="--rot: -1.4deg;">
+        <div class="tape"></div>
+        <h2 class="sticky-title">today's list <span class="flower">✿</span></h2>
 
-      <ul class="task-list" id="taskList"></ul>
+        <ul class="task-list" data-tasklist></ul>
 
-      <div class="add-row">
-        <span class="plus">+</span>
-        <input
-          id="newTask"
-          class="new-task-input"
-          placeholder="끄적이기..."
-          autocomplete="off"
-          maxlength="60"
-        />
+        <div class="add-row">
+          <span class="plus">+</span>
+          <input
+            class="new-task-input"
+            data-newtask
+            placeholder="끄적이기..."
+            autocomplete="off"
+            maxlength="60"
+          />
+        </div>
+      </div>
+
+      <div class="sticky" data-board="waiting" style="--rot: 1.2deg;">
+        <div class="tape"></div>
+        <h2 class="sticky-title">waiting... <span class="flower">⏳</span></h2>
+
+        <ul class="task-list" data-tasklist></ul>
+
+        <div class="add-row">
+          <span class="plus">+</span>
+          <input
+            class="new-task-input"
+            data-newtask
+            placeholder="기다리는 거..."
+            autocomplete="off"
+            maxlength="60"
+          />
+        </div>
+      </div>
+
+      <div class="sticky" data-board="someday" style="--rot: -0.8deg;">
+        <div class="tape"></div>
+        <h2 class="sticky-title">someday... <span class="flower">🌙</span></h2>
+
+        <ul class="task-list" data-tasklist></ul>
+
+        <div class="add-row">
+          <span class="plus">+</span>
+          <input
+            class="new-task-input"
+            data-newtask
+            placeholder="언젠가는..."
+            autocomplete="off"
+            maxlength="60"
+          />
+        </div>
       </div>
     </div>
   </div>
@@ -562,11 +609,16 @@
 
 <script>
 (function () {
-  const STORAGE_KEY = 'postit-todo-tasks-v1';
+  const STORAGE_KEY = 'postit-todo-boards-v1';
+  const OLD_STORAGE_KEY = 'postit-todo-tasks-v1';
   const REORDER_DELAY = 300;
+  const BOARD_IDS = ['today', 'waiting', 'someday'];
+  const EMPTY_HINTS = {
+    today: '오늘은 뭘 해볼까?',
+    waiting: '기다리는 거 없음',
+    someday: '언젠가 해볼까'
+  };
 
-  const taskListEl = document.getElementById('taskList');
-  const newTaskInput = document.getElementById('newTask');
   const dateEl = document.getElementById('dateText');
 
   function setDate() {
@@ -584,19 +636,29 @@
   }
   setDate();
 
-  function loadTasks() {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) return JSON.parse(raw);
-    } catch (e) {
-      /* fall through to seed data */
-    }
+  function seedToday() {
     return [
       { id: 1, text: '빨래 돌리기', done: false, urgent: false, subtasks: [] },
       { id: 2, text: '메일 보내기', done: true, urgent: false, subtasks: [] },
       { id: 3, text: '산책', done: false, urgent: false, subtasks: [] },
       { id: 4, text: '뭐라도 읽기', done: false, urgent: false, subtasks: [] }
     ];
+  }
+
+  function loadBoards() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) return JSON.parse(raw);
+    } catch (e) {
+      /* fall through */
+    }
+    try {
+      const old = localStorage.getItem(OLD_STORAGE_KEY);
+      if (old) return { today: JSON.parse(old), waiting: [], someday: [] };
+    } catch (e) {
+      /* fall through to seed data */
+    }
+    return { today: seedToday(), waiting: [], someday: [] };
   }
 
   function normalizeTasks(list) {
@@ -611,15 +673,27 @@
     }));
   }
 
-  function saveTasks() {
+  function normalizeBoards(data) {
+    const result = {};
+    BOARD_IDS.forEach(id => {
+      result[id] = normalizeTasks(Array.isArray(data[id]) ? data[id] : []);
+    });
+    return result;
+  }
+
+  function saveBoards() {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(boards));
     } catch (e) {
       /* storage unavailable — state just won't persist */
     }
   }
 
-  let tasks = normalizeTasks(loadTasks());
+  let boards = normalizeBoards(loadBoards());
+
+  function getListEl(boardId) {
+    return document.querySelector('.sticky[data-board="' + boardId + '"] [data-tasklist]');
+  }
 
   function makeCheckSvg(iconClass) {
     const ns = 'http://www.w3.org/2000/svg';
@@ -633,31 +707,38 @@
     return svg;
   }
 
-  function render() {
-    taskListEl.innerHTML = '';
+  function renderAll() {
+    BOARD_IDS.forEach(render);
+  }
 
+  function render(boardId) {
+    const listEl = getListEl(boardId);
+    if (!listEl) return;
+    listEl.innerHTML = '';
+
+    const tasks = boards[boardId];
     const active = tasks.filter(t => !t.done);
     const done = tasks.filter(t => t.done);
 
     if (active.length === 0 && done.length === 0) {
       const hint = document.createElement('li');
       hint.className = 'empty-hint';
-      hint.textContent = '오늘은 뭘 해볼까?';
-      taskListEl.appendChild(hint);
+      hint.textContent = EMPTY_HINTS[boardId] || '아직 없음';
+      listEl.appendChild(hint);
     }
 
-    active.forEach(t => taskListEl.appendChild(renderItem(t)));
+    active.forEach(t => listEl.appendChild(renderItem(boardId, t)));
 
     if (done.length > 0) {
       const divider = document.createElement('li');
       divider.className = 'divider';
       divider.textContent = '─────────';
-      taskListEl.appendChild(divider);
-      done.forEach(t => taskListEl.appendChild(renderItem(t)));
+      listEl.appendChild(divider);
+      done.forEach(t => listEl.appendChild(renderItem(boardId, t)));
     }
   }
 
-  function renderItem(task) {
+  function renderItem(boardId, task) {
     const li = document.createElement('li');
     li.className = 'task-item' + (task.done ? ' done' : '') + (task.urgent ? ' urgent' : '');
     li.dataset.id = task.id;
@@ -670,14 +751,14 @@
     checkbox.type = 'button';
     checkbox.setAttribute('aria-label', task.done ? '완료 취소' : '완료 표시');
     checkbox.appendChild(makeCheckSvg());
-    checkbox.addEventListener('click', () => toggleTask(task.id));
+    checkbox.addEventListener('click', () => toggleTask(boardId, task.id));
 
     const urgentBtn = document.createElement('button');
     urgentBtn.className = 'urgent-btn';
     urgentBtn.type = 'button';
     urgentBtn.setAttribute('aria-label', task.urgent ? '긴급 해제' : '긴급 표시');
     urgentBtn.textContent = '!';
-    urgentBtn.addEventListener('click', () => toggleUrgent(task.id));
+    urgentBtn.addEventListener('click', () => toggleUrgent(boardId, task.id));
 
     const text = document.createElement('span');
     text.className = 'task-text';
@@ -691,7 +772,7 @@
     del.type = 'button';
     del.setAttribute('aria-label', '삭제');
     del.textContent = '×';
-    del.addEventListener('click', () => deleteTask(task.id));
+    del.addEventListener('click', () => deleteTask(boardId, task.id));
 
     row.appendChild(checkbox);
     row.appendChild(urgentBtn);
@@ -702,12 +783,19 @@
     if (task.subtasks.length > 0) {
       const subList = document.createElement('ul');
       subList.className = 'subtask-list';
-      task.subtasks.forEach(sub => subList.appendChild(renderSubtaskItem(task.id, sub)));
+      task.subtasks.forEach(sub => subList.appendChild(renderSubtaskItem(boardId, task.id, sub)));
       li.appendChild(subList);
     }
 
+    const addToggle = document.createElement('button');
+    addToggle.className = 'add-subtask-toggle';
+    addToggle.type = 'button';
+    addToggle.setAttribute('aria-label', '하위 항목 추가');
+    addToggle.textContent = '+';
+
     const addSubRow = document.createElement('div');
     addSubRow.className = 'add-subtask-row';
+    addSubRow.hidden = true;
     const plus = document.createElement('span');
     plus.className = 'plus';
     plus.textContent = '+';
@@ -719,119 +807,138 @@
     subInput.maxLength = 60;
     subInput.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') {
-        addSubtask(task.id, subInput.value);
+        addSubtask(boardId, task.id, subInput.value);
         subInput.value = '';
       }
     });
+    subInput.addEventListener('blur', () => {
+      if (!subInput.value.trim()) openAddSubtaskRow(boardId, task.id, false);
+    });
+    addToggle.addEventListener('click', () => openAddSubtaskRow(boardId, task.id, true));
+
     addSubRow.appendChild(plus);
     addSubRow.appendChild(subInput);
+    li.appendChild(addToggle);
     li.appendChild(addSubRow);
 
     return li;
   }
 
-  function renderSubtaskItem(taskId, sub) {
+  function openAddSubtaskRow(boardId, taskId, open) {
+    const li = getListEl(boardId).querySelector('[data-id="' + taskId + '"]');
+    if (!li) return;
+    const toggle = li.querySelector('.add-subtask-toggle');
+    const row = li.querySelector('.add-subtask-row');
+    if (!toggle || !row) return;
+    row.hidden = !open;
+    toggle.hidden = open;
+    if (open) {
+      const input = row.querySelector('.new-subtask-input');
+      if (input) input.focus();
+    }
+  }
+
+  function renderSubtaskItem(boardId, taskId, sub) {
     const li = document.createElement('li');
     li.className = 'subtask-item' + (sub.done ? ' done' : '');
     li.dataset.id = sub.id;
 
-    const checkbox = document.createElement('button');
-    checkbox.className = 'subtask-checkbox';
-    checkbox.type = 'button';
-    checkbox.setAttribute('aria-label', sub.done ? '완료 취소' : '완료 표시');
-    checkbox.appendChild(makeCheckSvg('subtask-check-icon'));
-    checkbox.addEventListener('click', () => toggleSubtask(taskId, sub.id));
-
-    const text = document.createElement('span');
-    text.className = 'subtask-text';
-    text.textContent = sub.text;
+    const chip = document.createElement('button');
+    chip.className = 'subtask-chip';
+    chip.type = 'button';
+    chip.setAttribute('aria-label', sub.done ? '완료 취소' : '완료 표시');
+    chip.textContent = '[' + sub.text + ']';
+    chip.addEventListener('click', () => toggleSubtask(boardId, taskId, sub.id));
 
     const del = document.createElement('button');
     del.className = 'subtask-delete-btn';
     del.type = 'button';
     del.setAttribute('aria-label', '삭제');
     del.textContent = '×';
-    del.addEventListener('click', () => deleteSubtask(taskId, sub.id));
+    del.addEventListener('click', () => deleteSubtask(boardId, taskId, sub.id));
 
-    li.appendChild(checkbox);
-    li.appendChild(text);
+    li.appendChild(chip);
     li.appendChild(del);
     return li;
   }
 
-  function toggleTask(id) {
-    const task = tasks.find(t => t.id === id);
+  function toggleTask(boardId, id) {
+    const task = boards[boardId].find(t => t.id === id);
     if (!task) return;
     task.done = !task.done;
 
-    const li = taskListEl.querySelector('[data-id="' + id + '"]');
+    const li = getListEl(boardId).querySelector('[data-id="' + id + '"]');
     if (li) li.classList.toggle('done', task.done);
 
-    saveTasks();
-    setTimeout(render, REORDER_DELAY);
+    saveBoards();
+    setTimeout(() => render(boardId), REORDER_DELAY);
   }
 
-  function deleteTask(id) {
-    tasks = tasks.filter(t => t.id !== id);
-    saveTasks();
-    render();
+  function deleteTask(boardId, id) {
+    boards[boardId] = boards[boardId].filter(t => t.id !== id);
+    saveBoards();
+    render(boardId);
   }
 
-  function addTask(text) {
+  function addTask(boardId, text) {
     const trimmed = text.trim();
     if (!trimmed) return;
-    tasks.push({ id: Date.now(), text: trimmed, done: false, urgent: false, subtasks: [] });
-    saveTasks();
-    render();
+    boards[boardId].push({ id: Date.now(), text: trimmed, done: false, urgent: false, subtasks: [] });
+    saveBoards();
+    render(boardId);
   }
 
-  function toggleUrgent(id) {
-    const task = tasks.find(t => t.id === id);
+  function toggleUrgent(boardId, id) {
+    const task = boards[boardId].find(t => t.id === id);
     if (!task) return;
     task.urgent = !task.urgent;
-    saveTasks();
-    render();
+    saveBoards();
+    render(boardId);
   }
 
-  function toggleSubtask(taskId, subId) {
-    const task = tasks.find(t => t.id === taskId);
+  function toggleSubtask(boardId, taskId, subId) {
+    const task = boards[boardId].find(t => t.id === taskId);
     if (!task) return;
     const sub = task.subtasks.find(s => s.id === subId);
     if (!sub) return;
     sub.done = !sub.done;
 
-    const subLi = taskListEl.querySelector('[data-id="' + taskId + '"] .subtask-list [data-id="' + subId + '"]');
+    const subLi = getListEl(boardId).querySelector('[data-id="' + taskId + '"] .subtask-list [data-id="' + subId + '"]');
     if (subLi) subLi.classList.toggle('done', sub.done);
 
-    saveTasks();
+    saveBoards();
   }
 
-  function deleteSubtask(taskId, subId) {
-    const task = tasks.find(t => t.id === taskId);
+  function deleteSubtask(boardId, taskId, subId) {
+    const task = boards[boardId].find(t => t.id === taskId);
     if (!task) return;
     task.subtasks = task.subtasks.filter(s => s.id !== subId);
-    saveTasks();
-    render();
+    saveBoards();
+    render(boardId);
   }
 
-  function addSubtask(taskId, text) {
+  function addSubtask(boardId, taskId, text) {
     const trimmed = text.trim();
     if (!trimmed) return;
-    const task = tasks.find(t => t.id === taskId);
+    const task = boards[boardId].find(t => t.id === taskId);
     if (!task) return;
     task.subtasks.push({ id: Date.now(), text: trimmed, done: false });
-    saveTasks();
-    render();
+    saveBoards();
+    render(boardId);
+    openAddSubtaskRow(boardId, taskId, true);
   }
 
-  newTaskInput.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') {
-      addTask(newTaskInput.value);
-      newTaskInput.value = '';
-    }
+  document.querySelectorAll('[data-newtask]').forEach(input => {
+    const boardId = input.closest('.sticky').dataset.board;
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        addTask(boardId, input.value);
+        input.value = '';
+      }
+    });
   });
 
-  render();
+  renderAll();
 })();
 </script>
 
