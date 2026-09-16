@@ -2153,12 +2153,30 @@
     }
   }
 
+  // Tracks, per board, the id of the task most recently created via
+  // addTask — used by the Shift+Enter/Shift+D/Shift+E input shortcuts so
+  // they target the task the user just typed, not merely whatever happens
+  // to sit last in the array (which could be an unrelated older task if
+  // no task has been added yet in this session).
+  const lastAddedTaskId = { today: null, waiting: null, someday: null };
+
   function addTask(boardId, text) {
     const trimmed = text.trim();
     if (!trimmed) return;
-    boards[boardId].push({ id: Date.now(), text: trimmed, done: false, urgent: false, subtasks: [] });
+    const task = { id: Date.now(), text: trimmed, done: false, urgent: false, subtasks: [] };
+    boards[boardId].push(task);
+    lastAddedTaskId[boardId] = task.id;
     saveBoards();
     render(boardId);
+  }
+
+  // Resolves the shortcut target for a board: the task tracked by
+  // lastAddedTaskId, but only if it still actually exists there (it may
+  // have been deleted or moved elsewhere since).
+  function getShortcutTargetTask(boardId) {
+    const id = lastAddedTaskId[boardId];
+    if (id == null) return null;
+    return boards[boardId].find(t => t.id === id) || null;
   }
 
   function toggleUrgent(boardId, id) {
@@ -2245,10 +2263,9 @@
     input.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') {
         if (e.shiftKey) {
-          const list = boards[boardId];
-          if (list.length === 0) return; // 그 보드에 할일이 하나도 없으면 무시
-          const lastTask = list[list.length - 1]; // 배열 맨 끝 = 가장 최근에 등록된 항목
-          addSubtask(boardId, lastTask.id, input.value);
+          const target = getShortcutTargetTask(boardId);
+          if (!target) return; // 이번 세션에 이 입력창으로 등록한 할일이 없으면 무시
+          addSubtask(boardId, target.id, input.value);
           input.value = '';
         } else {
           addTask(boardId, input.value);
@@ -2258,20 +2275,18 @@
       }
       if (e.shiftKey && (e.key === 'd' || e.key === 'D')) {
         e.preventDefault(); // 안 막으면 입력창에 대문자 D가 그대로 찍힘
-        const list = boards[boardId];
-        if (list.length === 0) return; // 그 보드에 할일이 하나도 없으면 무시
-        const lastTask = list[list.length - 1];
-        const li = findTaskLi(lastTask.id);
+        const target = getShortcutTargetTask(boardId);
+        if (!target) return;
+        const li = findTaskLi(target.id);
         const dateBtn = li && li.querySelector('.date-btn');
         if (dateBtn) dateBtn.click(); // 날짜 지정 안 되는 보드(waiting)면 dateBtn 자체가 없어서 자연히 무시됨
         return;
       }
       if (e.shiftKey && (e.key === 'e' || e.key === 'E')) {
         e.preventDefault(); // 안 막으면 입력창에 대문자 E가 그대로 찍힘
-        const list = boards[boardId];
-        if (list.length === 0) return; // 그 보드에 할일이 하나도 없으면 무시
-        const lastTask = list[list.length - 1];
-        const li = findTaskLi(lastTask.id);
+        const target = getShortcutTargetTask(boardId);
+        if (!target) return;
+        const li = findTaskLi(target.id);
         const urgentBtn = li && li.querySelector('.urgent-btn');
         if (urgentBtn) urgentBtn.click(); // 방금 등록한 할일의 긴급 표시를 토글
       }
