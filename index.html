@@ -2263,10 +2263,11 @@
     input.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') {
         if (e.shiftKey) {
-          const target = getShortcutTargetTask(boardId);
-          if (!target) return; // 이번 세션에 이 입력창으로 등록한 할일이 없으면 무시
-          addSubtask(boardId, target.id, input.value);
+          const trimmed = input.value.trim();
+          if (!trimmed) return; // 칠 내용이 없으면 무시
+          addTask(boardId, input.value); // 지금 텍스트를 상위 항목으로 그대로 등록
           input.value = '';
+          openAddSubtaskRow(boardId, lastAddedTaskId[boardId], true); // 등록된 그 항목의 하위 항목 입력을 바로 열고 포커스
         } else {
           addTask(boardId, input.value);
           input.value = '';
