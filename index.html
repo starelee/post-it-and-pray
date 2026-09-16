@@ -176,8 +176,16 @@
     letter-spacing: 0.4px;
   }
 
-  .auth-row {
+  .header-actions {
     margin: 8px 0 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .auth-row {
     display: flex;
     align-items: center;
     justify-content: center;
@@ -211,11 +219,11 @@
   }
 
   .theme-toggle {
-    margin: 8px 0 0;
     background: none;
     border: 1px solid var(--ink-soft);
     border-radius: 12px;
     padding: 3px 10px;
+    font-family: 'Gaegu', cursive, sans-serif;
     font-size: 13px;
     line-height: 1.4;
     color: var(--ink-soft);
@@ -232,35 +240,26 @@
 
   .archive-flag {
     position: absolute;
-    top: -10px;
-    right: -10px;
+    top: -14px;
+    right: 14px;
     z-index: 5;
-    width: 66px;
-    height: 22px;
-    line-height: 22px;
+    width: 26px;
+    height: 20px;
     padding: 0;
     border: none;
-    background: linear-gradient(
-      to right,
-      var(--accent) 0 22%,
-      var(--legal-paper) 22% 78%,
-      var(--accent) 78% 100%
-    );
+    background: var(--urgent);
     clip-path: polygon(0 0, 100% 0, 100% 100%, 12% 100%, 0 65%);
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.18);
-    font-family: 'Gaegu', cursive, sans-serif;
-    font-size: 11px;
-    font-weight: 700;
-    color: var(--ink);
     cursor: pointer;
     opacity: 0.9;
-    transform: rotate(6deg);
+    transform-origin: bottom right;
+    transform: rotate(-22deg);
     transition: opacity 0.15s ease, transform 0.15s ease;
   }
 
   .archive-flag:hover {
     opacity: 1;
-    transform: rotate(6deg) translateY(-1px);
+    transform: rotate(-22deg) translateY(-2px);
   }
 
   /* On narrow (stacked) layouts the flag reads as attached to the "gotta
@@ -343,12 +342,30 @@
     color: var(--ink);
   }
 
+  .archive-date-group {
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+    padding: 6px 0 0;
+    list-style: none;
+  }
+
   .archive-date-heading {
+    flex: 0 0 auto;
+    width: 52px;
     font-family: 'NostalgicMyoeunHeullim', 'Gaegu', cursive, sans-serif;
     font-size: 14px;
     color: var(--ink-soft);
     letter-spacing: 0.4px;
-    margin: 10px 0 2px;
+    padding-top: 3px;
+  }
+
+  .archive-date-items {
+    flex: 1;
+    min-width: 0;
+    list-style: none;
+    margin: 0;
+    padding: 0;
   }
 
   .archive-item {
@@ -980,21 +997,23 @@
       <p class="tagline">오늘도 대충 해봅시다 ☁️</p>
       <p class="date" id="dateText"></p>
       <p class="counter" id="taskCounter"></p>
-      <div class="auth-row" id="authRow"></div>
-      <button class="theme-toggle" id="themeToggle" type="button" aria-label="테마 전환"></button>
+      <div class="header-actions">
+        <div class="auth-row" id="authRow"></div>
+        <button class="theme-toggle" id="themeToggle" type="button" aria-label="테마 전환"></button>
+      </div>
     </div>
 
     <div class="board-wrap">
       <div class="archive-panel" id="archivePanel">
         <div class="archive-panel-inner">
-          <h2 class="archive-title">다 한 일 📋</h2>
+          <h2 class="archive-title">done 📋</h2>
           <div class="archive-groups" id="archiveGroups"></div>
         </div>
       </div>
 
       <div class="board-row">
       <div class="sticky" data-board="today" style="--rot: -1.4deg;">
-        <button class="archive-flag archive-flag-mobile" type="button" aria-label="다 한 일 보기">다한일</button>
+        <button class="archive-flag archive-flag-mobile" type="button" aria-label="다 한 일 보기"></button>
         <div class="tape"></div>
         <h2 class="sticky-title">gotta do... <span class="flower">✿</span></h2>
 
@@ -1014,7 +1033,7 @@
 
       <div class="side-col">
         <div class="sticky" data-board="waiting" style="--rot: 1.2deg; --paper: var(--paper-waiting);">
-          <button class="archive-flag archive-flag-desktop" type="button" aria-label="다 한 일 보기">다한일</button>
+          <button class="archive-flag archive-flag-desktop" type="button" aria-label="다 한 일 보기"></button>
           <div class="tape"></div>
           <h2 class="sticky-title">waiting... <span class="flower">⏳</span></h2>
 
@@ -1820,11 +1839,20 @@
       list.className = 'task-list';
       Array.from(byDate.keys()).sort().reverse().forEach(dateStr => {
         const d = new Date(dateStr + 'T00:00:00');
-        const heading = document.createElement('li');
+        const group = document.createElement('li');
+        group.className = 'archive-date-group';
+
+        const heading = document.createElement('span');
         heading.className = 'archive-date-heading';
         heading.textContent = d.getDate() + '일 (' + WEEKDAY_KO[d.getDay()] + ')';
-        list.appendChild(heading);
-        byDate.get(dateStr).forEach(entry => list.appendChild(renderArchivedItem(entry)));
+        group.appendChild(heading);
+
+        const dateItems = document.createElement('ul');
+        dateItems.className = 'archive-date-items';
+        byDate.get(dateStr).forEach(entry => dateItems.appendChild(renderArchivedItem(entry)));
+        group.appendChild(dateItems);
+
+        list.appendChild(group);
       });
       body.appendChild(list);
 
