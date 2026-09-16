@@ -904,7 +904,9 @@
       if (diffDays === 0) return '오늘';
       if (diffDays === 1) return '내일';
       if (diffDays === -1) return '어제';
-      return d.getDate() + WEEKDAY_KO[d.getDay()];
+      const sameMonth = d.getFullYear() === today.getFullYear() && d.getMonth() === today.getMonth();
+      if (sameMonth) return d.getDate() + WEEKDAY_KO[d.getDay()];
+      return String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
     } catch (e) {
       return dateStr;
     }
