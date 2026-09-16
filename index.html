@@ -728,8 +728,14 @@
 
   function updateCounter() {
     const tasks = boards.today;
-    const done = tasks.filter(task => task.done).length;
-    const praying = tasks.filter(task => !task.done).length;
+    let done = 0;
+    let praying = 0;
+    tasks.forEach(task => {
+      if (task.done) done++; else praying++;
+      task.subtasks.forEach(sub => {
+        if (sub.done) done++; else praying++;
+      });
+    });
     counterEl.textContent = done + ' done · ' + praying + ' praying';
   }
 
@@ -1175,6 +1181,7 @@
     if (subLi) subLi.classList.toggle('done', sub.done);
 
     saveBoards();
+    updateCounter();
   }
 
   function deleteSubtask(boardId, taskId, subId) {
