@@ -2274,19 +2274,23 @@
         }
         return;
       }
-      if (e.shiftKey && (e.key === 'd' || e.key === 'D')) {
-        e.preventDefault(); // 안 막으면 입력창에 대문자 D가 그대로 찍힘
+      // Alt+D/Alt+E — Shift+D/Shift+E였을 땐 "Draft", "Edit"처럼 대문자
+      // D/E가 들어간 텍스트를 아예 칠 수 없어서(입력창이 비어있을 때만
+      // 봐줘도 첫 글자가 D/E인 경우엔 여전히 충돌) Alt 조합으로 변경 —
+      // 일반 타이핑으로는 절대 나오지 않는 조합이라 텍스트와 안 겹침.
+      if (e.altKey && e.code === 'KeyD') {
         const target = getShortcutTargetTask(boardId);
         if (!target) return;
+        e.preventDefault();
         const li = findTaskLi(target.id);
         const dateBtn = li && li.querySelector('.date-btn');
         if (dateBtn) dateBtn.click(); // 날짜 지정 안 되는 보드(waiting)면 dateBtn 자체가 없어서 자연히 무시됨
         return;
       }
-      if (e.shiftKey && (e.key === 'e' || e.key === 'E')) {
-        e.preventDefault(); // 안 막으면 입력창에 대문자 E가 그대로 찍힘
+      if (e.altKey && e.code === 'KeyE') {
         const target = getShortcutTargetTask(boardId);
         if (!target) return;
+        e.preventDefault();
         const li = findTaskLi(target.id);
         const urgentBtn = li && li.querySelector('.urgent-btn');
         if (urgentBtn) urgentBtn.click(); // 방금 등록한 할일의 긴급 표시를 토글
