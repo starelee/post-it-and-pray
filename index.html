@@ -964,7 +964,13 @@
     return result;
   }
 
+  // Bumped on every local edit so an in-flight cloud fetch (see syncRow)
+  // can tell whether the user changed something while it was loading and
+  // back off instead of clobbering that edit with stale server data.
+  let localVersion = 0;
+
   function saveBoards() {
+    localVersion++;
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(boards));
     } catch (e) {
@@ -1003,6 +1009,7 @@
   async function syncRow(rowId) {
     if (!cloudClient) return;
     activeRowId = rowId;
+    const versionAtStart = localVersion;
     try {
       const { data, error } = await cloudClient
         .from('postit_data')
@@ -1010,6 +1017,12 @@
         .eq('id', rowId)
         .maybeSingle();
       if (error) throw error;
+      if (localVersion !== versionAtStart) {
+        // The user edited boards locally while this fetch was in flight —
+        // that edit is newer, so push it up instead of overwriting it.
+        pushToCloud();
+        return;
+      }
       if (data && data.data) {
         boards = normalizeBoards(data.data);
         try {
