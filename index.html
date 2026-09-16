@@ -641,6 +641,12 @@
     border-radius: 10px;
     padding: 1px 7px;
     white-space: nowrap;
+    cursor: pointer;
+    transition: opacity 0.15s ease;
+  }
+
+  .due-badge:hover {
+    opacity: 0.75;
   }
 
   .date-picker-row {
@@ -1334,8 +1340,9 @@
     row.appendChild(checkbox);
     row.appendChild(text);
 
+    let badge = null;
     if (task.dueDate) {
-      const badge = document.createElement('span');
+      badge = document.createElement('span');
       badge.className = 'due-badge';
       badge.textContent = formatDueDateRelative(task.dueDate);
       row.appendChild(badge);
@@ -1424,10 +1431,12 @@
       dateRow.appendChild(clearBtn);
       li.appendChild(dateRow);
 
-      dateBtn.addEventListener('click', () => {
+      const toggleDateRow = () => {
         dateRow.hidden = !dateRow.hidden;
         if (!dateRow.hidden) dateInput.focus();
-      });
+      };
+      dateBtn.addEventListener('click', toggleDateRow);
+      if (badge) badge.addEventListener('click', toggleDateRow);
     }
 
     const addSubRow = document.createElement('div');
