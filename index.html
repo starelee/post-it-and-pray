@@ -686,16 +686,8 @@
     display: none;
   }
 
-  .section-label {
-    font-family: 'NostalgicMyoeunHeullim', 'Gaegu', cursive, sans-serif;
-    font-size: 13px;
-    color: var(--ink-soft);
-    letter-spacing: 0.5px;
-    margin: 4px 0 2px;
-  }
-
-  .section-label:first-child {
-    margin-top: 0;
+  .sticky-title-toggle-spaced {
+    margin-top: 14px;
   }
 
   .empty-hint {
@@ -811,16 +803,20 @@
 
         <div class="sticky" data-board="someday" style="--rot: -0.8deg; --paper: var(--paper-someday);">
           <div class="tape"></div>
+
           <button class="sticky-title sticky-title-toggle" type="button" data-collapse-toggle>
+            scheduled <span class="flower">📅</span>
+            <span class="toggle-arrow" data-toggle-arrow>▸</span>
+          </button>
+          <div class="collapsible-body" data-collapse-body hidden>
+            <ul class="task-list" data-tasklist="scheduled"></ul>
+          </div>
+
+          <button class="sticky-title sticky-title-toggle sticky-title-toggle-spaced" type="button" data-collapse-toggle>
             someday... <span class="flower">🌙</span>
             <span class="toggle-arrow" data-toggle-arrow>▸</span>
           </button>
-
           <div class="collapsible-body" data-collapse-body hidden>
-            <div class="section-label">📅 scheduled</div>
-            <ul class="task-list" data-tasklist="scheduled"></ul>
-
-            <div class="section-label">🌙 someday</div>
             <ul class="task-list" data-tasklist="someday"></ul>
 
             <div class="add-row">
@@ -1090,9 +1086,9 @@
   }
 
   document.querySelectorAll('[data-collapse-toggle]').forEach(toggle => {
-    const body = toggle.parentElement.querySelector('[data-collapse-body]');
+    const body = toggle.nextElementSibling;
     const arrow = toggle.querySelector('[data-toggle-arrow]');
-    if (!body) return;
+    if (!body || !body.hasAttribute('data-collapse-body')) return;
     toggle.addEventListener('click', () => {
       const open = body.hidden;
       body.hidden = !open;
