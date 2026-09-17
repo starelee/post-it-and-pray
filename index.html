@@ -675,6 +675,18 @@
     transform-origin: center left;
   }
 
+  /* gotta do -> someday/pray later 로 넘어간 항목 — 나중에 할 일이라 강조는
+     필요 없지만, 드롭다운을 펼쳐놓고 보고 있었을 유저를 위해 갑자기 팝인
+     하지 않고 살짝 떠오르듯 부드럽게 나타남. */
+  @keyframes move-arrive-fade {
+    0% { opacity: 0; transform: translateY(-6px); }
+    100% { opacity: 1; transform: translateY(0); }
+  }
+
+  .move-arrive-fade {
+    animation: move-arrive-fade 0.35s ease-out both;
+  }
+
   .checkbox {
     flex: 0 0 auto;
     width: 20px;
@@ -1922,7 +1934,7 @@
       urgentFlash = null;
     }
     if (moveHighlight && moveHighlight.id === task.id) {
-      li.className += moveHighlight.mode === 'highlight' ? ' move-arrive-highlight' : ' move-arrive-wiggle';
+      li.className += ' move-arrive-' + moveHighlight.mode;
       moveHighlight = null;
     }
     li.dataset.id = task.id;
@@ -2473,6 +2485,8 @@
       moveHighlight = { id, mode: 'highlight' };
     } else if (fromBoardId === 'today' && toBoardId === 'waiting') {
       moveHighlight = { id, mode: 'wiggle' };
+    } else if (fromBoardId === 'today' && toBoardId === 'someday') {
+      moveHighlight = { id, mode: 'fade' };
     }
     saveBoards();
     render(fromBoardId);
@@ -2509,6 +2523,9 @@
       task.dueDate = dateValue;
       task.from = boardId;
       boards.scheduled.push(task);
+      if (boardId === 'today') {
+        moveHighlight = { id, mode: 'fade' };
+      }
       saveBoards();
       render(boardId);
       render('today');
