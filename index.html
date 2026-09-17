@@ -1185,7 +1185,7 @@
           <div class="tape"></div>
 
           <button class="sticky-title sticky-title-toggle" type="button" data-collapse-toggle>
-            scheduled <span class="flower">📅</span>
+            pray later... <span class="flower">📅</span>
             <span class="toggle-arrow" data-toggle-arrow>▾</span>
           </button>
           <div class="collapsible-body" data-collapse-body hidden>
@@ -1193,22 +1193,22 @@
           </div>
 
           <button class="sticky-title sticky-title-toggle sticky-title-toggle-spaced" type="button" data-collapse-toggle>
-            someday... <span class="flower">🌙</span>
+            미래의 내가... <span class="flower">🌙</span>
             <span class="toggle-arrow" data-toggle-arrow>▾</span>
           </button>
           <div class="collapsible-body" data-collapse-body hidden>
             <ul class="task-list" data-tasklist="someday"></ul>
+          </div>
 
-            <div class="add-row">
-              <span class="plus">+</span>
-              <input
-                class="new-task-input"
-                data-newtask
-                placeholder="언젠가는..."
-                autocomplete="off"
-                maxlength="60"
-              />
-            </div>
+          <div class="add-row">
+            <span class="plus">+</span>
+            <input
+              class="new-task-input"
+              data-newtask
+              placeholder="미래의 나에게..."
+              autocomplete="off"
+              maxlength="60"
+            />
           </div>
         </div>
       </div>
@@ -1242,12 +1242,21 @@
   const BOARD_META = {
     today: { emoji: '✿', label: "today's list" },
     waiting: { emoji: '⏳', label: 'waiting...' },
-    someday: { emoji: '🌙', label: 'someday...' },
-    scheduled: { emoji: '📅', label: 'scheduled...' }
+    someday: { emoji: '🌙', label: '미래의 내가...' },
+    scheduled: { emoji: '📅', label: 'pray later...' }
   };
 
   function todayStr() {
     const d = new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return y + '-' + m + '-' + day;
+  }
+
+  function tomorrowStr() {
+    const d = new Date();
+    d.setDate(d.getDate() + 1);
     const y = d.getFullYear();
     const m = String(d.getMonth() + 1).padStart(2, '0');
     const day = String(d.getDate()).padStart(2, '0');
@@ -1938,6 +1947,18 @@
         setDueDate(boardId, task.id, dateInput.value);
       });
 
+      // 내일 날짜로 지정하는 경우가 워낙 많아서 달력을 열지 않고 바로 찍을
+      // 수 있게 — dateInput의 change 리스너를 그대로 재사용하도록 값만
+      // 채워넣고 change 이벤트를 직접 쏨.
+      const tomorrowBtn = document.createElement('button');
+      tomorrowBtn.className = 'date-clear-btn';
+      tomorrowBtn.type = 'button';
+      tomorrowBtn.textContent = '내일';
+      tomorrowBtn.addEventListener('click', () => {
+        dateInput.value = tomorrowStr();
+        dateInput.dispatchEvent(new Event('change'));
+      });
+
       const clearBtn = document.createElement('button');
       clearBtn.className = 'date-clear-btn';
       clearBtn.type = 'button';
@@ -1959,6 +1980,7 @@
       });
 
       dateRow.appendChild(dateInput);
+      dateRow.appendChild(tomorrowBtn);
       dateRow.appendChild(clearBtn);
       dateRow.appendChild(cancelBtn);
       li.appendChild(dateRow);
@@ -2112,6 +2134,16 @@
       if (dateInput.value) reviveTask(task, dateInput.value);
     });
     dateRow.appendChild(dateInput);
+
+    const tomorrowBtn = document.createElement('button');
+    tomorrowBtn.className = 'date-clear-btn';
+    tomorrowBtn.type = 'button';
+    tomorrowBtn.textContent = '내일';
+    tomorrowBtn.addEventListener('click', () => {
+      dateInput.value = tomorrowStr();
+      dateInput.dispatchEvent(new Event('change'));
+    });
+    dateRow.appendChild(tomorrowBtn);
 
     reviveBtn.addEventListener('click', () => {
       dateRow.hidden = !dateRow.hidden;
@@ -2655,12 +2687,6 @@
 
     const input = document.querySelector('.sticky[data-board="' + boardId + '"] [data-newtask]');
     if (!input) return;
-
-    // someday 입력창은 기본 접힘 섹션 안에 있음 — 접혀 있으면 기존 토글을 눌러서 펼침
-    const body = input.closest('[data-collapse-body]');
-    if (body && body.hidden && body.previousElementSibling) {
-      body.previousElementSibling.click();
-    }
 
     e.preventDefault();
     input.focus();
