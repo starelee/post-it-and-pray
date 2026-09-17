@@ -1075,6 +1075,9 @@
     max-height: 0;
     overflow: hidden;
     opacity: 0;
+    /* .task-controls와 같은 이유로 왼쪽을 띄움 — "+" 밑이 아니라
+       그 옆 텍스트("끄적이기..." 등) 시작 지점에 맞춰서 시작하게. */
+    padding-left: 28px;
     transition: max-height 0.15s ease, opacity 0.15s ease, margin-top 0.15s ease;
   }
 
