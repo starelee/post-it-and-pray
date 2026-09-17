@@ -1052,6 +1052,19 @@
   .plus {
     color: var(--ink-soft);
     font-size: 18px;
+    background: none;
+    border: none;
+    padding: 0;
+    font-family: inherit;
+    line-height: 1;
+    cursor: pointer;
+    transition: color 0.15s ease, transform 0.15s ease;
+  }
+
+  .plus:hover,
+  .plus:focus-visible {
+    color: var(--accent);
+    transform: scale(1.15);
   }
 
   .new-task-input {
@@ -1127,7 +1140,7 @@
         <ul class="task-list" data-tasklist="today"></ul>
 
         <div class="add-row">
-          <span class="plus">+</span>
+          <button type="button" class="plus" aria-label="새 항목 등록">+</button>
           <input
             class="new-task-input"
             data-newtask
@@ -1150,7 +1163,7 @@
             <ul class="task-list" data-tasklist="waiting"></ul>
 
             <div class="add-row">
-              <span class="plus">+</span>
+              <button type="button" class="plus" aria-label="새 항목 등록">+</button>
               <input
                 class="new-task-input"
                 data-newtask
@@ -1169,7 +1182,7 @@
             <ul class="task-list" data-tasklist="lupin"></ul>
 
             <div class="add-row">
-              <span class="plus">+</span>
+              <button type="button" class="plus" aria-label="새 항목 등록">+</button>
               <input
                 class="new-task-input"
                 data-newtask
@@ -1201,7 +1214,7 @@
           </div>
 
           <div class="add-row">
-            <span class="plus">+</span>
+            <button type="button" class="plus" aria-label="새 항목 등록">+</button>
             <input
               class="new-task-input"
               data-newtask
@@ -1996,8 +2009,10 @@
     const addSubRow = document.createElement('div');
     addSubRow.className = 'add-subtask-row';
     addSubRow.hidden = true;
-    const plus = document.createElement('span');
+    const plus = document.createElement('button');
+    plus.type = 'button';
     plus.className = 'plus';
+    plus.setAttribute('aria-label', '하위 항목 등록');
     plus.textContent = '+';
     const subInput = document.createElement('input');
     subInput.className = 'new-subtask-input';
@@ -2013,6 +2028,13 @@
     });
     subInput.addEventListener('blur', () => {
       if (!subInput.value.trim()) openAddSubtaskRow(boardId, task.id, false);
+    });
+    // 이 버튼도 Enter와 동일하게 등록 — 클릭하면 subInput이 먼저 blur되지만
+    // 텍스트가 있으면 위 blur 리스너가 행을 닫지 않으므로 안전함.
+    plus.addEventListener('click', () => {
+      const trimmed = subInput.value.trim();
+      if (trimmed) addSubtask(boardId, task.id, subInput.value);
+      else subInput.focus();
     });
     addToggle.addEventListener('click', () => openAddSubtaskRow(boardId, task.id, true));
 
@@ -2517,6 +2539,20 @@
     // 뒷면 래퍼 자체에 data-board="lupin"을 따로 붙여두고 가장 가까운
     // [data-board]를 찾아서 앞/뒷면 입력창을 정확히 구분함.
     const boardId = input.closest('[data-board]').dataset.board;
+
+    // "+" 버튼 — 지금까지는 Enter로만 등록할 수 있어서 마우스만으로는
+    // 새 항목을 넣을 방법이 아예 없었음. 입력해둔 텍스트가 있으면 그걸
+    // 등록(Enter와 동일), 비어있으면 그냥 입력창에 포커스만 줌.
+    const plusBtn = input.closest('.add-row').querySelector('.plus');
+    plusBtn.addEventListener('click', () => {
+      const trimmed = input.value.trim();
+      if (trimmed) {
+        addTask(boardId, input.value);
+        input.value = '';
+      }
+      input.focus();
+    });
+
     input.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') {
         if (e.shiftKey) {
