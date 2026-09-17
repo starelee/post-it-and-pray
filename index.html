@@ -1820,8 +1820,22 @@
       clearBtn.hidden = !task.dueDate;
       clearBtn.addEventListener('click', () => setDueDate(boardId, task.id, ''));
 
+      // Only shown while no date has been assigned yet — lets the user
+      // close the picker without picking one. Once a date exists, clearBtn
+      // above already covers "undo the date".
+      const cancelBtn = document.createElement('button');
+      cancelBtn.className = 'date-clear-btn';
+      cancelBtn.type = 'button';
+      cancelBtn.textContent = '취소';
+      cancelBtn.hidden = !!task.dueDate;
+      cancelBtn.addEventListener('click', () => {
+        dateInput.value = '';
+        dateRow.hidden = true;
+      });
+
       dateRow.appendChild(dateInput);
       dateRow.appendChild(clearBtn);
+      dateRow.appendChild(cancelBtn);
       li.appendChild(dateRow);
 
       const toggleDateRow = () => {
