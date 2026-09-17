@@ -2086,7 +2086,10 @@
     input.focus();
     input.select();
 
+    let committed = false;
     const commit = () => {
+      if (committed) return;
+      committed = true;
       const trimmed = input.value.trim();
       if (trimmed) task.text = trimmed;
       saveBoards();
@@ -2099,6 +2102,16 @@
       } else if (e.key === 'Escape') {
         input.value = task.text;
         input.blur();
+      } else if (e.altKey && (e.code === 'KeyD' || e.code === 'KeyE')) {
+        e.preventDefault();
+        // Opening the date row (or clicking urgent) re-renders the list —
+        // commit the text edit first so that render happens once, up
+        // front, instead of firing again later via this input's own blur
+        // and wiping out the date row we just opened.
+        commit();
+        const freshLi = findTaskLi(id);
+        const btn = freshLi && freshLi.querySelector(e.code === 'KeyD' ? '.date-btn' : '.urgent-btn');
+        if (btn) btn.click();
       }
     });
     input.addEventListener('blur', commit);
