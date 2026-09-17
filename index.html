@@ -22,6 +22,7 @@
     --paper: #fff6c8;
     --paper-waiting: #ffe1ac;
     --paper-someday: #dbe2f7;
+    --paper-lupin: #d9d5c9;
     --paper-shadow: rgba(70, 60, 20, 0.28);
     --paper-contact: rgba(70, 60, 20, 0.16);
     --ink: #4a4034;
@@ -48,6 +49,7 @@
       --paper: #3a3320;
       --paper-waiting: #4a3a1f;
       --paper-someday: #2c3350;
+      --paper-lupin: #2e2c27;
       --paper-shadow: rgba(0, 0, 0, 0.5);
       --paper-contact: rgba(0, 0, 0, 0.35);
       --ink: #ecdfc2;
@@ -74,6 +76,7 @@
     --paper: #3a3320;
     --paper-waiting: #4a3a1f;
     --paper-someday: #2c3350;
+    --paper-lupin: #2e2c27;
     --paper-shadow: rgba(0, 0, 0, 0.5);
     --paper-contact: rgba(0, 0, 0, 0.35);
     --ink: #ecdfc2;
@@ -132,6 +135,7 @@
     display: flex;
     flex-direction: column;
     gap: 30px;
+    perspective: 1200px;
   }
 
   .header {
@@ -512,6 +516,41 @@
     display: flex;
     align-items: baseline;
     gap: 6px;
+  }
+
+  /* lupin mode — waiting 스티키를 뒤집으면 나오는 개인용 숨김 메모장.
+     별도 카드가 아니라 같은 노트의 뒷면이라는 물리적 은유가 핵심이라,
+     실제로 두 면을 겹쳐 쌓지 않고 뒤집는 애니메이션의 중간 지점(카드가
+     옆으로 서서 안 보이는 순간)에 표시 중인 면만 바꿔치기함 — 그래야
+     waiting/lupin 리스트 길이가 달라도 카드 높이가 내용에 맞게 자연스럽게
+     따라감. 뒤집기 버튼은 someday 스티키의 접힘 화살표(.toggle-arrow)와
+     같은 자리 — 제목 줄 오른쪽 끝 — 에 숨김 없이 그대로 노출.  */
+  .lupin-flip-btn {
+    margin-left: auto;
+    background: none;
+    border: none;
+    font-size: 15px;
+    line-height: 1;
+    padding: 0;
+    cursor: pointer;
+    color: var(--ink-soft);
+    transition: color 0.15s ease, transform 0.15s ease;
+  }
+
+  .lupin-flip-btn:hover,
+  .lupin-flip-btn:focus-visible {
+    color: var(--accent);
+    transform: scale(1.15);
+  }
+
+  @keyframes lupin-flip {
+    0% { transform: rotate(var(--rot, 0deg)) rotateY(0deg); }
+    50% { transform: rotate(var(--rot, 0deg)) rotateY(94deg); }
+    100% { transform: rotate(var(--rot, 0deg)) rotateY(0deg); }
+  }
+
+  .sticky-flipping {
+    animation: lupin-flip 0.6s cubic-bezier(0.45, 0.05, 0.55, 0.95);
   }
 
   .sticky-title .flower {
@@ -1100,22 +1139,45 @@
       </div>
 
       <div class="side-col">
-        <div class="sticky" data-board="waiting" style="--rot: 1.2deg; --paper: var(--paper-waiting);">
+        <div class="sticky" data-board="waiting" id="waitingSticky" style="--rot: 1.2deg; --paper: var(--paper-waiting);">
           <button class="archive-flag archive-flag-desktop" type="button" aria-label="다 한 일 보기"></button>
-          <div class="tape"></div>
-          <h2 class="sticky-title">waiting... <span class="flower">⏳</span></h2>
+          <div data-lupin-front>
+            <div class="tape"></div>
+            <h2 class="sticky-title">waiting... <span class="flower">⏳</span>
+              <button class="lupin-flip-btn" id="lupinFlipBtn" type="button" aria-label="루팡 모드로 뒤집기">🥷</button>
+            </h2>
 
-          <ul class="task-list" data-tasklist="waiting"></ul>
+            <ul class="task-list" data-tasklist="waiting"></ul>
 
-          <div class="add-row">
-            <span class="plus">+</span>
-            <input
-              class="new-task-input"
-              data-newtask
-              placeholder="기다리는 거..."
-              autocomplete="off"
-              maxlength="60"
-            />
+            <div class="add-row">
+              <span class="plus">+</span>
+              <input
+                class="new-task-input"
+                data-newtask
+                placeholder="기다리는 거..."
+                autocomplete="off"
+                maxlength="60"
+              />
+            </div>
+          </div>
+
+          <div data-lupin-back data-board="lupin" hidden>
+            <h2 class="sticky-title">lupin mode <span class="flower">🥷</span>
+              <button class="lupin-flip-btn" id="lupinFlipBackBtn" type="button" aria-label="원래대로 뒤집기">⏳</button>
+            </h2>
+
+            <ul class="task-list" data-tasklist="lupin"></ul>
+
+            <div class="add-row">
+              <span class="plus">+</span>
+              <input
+                class="new-task-input"
+                data-newtask
+                placeholder="아무도 모르게..."
+                autocomplete="off"
+                maxlength="60"
+              />
+            </div>
           </div>
         </div>
 
@@ -1174,7 +1236,8 @@
     today: '오늘은 뭘 해볼까?',
     waiting: '기다리는 거 없음',
     someday: '언젠가 해볼까',
-    scheduled: '예정된 일 없음'
+    scheduled: '예정된 일 없음',
+    lupin: '아무것도 없음... 진짜로 🤫'
   };
   const BOARD_META = {
     today: { emoji: '✿', label: "today's list" },
@@ -1357,6 +1420,9 @@
       result[id] = normalizeTasks(Array.isArray(data[id]) ? data[id] : []);
     });
     result.archive = normalizeTasks(Array.isArray(data.archive) ? data.archive : []);
+    // lupin은 다른 보드로 옮겨지지도, done 아카이브로 넘어가지도 않는
+    // 별도 은닉 보드라 BOARD_IDS/migrateArchive 양쪽 모두에서 의도적으로 제외.
+    result.lupin = normalizeTasks(Array.isArray(data.lupin) ? data.lupin : []);
     migrateArchive(result);
     return result;
   }
@@ -1601,6 +1667,7 @@
 
   function renderAll() {
     BOARD_IDS.forEach(render);
+    render('lupin');
     updateCounter();
   }
 
@@ -1808,7 +1875,10 @@
       controls.appendChild(dateBtn);
     }
 
-    MOVE_TARGET_IDS
+    // lupin은 숨겨진 개인 메모라 다른 보드로도, 다른 보드에서 lupin으로도
+    // 옮겨질 수 없음 — 애초에 MOVE_TARGET_IDS에 없어서 뒤쪽은 이미 보장되고,
+    // 여기선 lupin 항목 자체가 이동 버튼을 갖지 않도록 명시적으로 막음.
+    (boardId === 'lupin' ? [] : MOVE_TARGET_IDS)
       .filter(id => id !== boardId)
       .filter(id => !(boardId === 'waiting' && id === 'today')) // redundant with the always-visible ←
       .forEach(otherId => {
@@ -2174,6 +2244,14 @@
 
     saveBoards();
 
+    // lupin은 체크해도 절대 done 아카이브로 넘어가지 않음 — 숨겨진 개인
+    // 메모라 다른 보드로 옮겨지듯 노출되면 안 되고, 취소선만 그어진 채
+    // 지우기 전까지 그 자리에 그대로 남아있음.
+    if (boardId === 'lupin') {
+      setTimeout(() => render(boardId), REORDER_DELAY);
+      return;
+    }
+
     const today = todayStr();
     // `today` tasks (plain, or a scheduled task due today rendered inside
     // today's list) get a same-day grace period before archiving; anything
@@ -2271,7 +2349,7 @@
   // they target the task the user just typed, not merely whatever happens
   // to sit last in the array (which could be an unrelated older task if
   // no task has been added yet in this session).
-  const lastAddedTaskId = { today: null, waiting: null, someday: null };
+  const lastAddedTaskId = { today: null, waiting: null, someday: null, lupin: null };
 
   // Set right before a render caused by toggleUrgent, so the freshly
   // rebuilt li for that one task can play an in/out animation once —
@@ -2378,7 +2456,11 @@
   }
 
   document.querySelectorAll('[data-newtask]').forEach(input => {
-    const boardId = input.closest('.sticky').dataset.board;
+    // waiting 스티키 뒷면(lupin)의 입력창도 같은 .sticky[data-board="waiting"]
+    // 안에 물리적으로 들어있어서 .closest('.sticky')로는 구분이 안 됨 —
+    // 뒷면 래퍼 자체에 data-board="lupin"을 따로 붙여두고 가장 가까운
+    // [data-board]를 찾아서 앞/뒷면 입력창을 정확히 구분함.
+    const boardId = input.closest('[data-board]').dataset.board;
     input.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') {
         if (e.shiftKey) {
@@ -2420,8 +2502,70 @@
     });
   });
 
+  // lupin mode — waiting 스티키를 뒤집으면 나오는 개인용 숨김 메모장.
+  // 🥷/⏳ 아이콘 클릭 또는 키보드 l/ll로 뒤집음(아래 keydown 리스너 참고).
+  const waitingStickyEl = document.getElementById('waitingSticky');
+  const lupinFlipBtn = document.getElementById('lupinFlipBtn');
+  const lupinFlipBackBtn = document.getElementById('lupinFlipBackBtn');
+  const lupinFrontEl = waitingStickyEl.querySelector('[data-lupin-front]');
+  const lupinBackEl = waitingStickyEl.querySelector('[data-lupin-back]');
+
+  // 실제 열림 상태는 애니메이션 중간(300ms 지연)에야 DOM에 반영되므로,
+  // 그 DOM 상태(lupinBackEl.hidden)를 그대로 진위값으로 쓰면 "ll"처럼
+  // 애니메이션이 끝나기 전에 연달아 눌리는 두 번째 입력이 아직 안 뒤집힌
+  // 걸로 오판함 — 그래서 의도를 별도 변수로 즉시 기록해두고 그걸 기준으로 판단.
+  let lupinOpen = false;
+  let lupinFocusPending = false;
+
+  function isLupinOpen() {
+    return lupinOpen;
+  }
+
+  function setLupinOpen(open, focusInput) {
+    if (lupinOpen === open) {
+      if (open && focusInput) {
+        if (lupinBackEl.hidden) {
+          lupinFocusPending = true; // 아직 스왑 전이면 스왑 콜백에서 포커스
+        } else {
+          const input = lupinBackEl.querySelector('[data-newtask]');
+          if (input) input.focus();
+        }
+      }
+      return;
+    }
+    lupinOpen = open;
+    if (open && focusInput) lupinFocusPending = true;
+
+    waitingStickyEl.classList.add('sticky-flipping');
+    // 카드가 옆으로 서서 안 보이는 애니메이션 중간 지점에 표시 면을 바꿔치기
+    // 해야 실제로 "뒤집는" 것처럼 보임(페이드가 아니라).
+    setTimeout(() => {
+      lupinFrontEl.hidden = open;
+      lupinBackEl.hidden = !open;
+      // 인라인 style="--paper: var(--paper-waiting)"가 이미 걸려있어서
+      // 클래스 규칙보다 우선순위가 높음 — 같은 인라인 자리에서 직접 덮어씀.
+      waitingStickyEl.style.setProperty('--paper', open ? 'var(--paper-lupin)' : 'var(--paper-waiting)');
+      if (open && lupinFocusPending) {
+        lupinFocusPending = false;
+        const input = lupinBackEl.querySelector('[data-newtask]');
+        if (input) input.focus();
+      }
+    }, 300);
+    waitingStickyEl.addEventListener('animationend', function handler() {
+      waitingStickyEl.classList.remove('sticky-flipping');
+      waitingStickyEl.removeEventListener('animationend', handler);
+    });
+  }
+
+  lupinFlipBtn.addEventListener('click', () => setLupinOpen(true));
+  lupinFlipBackBtn.addEventListener('click', () => setLupinOpen(false));
+
   // n/w/s: 어떤 입력창에도 포커스가 없을 때만 각 보드의 새 항목 입력창으로 포커스 이동.
   const SHORTCUT_BOARD_IDS = { n: 'today', w: 'waiting', s: 'someday' };
+  // l 한 번 = lupin 모드로 뒤집기(이미 열려있으면 원래대로), l을 짧은 간격
+  // 안에 두 번(ll) = 뒤집힌 김에 새 항목 입력창까지 바로 포커스 — n/w/s와
+  // 같은 흐름으로 이어서 타이핑할 수 있게.
+  let lastLKeyTime = 0;
 
   document.addEventListener('keydown', (e) => {
     if (e.metaKey || e.ctrlKey || e.altKey) return;
@@ -2432,6 +2576,15 @@
     if (e.key === 'd' || e.key === 'D') {
       e.preventDefault();
       toggleArchivePanel(); // 플래그 버튼 클릭과 같은 토글 함수 재사용
+      return;
+    }
+
+    if (e.key === 'l' || e.key === 'L') {
+      e.preventDefault();
+      const now = Date.now();
+      const isDoubleTap = isLupinOpen() && (now - lastLKeyTime < 500);
+      setLupinOpen(isDoubleTap ? true : !isLupinOpen(), isDoubleTap);
+      lastLKeyTime = now;
       return;
     }
 

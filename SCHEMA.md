@@ -16,10 +16,11 @@ type Boards = {
   someday: Task[];
   scheduled: Task[];
   archive: Task[];
+  lupin: Task[];
 };
 ```
 
-다섯 개 배열 모두 `Task` 객체의 배열이며, **어느 배열에 들어있느냐 자체가 그 항목이 어떤 보드에 속해 있는지를 결정함**(별도의 `boardId` 필드 없음). 항목이 보드를 이동하면(예: 날짜 지정, 완료 처리, waiting → today 복귀) 실제로 한 배열에서 `splice`해서 다른 배열로 `push`함.
+여섯 개 배열 모두 `Task` 객체의 배열이며, **어느 배열에 들어있느냐 자체가 그 항목이 어떤 보드에 속해 있는지를 결정함**(별도의 `boardId` 필드 없음). 항목이 보드를 이동하면(예: 날짜 지정, 완료 처리, waiting → today 복귀) 실제로 한 배열에서 `splice`해서 다른 배열로 `push`함. 단, `lupin`은 예외 — 아래 참고.
 
 ## `Task`
 
@@ -64,6 +65,7 @@ type Subtask = {
 | `someday` | 직접 입력 | 날짜 지정(→ `scheduled`), 체크(→ 즉시 `archive`, 유예 없음) |
 | `scheduled` | today/someday 항목에 날짜 지정, 아카이브 항목 "다시 쓰기" | 날짜 지움(→ 원래 보드), 오늘 마감분은 체크 후 다음날 스윕(→ `archive`), 오늘 마감 아닌 항목은 체크 즉시(→ `archive`) |
 | `archive` | 위 스윕/즉시 아카이브 경로 | 🗑️ 삭제만 가능(원본 삭제, 복구 없음). "다시 쓰기"는 원본은 그대로 두고 `scheduled`에 완전히 새로운 독립 항목을 생성 |
+| `lupin` | 직접 입력만(waiting 스티키를 뒤집었을 때 나오는 개인용 숨김 메모장 UI에서) | 🗑️ 삭제만. 체크해도 `archive`로 넘어가지 않고 취소선만 그어진 채 그대로 남음 — `today`/`waiting`/`someday` 등 다른 보드로도 옮겨지지 않음(이동 버튼 자체가 없음), `BOARD_IDS`/`migrateArchive`/`collectArchiveEntries`에서 의도적으로 제외되어 있어 done 아카이브 패널에도 절대 노출되지 않음 |
 
 ## `today`'s list에 표시되는데 `boards.today`엔 없는 항목들
 
