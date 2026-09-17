@@ -568,6 +568,33 @@
     opacity: 1;
   }
 
+  @keyframes urgent-alert-in {
+    0% { transform: scale(1) rotate(0); box-shadow: 0 0 0 0 var(--urgent-bg); }
+    15% { transform: scale(1.05) rotate(-2deg); box-shadow: 0 0 0 5px var(--urgent-bg); }
+    30% { transform: scale(0.98) rotate(2deg); }
+    45% { transform: scale(1.04) rotate(-1.5deg); box-shadow: 0 0 0 2px var(--urgent-bg); }
+    60% { transform: scale(0.99) rotate(1deg); }
+    75% { transform: scale(1.02) rotate(-0.5deg); }
+    100% { transform: scale(1) rotate(0); box-shadow: 0 0 0 0 rgba(0, 0, 0, 0); }
+  }
+
+  .urgent-flash-in .task-row {
+    animation: urgent-alert-in 0.5s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+    transform-origin: center left;
+  }
+
+  @keyframes urgent-sigh-out {
+    0% { transform: scale(1) translateY(0); opacity: 1; }
+    35% { transform: scale(1.015) translateY(-2px); opacity: 0.85; }
+    65% { transform: scale(0.985) translateY(3px); opacity: 1; }
+    100% { transform: scale(1) translateY(0); opacity: 1; }
+  }
+
+  .urgent-flash-out .task-row {
+    animation: urgent-sigh-out 0.7s cubic-bezier(0.33, 1, 0.68, 1) both;
+    transform-origin: center left;
+  }
+
   .checkbox {
     flex: 0 0 auto;
     width: 20px;
@@ -1692,6 +1719,10 @@
   function renderItem(boardId, task) {
     const li = document.createElement('li');
     li.className = 'task-item' + (task.done ? ' done' : '') + (task.urgent ? ' urgent' : '');
+    if (urgentFlash && urgentFlash.id === task.id) {
+      li.className += urgentFlash.mode === 'in' ? ' urgent-flash-in' : ' urgent-flash-out';
+      urgentFlash = null;
+    }
     li.dataset.id = task.id;
 
     const row = document.createElement('div');
@@ -2242,6 +2273,11 @@
   // no task has been added yet in this session).
   const lastAddedTaskId = { today: null, waiting: null, someday: null };
 
+  // Set right before a render caused by toggleUrgent, so the freshly
+  // rebuilt li for that one task can play an in/out animation once —
+  // renderItem consumes and clears it as soon as it matches.
+  let urgentFlash = null;
+
   function addTask(boardId, text) {
     const trimmed = text.trim();
     if (!trimmed) return;
@@ -2265,6 +2301,7 @@
     const task = boards[boardId].find(t => t.id === id);
     if (!task) return;
     task.urgent = !task.urgent;
+    urgentFlash = { id, mode: task.urgent ? 'in' : 'out' };
     saveBoards();
     render(boardId);
   }
@@ -2373,6 +2410,9 @@
         const target = getShortcutTargetTask(boardId);
         if (!target) return;
         e.preventDefault();
+        // 입력 중이던 포커스를 먼저 놓아서 "긴급 알림이 끼어든" 느낌을 줌 —
+        // 토글 자체(및 애니메이션)는 그 다음에 일어남.
+        input.blur();
         const li = findTaskLi(target.id);
         const urgentBtn = li && li.querySelector('.urgent-btn');
         if (urgentBtn) urgentBtn.click(); // 방금 등록한 할일의 긴급 표시를 토글
