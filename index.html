@@ -137,6 +137,16 @@
     gap: 30px 22px;
   }
 
+  /* today(380px) + 간격(22px) + waiting/someday 컬럼(380px) + 화면 좌우
+     여백(40px) = 822px — 이 폭 이상이면 항상 2단(가로 배치)으로 강제 고정.
+     flex-wrap의 자연스러운 줄바꿈 계산에 맡기면 폰트/줌 등 예상 밖의
+     변수로 이 폭 이상에서도 1단으로 떨어지는 경우가 있어서 명시적으로 못박음. */
+  @media (min-width: 822px) {
+    .board-row {
+      flex-wrap: nowrap;
+    }
+  }
+
   .side-col {
     display: flex;
     flex-direction: column;
