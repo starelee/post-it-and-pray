@@ -1483,7 +1483,7 @@
   // that user's own cloud row.
   let activeRowId = null;
 
-  function pushToCloud() {
+  function pushToCloudNow() {
     if (!cloudClient || !activeRowId) return;
     cloudClient
       .from('postit_data')
@@ -1491,6 +1491,30 @@
       .then(() => {})
       .catch(() => {});
   }
+
+  // Checking off five tasks in a row shouldn't fire five full-document
+  // upserts — debounce so a burst of edits (saveBoards is called on every
+  // single action) coalesces into one upload of whatever `boards` looks
+  // like once things settle, instead of re-sending the whole thing each time.
+  const CLOUD_PUSH_DEBOUNCE = 800;
+  let cloudPushTimer = null;
+
+  function pushToCloud() {
+    if (!cloudClient || !activeRowId) return;
+    clearTimeout(cloudPushTimer);
+    cloudPushTimer = setTimeout(pushToCloudNow, CLOUD_PUSH_DEBOUNCE);
+  }
+
+  // Best-effort flush so closing the tab right after an edit doesn't just
+  // drop the still-pending debounced write — no guarantee it completes
+  // before the page unloads, but that's strictly better than never sending it.
+  window.addEventListener('beforeunload', () => {
+    if (cloudPushTimer) {
+      clearTimeout(cloudPushTimer);
+      cloudPushTimer = null;
+      pushToCloudNow();
+    }
+  });
 
   // Syncs `boards` with the signed-in user's own cloud row. If that row
   // already exists, it's the source of truth and we pull it down; if it
