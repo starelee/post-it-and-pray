@@ -460,13 +460,20 @@
 
   .back-btn {
     flex: 0 0 auto;
+    /* checkbox와 같은 20px 박스로 고정 — 안 그러면 이 버튼 자체 폭이
+       달라서 waiting의 항목 텍스트만 다른 보드보다 오른쪽에서 시작함. */
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     background: none;
     border: none;
     font-size: 17px;
     line-height: 1;
     color: var(--ink);
     cursor: pointer;
-    padding: 2px 4px;
+    padding: 0;
     opacity: 0.75;
     transition: opacity 0.15s ease, transform 0.15s ease;
   }
