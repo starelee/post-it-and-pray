@@ -30,6 +30,7 @@
     --accent: #e2727e;
     --urgent: #d43d3d;
     --urgent-bg: rgba(212, 61, 61, 0.1);
+    --highlighter: rgba(74, 144, 226, 0.55);
     --tape: rgba(255, 255, 255, 0.6);
     --tape-edge: rgba(255, 255, 255, 0.25);
     --divider: #cdbd7c;
@@ -57,6 +58,7 @@
       --accent: #e8919b;
       --urgent: #ff6b6b;
       --urgent-bg: rgba(255, 107, 107, 0.14);
+      --highlighter: rgba(94, 169, 255, 0.55);
       --tape: rgba(255, 255, 255, 0.14);
       --tape-edge: rgba(255, 255, 255, 0.05);
       --divider: #5c5537;
@@ -84,6 +86,7 @@
     --accent: #e8919b;
     --urgent: #ff6b6b;
     --urgent-bg: rgba(255, 107, 107, 0.14);
+    --highlighter: rgba(94, 169, 255, 0.55);
     --tape: rgba(255, 255, 255, 0.14);
     --tape-edge: rgba(255, 255, 255, 0.05);
     --divider: #5c5537;
@@ -121,6 +124,12 @@
     justify-content: center;
     gap: clamp(18px, 4vh, 40px);
     padding: 32px 20px 24px;
+  }
+
+  @media (max-width: 480px) {
+    .screen {
+      padding: 20px 10px 16px;
+    }
   }
 
   .board-row {
@@ -464,6 +473,7 @@
        달라서 waiting의 항목 텍스트만 다른 보드보다 오른쪽에서 시작함. */
     width: 20px;
     height: 20px;
+    margin-top: 3px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -494,6 +504,12 @@
       0 3px 6px var(--paper-contact);
     transform: rotate(var(--rot, -1.4deg));
     transition: transform 0.25s ease, box-shadow 0.25s ease;
+  }
+
+  @media (max-width: 480px) {
+    .sticky {
+      width: min(320px, 94vw);
+    }
   }
 
   .sticky:hover, .sticky:focus-within {
@@ -580,7 +596,7 @@
 
   .task-row {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     gap: 8px;
   }
 
@@ -642,10 +658,53 @@
     transform-origin: center left;
   }
 
+  /* waiting/someday/pray later -> gotta do 로 넘어온 항목이 도착한 자리를
+     파란 형광펜으로 슥 훑고 지나가듯 잠깐 강조했다가 사라짐. */
+  @keyframes move-arrive-highlight {
+    0% { background: transparent; }
+    20% { background: var(--highlighter); }
+    100% { background: transparent; }
+  }
+
+  .move-arrive-highlight .task-row {
+    border-radius: 4px;
+    margin: -2px -6px;
+    padding: 2px 6px;
+    animation: move-arrive-highlight 1.1s ease-out both;
+  }
+
+  /* gotta do -> waiting 으로 넘어간 항목이 잘 도착했음을 알리는 가벼운
+     흔들림 — 형광펜만큼 강조할 필요는 없는 이동이라 살짝 흔들리기만 함. */
+  @keyframes move-arrive-wiggle {
+    0%, 100% { transform: rotate(0); }
+    20% { transform: rotate(-3deg); }
+    40% { transform: rotate(2.5deg); }
+    60% { transform: rotate(-2deg); }
+    80% { transform: rotate(1deg); }
+  }
+
+  .move-arrive-wiggle .task-row {
+    animation: move-arrive-wiggle 0.45s ease-in-out both;
+    transform-origin: center left;
+  }
+
+  /* gotta do -> someday/pray later 로 넘어간 항목 — 나중에 할 일이라 강조는
+     필요 없지만, 드롭다운을 펼쳐놓고 보고 있었을 유저를 위해 갑자기 팝인
+     하지 않고 살짝 떠오르듯 부드럽게 나타남. */
+  @keyframes move-arrive-fade {
+    0% { opacity: 0; transform: translateY(-6px); }
+    100% { opacity: 1; transform: translateY(0); }
+  }
+
+  .move-arrive-fade {
+    animation: move-arrive-fade 0.35s ease-out both;
+  }
+
   .checkbox {
     flex: 0 0 auto;
     width: 20px;
     height: 20px;
+    margin-top: 3px;
     border: 2px solid var(--ink);
     border-radius: 3px 5px 4px 6px;
     background: transparent;
@@ -724,7 +783,6 @@
 
   .task-item.urgent .task-text {
     color: var(--urgent);
-    font-weight: 700;
   }
 
   .task-item.urgent.done .task-text {
@@ -1039,6 +1097,12 @@
     margin-left: auto;
     font-size: 14px;
     color: var(--ink-soft);
+    display: inline-block;
+    transition: transform 0.15s ease;
+  }
+
+  .toggle-arrow-open {
+    transform: rotate(180deg);
   }
 
   .collapsible-body[hidden] {
@@ -1115,6 +1179,7 @@
 
   .new-task-input {
     flex: 1;
+    min-width: 0;
     border: none;
     background: transparent;
     font-family: 'NostalgicMyoeunHeullim', 'Gaegu', cursive, sans-serif;
@@ -1729,20 +1794,30 @@
   // call this themselves at creation time since the querySelectorAll below
   // only ever sees elements that exist at module-load time).
   function wireCollapseToggle(toggle, body, defaultOpen) {
+    // 열림/닫힘을 다른 글자(▾/▴)로 바꾸는 대신 같은 글자를 180도 돌리기만
+    // 함 — 두 글자가 폰트별로 미묘하게 다른 크기/기준선을 가져서(특히
+    // 모바일 사파리) 위아래 화살표 크기가 달라 보이는 문제가 있었음.
     const arrow = toggle.querySelector('[data-toggle-arrow]');
     body.hidden = !defaultOpen;
-    if (arrow) arrow.textContent = defaultOpen ? '▴' : '▾';
-    toggle.addEventListener('click', () => {
-      const open = body.hidden;
+    if (arrow) arrow.classList.toggle('toggle-arrow-open', defaultOpen);
+    function setOpen(open) {
       body.hidden = !open;
-      if (arrow) arrow.textContent = open ? '▴' : '▾';
-    });
+      if (arrow) arrow.classList.toggle('toggle-arrow-open', open);
+    }
+    toggle.addEventListener('click', () => setOpen(body.hidden));
+    return setOpen;
   }
 
+  // someday 스티키 안의 pray later(scheduled)/someday 섹션 — p/s 단축키가
+  // "닫혀있으면 열기만, 이미 열려있으면 입력창 포커스"를 판단할 때
+  // body.hidden을 그대로 열림/닫힘 상태로 재사용함(따로 상태를 안 들고 있음).
+  const collapseSections = {};
   document.querySelectorAll('[data-collapse-toggle]').forEach(toggle => {
     const body = toggle.nextElementSibling;
     if (!body || !body.hasAttribute('data-collapse-body')) return;
-    wireCollapseToggle(toggle, body, false);
+    const setOpen = wireCollapseToggle(toggle, body, false);
+    const listEl = body.querySelector('[data-tasklist]');
+    if (listEl) collapseSections[listEl.dataset.tasklist] = { body, setOpen };
   });
 
   function makeCheckSvg(iconClass) {
@@ -1881,6 +1956,10 @@
     if (urgentFlash && urgentFlash.id === task.id) {
       li.className += urgentFlash.mode === 'in' ? ' urgent-flash-in' : ' urgent-flash-out';
       urgentFlash = null;
+    }
+    if (moveHighlight && moveHighlight.id === task.id) {
+      li.className += ' move-arrive-' + moveHighlight.mode;
+      moveHighlight = null;
     }
     li.dataset.id = task.id;
 
@@ -2426,6 +2505,13 @@
       delete task.doneAt;
     }
     boards[toBoardId].push(task);
+    if (toBoardId === 'today' && (fromBoardId === 'waiting' || fromBoardId === 'someday' || fromBoardId === 'scheduled')) {
+      moveHighlight = { id, mode: 'highlight' };
+    } else if (fromBoardId === 'today' && toBoardId === 'waiting') {
+      moveHighlight = { id, mode: 'wiggle' };
+    } else if (fromBoardId === 'today' && toBoardId === 'someday') {
+      moveHighlight = { id, mode: 'fade' };
+    }
     saveBoards();
     render(fromBoardId);
     render(toBoardId);
@@ -2461,6 +2547,9 @@
       task.dueDate = dateValue;
       task.from = boardId;
       boards.scheduled.push(task);
+      if (boardId === 'today') {
+        moveHighlight = { id, mode: 'fade' };
+      }
       saveBoards();
       render(boardId);
       render('today');
@@ -2479,6 +2568,13 @@
   // rebuilt li for that one task can play an in/out animation once —
   // renderItem consumes and clears it as soon as it matches.
   let urgentFlash = null;
+
+  // Set right before a render caused by moveTask, so the freshly rebuilt li
+  // for that one task can play a one-shot arrival animation — renderItem
+  // consumes and clears it as soon as it matches. 'highlight' is the blue
+  // flash for waiting/someday/scheduled -> today; 'wiggle' is the softer
+  // shake for today -> waiting. Any other transition gets no animation.
+  let moveHighlight = null;
 
   // draft: 등록 전 입력창에서 마우스로 미리 정해둔 긴급/날짜/하위 항목
   // ({ urgent, dueDate, subtasks: string[] }) — 새 항목 입력창의 draft
@@ -2600,6 +2696,10 @@
     render(boardId);
     openAddSubtaskRow(boardId, taskId, true);
   }
+
+  // p 단축키 두 번째 누름에서 someday 입력창의 날짜 피커를 열어주기 위해
+  // 아래 forEach(해당 입력창이 만들어질 때) 안에서 채워짐.
+  let openSomedayDatePicker = null;
 
   document.querySelectorAll('[data-newtask]').forEach(input => {
     // waiting 스티키 뒷면(lupin)의 입력창도 같은 .sticky[data-board="waiting"]
@@ -2725,6 +2825,14 @@
         if (!dateRow.hidden) dateInput.focus();
       });
       insertAfterAddRow(dateRow);
+
+      // p 단축키 두 번째 누름(pray later용 새 항목 입력 + 날짜 옵션 활성화)이
+      // someday 입력창의 날짜 피커를 곧장 펼칠 수 있도록 바깥에 노출함.
+      if (boardId === 'someday') {
+        openSomedayDatePicker = () => {
+          dateRow.hidden = false;
+        };
+      }
     }
 
     const subtaskChips = document.createElement('ul');
@@ -2941,11 +3049,45 @@
   lupinFlipBtn.addEventListener('click', () => setLupinOpen(true));
   lupinFlipBackBtn.addEventListener('click', () => setLupinOpen(false));
 
-  // n/w/s: 어떤 입력창에도 포커스가 없을 때만 각 보드의 새 항목 입력창으로 포커스 이동.
+  // n/w: 어떤 입력창에도 포커스가 없을 때만 각 보드의 새 항목 입력창으로 포커스 이동.
   // 물리 키(e.code) 기준으로 감지 — e.key로 비교하면 한글 입력기가 켜져
   // 있을 때 물리적으로 같은 자리를 눌러도 자모가 들어와서 단축키가 아예
   // 안 먹는 문제가 있어서, Alt+D/Alt+E와 같은 방식으로 통일함.
-  const SHORTCUT_BOARD_CODES = { KeyN: 'today', KeyW: 'waiting', KeyS: 'someday' };
+  const SHORTCUT_BOARD_CODES = { KeyN: 'today', KeyW: 'waiting' };
+
+  // someday 입력창은 someday/scheduled 두 리스트를 같이 담고 있는 스티키
+  // 안에 하나뿐이라, s/p 모두 결국 이 입력창을 포커스함 — 차이는 어떤
+  // 드롭다운(someday/pray later)을 먼저 열어주고, p는 추가로 날짜 피커까지
+  // 펼쳐주는지에 있음.
+  function focusSomedayInput() {
+    const input = document.querySelector('.sticky[data-board="someday"] [data-newtask]');
+    if (input) input.focus();
+  }
+
+  // s: someday 드롭다운이 닫혀있으면 일단 펼치기만(포커스 없이), 이미
+  // 펼쳐진 중이면 곧장 새 항목 입력창 포커스 — l/w와 같은 "닫혀있으면 열기,
+  // 열려있으면 포커스" 2단 패턴.
+  function handleSomedayShortcut() {
+    const section = collapseSections.someday;
+    if (section && section.body.hidden) {
+      section.setOpen(true);
+    } else {
+      focusSomedayInput();
+    }
+  }
+
+  // p: pray later(scheduled) 드롭다운이 닫혀있으면 일단 펼치기만, 이미
+  // 펼쳐진 중이면 새 항목 입력창을 포커스하면서 그 자리에서 바로 날짜를
+  // 지정할 수 있게 날짜 피커까지 함께 열어줌.
+  function handlePrayLaterShortcut() {
+    const section = collapseSections.scheduled;
+    if (section && section.body.hidden) {
+      section.setOpen(true);
+    } else {
+      focusSomedayInput();
+      if (openSomedayDatePicker) openSomedayDatePicker();
+    }
+  }
 
   document.addEventListener('keydown', (e) => {
     if (e.metaKey || e.ctrlKey || e.altKey) return;
@@ -2974,6 +3116,18 @@
     if (e.code === 'KeyW' && (isLupinOpen() || lupinSwapPending)) {
       e.preventDefault();
       setLupinOpen(false, !isLupinOpen());
+      return;
+    }
+
+    if (e.code === 'KeyS') {
+      e.preventDefault();
+      handleSomedayShortcut();
+      return;
+    }
+
+    if (e.code === 'KeyP') {
+      e.preventDefault();
+      handlePrayLaterShortcut();
       return;
     }
 
