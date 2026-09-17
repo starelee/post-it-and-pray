@@ -1477,7 +1477,11 @@
       btn.addEventListener('click', () => {
         cloudClient.auth.signInWithOAuth({
           provider: 'google',
-          options: { redirectTo: window.location.href }
+          // Never window.location.href here — if a previous login's
+          // #access_token=... hash is still sitting in the address bar
+          // (see clearAuthHash below), baking it into this redirect target
+          // corrupts the round trip and the next login silently fails.
+          options: { redirectTo: window.location.origin + window.location.pathname }
         });
       });
 
@@ -1490,9 +1494,20 @@
     }
   }
 
+  // supabase-js normally strips the #access_token=... hash it left in the
+  // URL after the OAuth redirect, but if that ever fails to happen the
+  // stale token sits in the address bar and gets fed straight back into
+  // the next login's redirectTo — clean it up ourselves as a backstop.
+  function clearAuthHash() {
+    if (/access_token|refresh_token|error_description/.test(window.location.hash)) {
+      history.replaceState(null, '', window.location.pathname + window.location.search);
+    }
+  }
+
   async function handleAuthChange(session) {
     const user = session && session.user ? session.user : null;
     renderAuthUI(user);
+    clearAuthHash();
     if (user) {
       if (activeRowId === user.id) return;
       await syncRow(user.id);
