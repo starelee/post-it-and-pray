@@ -460,13 +460,20 @@
 
   .back-btn {
     flex: 0 0 auto;
+    /* checkbox와 같은 20px 박스로 고정 — 안 그러면 이 버튼 자체 폭이
+       달라서 waiting의 항목 텍스트만 다른 보드보다 오른쪽에서 시작함. */
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     background: none;
     border: none;
     font-size: 17px;
     line-height: 1;
     color: var(--ink);
     cursor: pointer;
-    padding: 2px 4px;
+    padding: 0;
     opacity: 0.75;
     transition: opacity 0.15s ease, transform 0.15s ease;
   }
@@ -602,7 +609,8 @@
     transform: scale(1.1);
   }
 
-  .task-item.urgent .urgent-btn {
+  .task-item.urgent .urgent-btn,
+  .urgent-btn.draft-active {
     color: var(--urgent);
     opacity: 1;
   }
@@ -803,6 +811,14 @@
     flex-wrap: wrap;
     align-items: center;
     gap: 4px 2px;
+  }
+
+  /* display:flex가 브라우저 기본 [hidden] 규칙(display:none)보다 우선
+     적용돼서 hidden 속성만으론 안 접힘 — 초안 하위 항목 칩 목록을 비었을
+     때 hidden으로 감출 때 필요(실제 항목의 subtask-list는 원래 있을 때만
+     DOM에 붙여서 이 문제가 없었음). */
+  .subtask-list[hidden] {
+    display: none;
   }
 
   .subtask-item {
@@ -1042,16 +1058,59 @@
 
   .add-row {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: 6px;
     margin-top: 12px;
     border-top: 1px dashed var(--input-line);
     padding-top: 12px;
+    transition: background 0.15s ease, border-radius 0.15s ease;
+  }
+
+  .add-row.draft-urgent {
+    background: var(--urgent-bg);
+    border-radius: 4px;
+  }
+
+  /* draft-controls를 add-row 안에 두면 opacity:0이어도 flex 자리는 그대로
+     차지해서 "+"/입력창이 밀려남 — 그래서 .task-controls와 똑같이 별도
+     행으로 분리하고 max-height로 접어서 평소엔 자리 자체를 안 차지함. */
+  .draft-controls {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    max-height: 0;
+    overflow: hidden;
+    opacity: 0;
+    /* .task-controls와 같은 이유로 왼쪽을 띄움 — "+" 밑이 아니라
+       그 옆 텍스트("끄적이기..." 등) 시작 지점에 맞춰서 시작하게. */
+    padding-left: 28px;
+    transition: max-height 0.15s ease, opacity 0.15s ease, margin-top 0.15s ease;
+  }
+
+  .add-row-wrap:hover .draft-controls,
+  .add-row-wrap:focus-within .draft-controls {
+    max-height: 26px;
+    opacity: 1;
+    margin-top: 6px;
   }
 
   .plus {
     color: var(--ink-soft);
     font-size: 18px;
+    background: none;
+    border: none;
+    padding: 0;
+    font-family: inherit;
+    line-height: 1;
+    cursor: pointer;
+    transition: color 0.15s ease, transform 0.15s ease;
+  }
+
+  .plus:hover,
+  .plus:focus-visible {
+    color: var(--accent);
+    transform: scale(1.15);
   }
 
   .new-task-input {
@@ -1127,7 +1186,7 @@
         <ul class="task-list" data-tasklist="today"></ul>
 
         <div class="add-row">
-          <span class="plus">+</span>
+          <button type="button" class="plus" aria-label="새 항목 등록">+</button>
           <input
             class="new-task-input"
             data-newtask
@@ -1150,7 +1209,7 @@
             <ul class="task-list" data-tasklist="waiting"></ul>
 
             <div class="add-row">
-              <span class="plus">+</span>
+              <button type="button" class="plus" aria-label="새 항목 등록">+</button>
               <input
                 class="new-task-input"
                 data-newtask
@@ -1169,7 +1228,7 @@
             <ul class="task-list" data-tasklist="lupin"></ul>
 
             <div class="add-row">
-              <span class="plus">+</span>
+              <button type="button" class="plus" aria-label="새 항목 등록">+</button>
               <input
                 class="new-task-input"
                 data-newtask
@@ -1185,7 +1244,7 @@
           <div class="tape"></div>
 
           <button class="sticky-title sticky-title-toggle" type="button" data-collapse-toggle>
-            scheduled <span class="flower">📅</span>
+            pray later... <span class="flower">📅</span>
             <span class="toggle-arrow" data-toggle-arrow>▾</span>
           </button>
           <div class="collapsible-body" data-collapse-body hidden>
@@ -1198,17 +1257,17 @@
           </button>
           <div class="collapsible-body" data-collapse-body hidden>
             <ul class="task-list" data-tasklist="someday"></ul>
+          </div>
 
-            <div class="add-row">
-              <span class="plus">+</span>
-              <input
-                class="new-task-input"
-                data-newtask
-                placeholder="언젠가는..."
-                autocomplete="off"
-                maxlength="60"
-              />
-            </div>
+          <div class="add-row">
+            <button type="button" class="plus" aria-label="새 항목 등록">+</button>
+            <input
+              class="new-task-input"
+              data-newtask
+              placeholder="미래에 내가..."
+              autocomplete="off"
+              maxlength="60"
+            />
           </div>
         </div>
       </div>
@@ -1243,11 +1302,20 @@
     today: { emoji: '✿', label: "today's list" },
     waiting: { emoji: '⏳', label: 'waiting...' },
     someday: { emoji: '🌙', label: 'someday...' },
-    scheduled: { emoji: '📅', label: 'scheduled...' }
+    scheduled: { emoji: '📅', label: 'pray later...' }
   };
 
   function todayStr() {
     const d = new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return y + '-' + m + '-' + day;
+  }
+
+  function tomorrowStr() {
+    const d = new Date();
+    d.setDate(d.getDate() + 1);
     const y = d.getFullYear();
     const m = String(d.getMonth() + 1).padStart(2, '0');
     const day = String(d.getDate()).padStart(2, '0');
@@ -1938,6 +2006,18 @@
         setDueDate(boardId, task.id, dateInput.value);
       });
 
+      // 내일 날짜로 지정하는 경우가 워낙 많아서 달력을 열지 않고 바로 찍을
+      // 수 있게 — dateInput의 change 리스너를 그대로 재사용하도록 값만
+      // 채워넣고 change 이벤트를 직접 쏨.
+      const tomorrowBtn = document.createElement('button');
+      tomorrowBtn.className = 'date-clear-btn';
+      tomorrowBtn.type = 'button';
+      tomorrowBtn.textContent = '내일';
+      tomorrowBtn.addEventListener('click', () => {
+        dateInput.value = tomorrowStr();
+        dateInput.dispatchEvent(new Event('change'));
+      });
+
       const clearBtn = document.createElement('button');
       clearBtn.className = 'date-clear-btn';
       clearBtn.type = 'button';
@@ -1959,6 +2039,7 @@
       });
 
       dateRow.appendChild(dateInput);
+      dateRow.appendChild(tomorrowBtn);
       dateRow.appendChild(clearBtn);
       dateRow.appendChild(cancelBtn);
       li.appendChild(dateRow);
@@ -1974,8 +2055,10 @@
     const addSubRow = document.createElement('div');
     addSubRow.className = 'add-subtask-row';
     addSubRow.hidden = true;
-    const plus = document.createElement('span');
+    const plus = document.createElement('button');
+    plus.type = 'button';
     plus.className = 'plus';
+    plus.setAttribute('aria-label', '하위 항목 등록');
     plus.textContent = '+';
     const subInput = document.createElement('input');
     subInput.className = 'new-subtask-input';
@@ -1991,6 +2074,13 @@
     });
     subInput.addEventListener('blur', () => {
       if (!subInput.value.trim()) openAddSubtaskRow(boardId, task.id, false);
+    });
+    // 이 버튼도 Enter와 동일하게 등록 — 클릭하면 subInput이 먼저 blur되지만
+    // 텍스트가 있으면 위 blur 리스너가 행을 닫지 않으므로 안전함.
+    plus.addEventListener('click', () => {
+      const trimmed = subInput.value.trim();
+      if (trimmed) addSubtask(boardId, task.id, subInput.value);
+      else subInput.focus();
     });
     addToggle.addEventListener('click', () => openAddSubtaskRow(boardId, task.id, true));
 
@@ -2112,6 +2202,16 @@
       if (dateInput.value) reviveTask(task, dateInput.value);
     });
     dateRow.appendChild(dateInput);
+
+    const tomorrowBtn = document.createElement('button');
+    tomorrowBtn.className = 'date-clear-btn';
+    tomorrowBtn.type = 'button';
+    tomorrowBtn.textContent = '내일';
+    tomorrowBtn.addEventListener('click', () => {
+      dateInput.value = tomorrowStr();
+      dateInput.dispatchEvent(new Event('change'));
+    });
+    dateRow.appendChild(tomorrowBtn);
 
     reviveBtn.addEventListener('click', () => {
       dateRow.hidden = !dateRow.hidden;
@@ -2380,23 +2480,45 @@
   // renderItem consumes and clears it as soon as it matches.
   let urgentFlash = null;
 
-  function addTask(boardId, text) {
+  // draft: 등록 전 입력창에서 마우스로 미리 정해둔 긴급/날짜/하위 항목
+  // ({ urgent, dueDate, subtasks: string[] }) — 새 항목 입력창의 draft
+  // 컨트롤(아래 [data-newtask] 와이어링)에서 넘어옴.
+  function addTask(boardId, text, draft) {
     const trimmed = text.trim();
     if (!trimmed) return;
-    const task = { id: Date.now(), text: trimmed, done: false, urgent: false, subtasks: [] };
-    boards[boardId].push(task);
+    const task = {
+      id: Date.now(),
+      text: trimmed,
+      done: false,
+      urgent: !!(draft && draft.urgent),
+      subtasks: (draft && draft.subtasks || []).map((t, i) => ({ id: Date.now() + i, text: t, done: false }))
+    };
     lastAddedTaskId[boardId] = task.id;
-    saveBoards();
-    render(boardId);
+    if (draft && draft.dueDate) {
+      // setDueDate가 today/someday 항목을 scheduled로 옮길 때와 동일한
+      // 모양 — 처음부터 날짜가 있는 채로 바로 scheduled에 생성함.
+      task.dueDate = draft.dueDate;
+      task.from = boardId;
+      boards.scheduled.push(task);
+      saveBoards();
+      render(boardId);
+      render('today');
+      render('scheduled');
+    } else {
+      boards[boardId].push(task);
+      saveBoards();
+      render(boardId);
+    }
   }
 
   // Resolves the shortcut target for a board: the task tracked by
   // lastAddedTaskId, but only if it still actually exists there (it may
-  // have been deleted or moved elsewhere since).
+  // have been deleted or moved elsewhere since) — or, if a draft date was
+  // set at creation, in `scheduled` instead (see addTask).
   function getShortcutTargetTask(boardId) {
     const id = lastAddedTaskId[boardId];
     if (id == null) return null;
-    return boards[boardId].find(t => t.id === id) || null;
+    return boards[boardId].find(t => t.id === id) || boards.scheduled.find(t => t.id === id) || null;
   }
 
   function toggleUrgent(boardId, id) {
@@ -2485,17 +2607,226 @@
     // 뒷면 래퍼 자체에 data-board="lupin"을 따로 붙여두고 가장 가까운
     // [data-board]를 찾아서 앞/뒷면 입력창을 정확히 구분함.
     const boardId = input.closest('[data-board]').dataset.board;
+    const addRow = input.closest('.add-row');
+
+    // 아직 등록 전인 새 항목에 대해서도 날짜/긴급/하위 항목을 마우스로
+    // 미리 정해둘 수 있게 하는 "초안" 상태 — 등록되는 순간 addTask로
+    // 그대로 넘어가고, 등록 후엔 다음 입력을 위해 리셋됨.
+    let draftUrgent = false;
+    let draftDueDate = '';
+    let draftSubtasks = [];
+
+    // draftControls를 add-row 안에 같이 두면 opacity로 숨겨도 flex 공간은
+    // 그대로 차지해서 "+"/입력창이 원래 자리에서 밀려남 — 그래서 실제
+    // task-item처럼 별도의 행으로 분리하고, add-row를 감싸는 래퍼에
+    // 마우스를 올리거나(또는 입력창에 포커스하면) max-height로 펼쳐서
+    // 보여줌. 평소엔 높이 0이라 자리 자체를 안 차지함.
+    const addRowWrap = document.createElement('div');
+    addRowWrap.className = 'add-row-wrap';
+    addRow.replaceWith(addRowWrap);
+    addRowWrap.appendChild(addRow);
+
+    const draftControls = document.createElement('div');
+    draftControls.className = 'draft-controls';
+    addRowWrap.appendChild(draftControls);
+
+    const urgentBtn = document.createElement('button');
+    urgentBtn.type = 'button';
+    urgentBtn.className = 'urgent-btn';
+    urgentBtn.setAttribute('aria-label', '긴급 표시');
+    urgentBtn.textContent = '!';
+    urgentBtn.addEventListener('click', () => {
+      draftUrgent = !draftUrgent;
+      urgentBtn.classList.toggle('draft-active', draftUrgent);
+      // 버튼 자체는 호버 중에만 보이니, 긴급 여부는 행 배경색으로 항상
+      // 표시해줌 — 실제 등록된 항목의 urgent 강조와 같은 방식.
+      addRow.classList.toggle('draft-urgent', draftUrgent);
+    });
+    draftControls.appendChild(urgentBtn);
+
+    const subtaskToggle = document.createElement('button');
+    subtaskToggle.type = 'button';
+    subtaskToggle.className = 'add-subtask-toggle';
+    subtaskToggle.setAttribute('aria-label', '하위 항목 추가');
+    subtaskToggle.textContent = '+';
+    draftControls.appendChild(subtaskToggle);
+
+    // 날짜 기능 없는 보드(waiting)는 기존 task-item과 동일하게 아예 제외.
+    let dateBtn = null;
+    if (DATE_ENABLED_IDS.includes(boardId)) {
+      dateBtn = document.createElement('button');
+      dateBtn.type = 'button';
+      dateBtn.className = 'date-btn';
+      dateBtn.setAttribute('aria-label', '날짜 지정');
+      dateBtn.textContent = '📅';
+      draftControls.appendChild(dateBtn);
+    }
+
+    let insertAfter = addRowWrap;
+    function insertAfterAddRow(el) {
+      insertAfter.insertAdjacentElement('afterend', el);
+      insertAfter = el;
+    }
+
+    let dateRow = null;
+    let dateInput = null;
+    let dateBadge = null;
+    if (dateBtn) {
+      dateBadge = document.createElement('span');
+      dateBadge.className = 'due-badge';
+      dateBadge.hidden = true;
+      dateBadge.addEventListener('click', () => {
+        dateRow.hidden = !dateRow.hidden;
+        if (!dateRow.hidden) dateInput.focus();
+      });
+      // draftControls(호버해야 보임)가 아니라 add-row 안에 둬서 날짜를
+      // 지정해두면 호버 여부와 상관없이 항상 보이게 함.
+      addRow.appendChild(dateBadge);
+
+      dateRow = document.createElement('div');
+      dateRow.className = 'date-picker-row';
+      dateRow.hidden = true;
+
+      dateInput = document.createElement('input');
+      dateInput.className = 'date-picker-input';
+      dateInput.type = 'date';
+
+      const applyDraftDate = (value) => {
+        draftDueDate = value;
+        dateBadge.hidden = !value;
+        if (value) dateBadge.textContent = formatDueDateRelative(value);
+      };
+      dateInput.addEventListener('change', () => applyDraftDate(dateInput.value));
+
+      const tomorrowBtn = document.createElement('button');
+      tomorrowBtn.type = 'button';
+      tomorrowBtn.className = 'date-clear-btn';
+      tomorrowBtn.textContent = '내일';
+      tomorrowBtn.addEventListener('click', () => {
+        dateInput.value = tomorrowStr();
+        applyDraftDate(dateInput.value);
+      });
+
+      const dateClearBtn = document.createElement('button');
+      dateClearBtn.type = 'button';
+      dateClearBtn.className = 'date-clear-btn';
+      dateClearBtn.textContent = '날짜 지우기';
+      dateClearBtn.addEventListener('click', () => {
+        dateInput.value = '';
+        applyDraftDate('');
+        dateRow.hidden = true;
+      });
+
+      dateRow.appendChild(dateInput);
+      dateRow.appendChild(tomorrowBtn);
+      dateRow.appendChild(dateClearBtn);
+      dateBtn.addEventListener('click', () => {
+        dateRow.hidden = !dateRow.hidden;
+        if (!dateRow.hidden) dateInput.focus();
+      });
+      insertAfterAddRow(dateRow);
+    }
+
+    const subtaskChips = document.createElement('ul');
+    subtaskChips.className = 'subtask-list';
+    subtaskChips.hidden = true;
+    insertAfterAddRow(subtaskChips);
+
+    const subtaskRow = document.createElement('div');
+    subtaskRow.className = 'add-subtask-row';
+    subtaskRow.hidden = true;
+    const subtaskPlus = document.createElement('button');
+    subtaskPlus.type = 'button';
+    subtaskPlus.className = 'plus';
+    subtaskPlus.setAttribute('aria-label', '하위 항목 등록');
+    subtaskPlus.textContent = '+';
+    const subtaskInput = document.createElement('input');
+    subtaskInput.className = 'new-subtask-input';
+    subtaskInput.type = 'text';
+    subtaskInput.placeholder = '하위 항목 추가...';
+    subtaskInput.autocomplete = 'off';
+    subtaskInput.maxLength = 60;
+
+    function renderDraftSubtasks() {
+      subtaskChips.innerHTML = '';
+      subtaskChips.hidden = draftSubtasks.length === 0;
+      draftSubtasks.forEach((text, i) => {
+        const li = document.createElement('li');
+        li.className = 'subtask-item';
+        const chip = document.createElement('span');
+        chip.className = 'subtask-chip';
+        chip.textContent = '[' + text + ']';
+        const del = document.createElement('button');
+        del.type = 'button';
+        del.className = 'subtask-delete-btn';
+        del.setAttribute('aria-label', '삭제');
+        del.textContent = '×';
+        del.addEventListener('click', () => {
+          draftSubtasks.splice(i, 1);
+          renderDraftSubtasks();
+        });
+        li.appendChild(chip);
+        li.appendChild(del);
+        subtaskChips.appendChild(li);
+      });
+    }
+
+    function addDraftSubtask() {
+      const trimmed = subtaskInput.value.trim();
+      if (!trimmed) return;
+      draftSubtasks.push(trimmed);
+      subtaskInput.value = '';
+      renderDraftSubtasks();
+      subtaskInput.focus();
+    }
+    subtaskInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') addDraftSubtask();
+    });
+    subtaskPlus.addEventListener('click', addDraftSubtask);
+    subtaskToggle.addEventListener('click', () => {
+      subtaskRow.hidden = !subtaskRow.hidden;
+      if (!subtaskRow.hidden) subtaskInput.focus();
+    });
+
+    subtaskRow.appendChild(subtaskPlus);
+    subtaskRow.appendChild(subtaskInput);
+    insertAfterAddRow(subtaskRow);
+
+    // 등록 직전에 초안(긴급/날짜/하위 항목)을 addTask로 넘기고, 등록 후엔
+    // 다음 입력을 위해 전부 원상태로 되돌림 — Enter, "+" 클릭, Alt+D/E
+    // 선등록 전부 이 한 곳을 거쳐가게 해서 초안 처리가 한 군데로 모임.
+    function commitDraft() {
+      const trimmed = input.value.trim();
+      if (!trimmed) return false;
+      addTask(boardId, input.value, { urgent: draftUrgent, dueDate: draftDueDate, subtasks: draftSubtasks });
+      input.value = '';
+      draftUrgent = false;
+      draftDueDate = '';
+      draftSubtasks = [];
+      urgentBtn.classList.remove('draft-active');
+      addRow.classList.remove('draft-urgent');
+      if (dateBadge) dateBadge.hidden = true;
+      if (dateInput) dateInput.value = '';
+      if (dateRow) dateRow.hidden = true;
+      subtaskRow.hidden = true;
+      renderDraftSubtasks();
+      return true;
+    }
+
+    // "+" 버튼 — 지금까지는 Enter로만 등록할 수 있어서 마우스만으로는
+    // 새 항목을 넣을 방법이 아예 없었음.
+    const plusBtn = addRow.querySelector('.plus');
+    plusBtn.addEventListener('click', () => {
+      commitDraft();
+      input.focus();
+    });
+
     input.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') {
         if (e.shiftKey) {
-          const trimmed = input.value.trim();
-          if (!trimmed) return; // 칠 내용이 없으면 무시
-          addTask(boardId, input.value); // 지금 텍스트를 상위 항목으로 그대로 등록
-          input.value = '';
-          openAddSubtaskRow(boardId, lastAddedTaskId[boardId], true); // 등록된 그 항목의 하위 항목 입력을 바로 열고 포커스
+          if (commitDraft()) openAddSubtaskRow(boardId, lastAddedTaskId[boardId], true); // 등록된 그 항목의 하위 항목 입력을 바로 열고 포커스
         } else {
-          addTask(boardId, input.value);
-          input.value = '';
+          commitDraft();
         }
         return;
       }
@@ -2514,11 +2845,7 @@
         // 아직 등록 안 하고 치고 있던 텍스트가 있으면 Shift+Enter처럼 먼저
         // 상위 항목으로 등록함 — 안 그러면 지금 치는 중인 게 아니라
         // 세션에서 마지막으로 등록됐던 예전 항목이 대상이 돼서 헷갈림.
-        const trimmed = input.value.trim();
-        if (trimmed) {
-          addTask(boardId, input.value);
-          input.value = '';
-        }
+        commitDraft();
       }
       if (e.altKey && e.code === 'KeyD') {
         const target = getShortcutTargetTask(boardId);
@@ -2655,12 +2982,6 @@
 
     const input = document.querySelector('.sticky[data-board="' + boardId + '"] [data-newtask]');
     if (!input) return;
-
-    // someday 입력창은 기본 접힘 섹션 안에 있음 — 접혀 있으면 기존 토글을 눌러서 펼침
-    const body = input.closest('[data-collapse-body]');
-    if (body && body.hidden && body.previousElementSibling) {
-      body.previousElementSibling.click();
-    }
 
     e.preventDefault();
     input.focus();
