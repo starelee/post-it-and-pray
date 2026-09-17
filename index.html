@@ -806,6 +806,14 @@
     gap: 4px 2px;
   }
 
+  /* display:flex가 브라우저 기본 [hidden] 규칙(display:none)보다 우선
+     적용돼서 hidden 속성만으론 안 접힘 — 초안 하위 항목 칩 목록을 비었을
+     때 hidden으로 감출 때 필요(실제 항목의 subtask-list는 원래 있을 때만
+     DOM에 붙여서 이 문제가 없었음). */
+  .subtask-list[hidden] {
+    display: none;
+  }
+
   .subtask-item {
     display: inline-flex;
     align-items: center;
@@ -1057,17 +1065,24 @@
     border-radius: 4px;
   }
 
+  /* draft-controls를 add-row 안에 두면 opacity:0이어도 flex 자리는 그대로
+     차지해서 "+"/입력창이 밀려남 — 그래서 .task-controls와 똑같이 별도
+     행으로 분리하고 max-height로 접어서 평소엔 자리 자체를 안 차지함. */
   .draft-controls {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 10px;
+    max-height: 0;
+    overflow: hidden;
     opacity: 0;
-    transition: opacity 0.15s ease;
+    transition: max-height 0.15s ease, opacity 0.15s ease, margin-top 0.15s ease;
   }
 
-  .add-row:hover .draft-controls,
-  .add-row:focus-within .draft-controls {
+  .add-row-wrap:hover .draft-controls,
+  .add-row-wrap:focus-within .draft-controls {
+    max-height: 26px;
     opacity: 1;
+    margin-top: 6px;
   }
 
   .plus {
@@ -2591,12 +2606,19 @@
     let draftDueDate = '';
     let draftSubtasks = [];
 
-    // 평소엔 숨겨져 있다가 기존 task-item의 .task-controls처럼 이 행에
-    // 마우스를 올리면(또는 입력창에 포커스하면) 나타남 — 그래서 아무것도
-    // 안 건드린 기본 상태의 add-row는 지금까지와 똑같이 깔끔하게 유지됨.
-    const draftControls = document.createElement('span');
+    // draftControls를 add-row 안에 같이 두면 opacity로 숨겨도 flex 공간은
+    // 그대로 차지해서 "+"/입력창이 원래 자리에서 밀려남 — 그래서 실제
+    // task-item처럼 별도의 행으로 분리하고, add-row를 감싸는 래퍼에
+    // 마우스를 올리거나(또는 입력창에 포커스하면) max-height로 펼쳐서
+    // 보여줌. 평소엔 높이 0이라 자리 자체를 안 차지함.
+    const addRowWrap = document.createElement('div');
+    addRowWrap.className = 'add-row-wrap';
+    addRow.replaceWith(addRowWrap);
+    addRowWrap.appendChild(addRow);
+
+    const draftControls = document.createElement('div');
     draftControls.className = 'draft-controls';
-    addRow.appendChild(draftControls);
+    addRowWrap.appendChild(draftControls);
 
     const urgentBtn = document.createElement('button');
     urgentBtn.type = 'button';
@@ -2630,7 +2652,7 @@
       draftControls.appendChild(dateBtn);
     }
 
-    let insertAfter = addRow;
+    let insertAfter = addRowWrap;
     function insertAfterAddRow(el) {
       insertAfter.insertAdjacentElement('afterend', el);
       insertAfter = el;
@@ -2647,9 +2669,9 @@
         dateRow.hidden = !dateRow.hidden;
         if (!dateRow.hidden) dateInput.focus();
       });
-      // draftControls(호버해야 보임)가 아니라 addRow 바로 아래 둬서
-      // 날짜를 지정해두면 호버 여부와 상관없이 항상 보이게 함.
-      addRow.insertBefore(dateBadge, draftControls);
+      // draftControls(호버해야 보임)가 아니라 add-row 안에 둬서 날짜를
+      // 지정해두면 호버 여부와 상관없이 항상 보이게 함.
+      addRow.appendChild(dateBadge);
 
       dateRow = document.createElement('div');
       dateRow.className = 'date-picker-row';
