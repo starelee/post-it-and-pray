@@ -1144,7 +1144,7 @@
           <div data-lupin-front>
             <div class="tape"></div>
             <h2 class="sticky-title">waiting... <span class="flower">⏳</span>
-              <button class="lupin-flip-btn" id="lupinFlipBtn" type="button" aria-label="루팡 모드로 뒤집기">🥷</button>
+              <button class="lupin-flip-btn" id="lupinFlipBtn" type="button" aria-label="루팡 모드로 뒤집기">🎭</button>
             </h2>
 
             <ul class="task-list" data-tasklist="waiting"></ul>
@@ -1162,7 +1162,7 @@
           </div>
 
           <div data-lupin-back data-board="lupin" hidden>
-            <h2 class="sticky-title">lupin mode <span class="flower">🥷</span>
+            <h2 class="sticky-title">lupin mode <span class="flower">🎭</span>
               <button class="lupin-flip-btn" id="lupinFlipBackBtn" type="button" aria-label="원래대로 뒤집기">⏳</button>
             </h2>
 
@@ -2499,6 +2499,13 @@
         }
         return;
       }
+      // 아직 아무것도 안 친 새 항목 입력창이면 Esc로 포커스만 놓음(today/
+      // waiting/someday/lupin 전부 이 리스너를 같이 타서 자동으로 다 적용됨) —
+      // 뭔가 쳐놓은 상태에서 Esc를 누르면 그 텍스트는 그대로 두고 무시.
+      if (e.key === 'Escape') {
+        if (!input.value.trim()) input.blur();
+        return;
+      }
       // Alt+D/Alt+E — Shift+D/Shift+E였을 땐 "Draft", "Edit"처럼 대문자
       // D/E가 들어간 텍스트를 아예 칠 수 없어서(입력창이 비어있을 때만
       // 봐줘도 첫 글자가 D/E인 경우엔 여전히 충돌) Alt 조합으로 변경 —
@@ -2527,19 +2534,21 @@
   });
 
   // lupin mode — waiting 스티키를 뒤집으면 나오는 개인용 숨김 메모장.
-  // 🥷/⏳ 아이콘 클릭 또는 키보드 l/ll로 뒤집음(아래 keydown 리스너 참고).
+  // 🎭/⏳ 아이콘 클릭 또는 키보드 l/w로 뒤집음(아래 keydown 리스너 참고).
   const waitingStickyEl = document.getElementById('waitingSticky');
   const lupinFlipBtn = document.getElementById('lupinFlipBtn');
   const lupinFlipBackBtn = document.getElementById('lupinFlipBackBtn');
   const lupinFrontEl = waitingStickyEl.querySelector('[data-lupin-front]');
   const lupinBackEl = waitingStickyEl.querySelector('[data-lupin-back]');
 
-  // 실제 열림 상태는 애니메이션 중간(300ms 지연)에야 DOM에 반영되므로,
-  // 그 DOM 상태(lupinBackEl.hidden)를 그대로 진위값으로 쓰면 "ll"처럼
-  // 애니메이션이 끝나기 전에 연달아 눌리는 두 번째 입력이 아직 안 뒤집힌
-  // 걸로 오판함 — 그래서 의도를 별도 변수로 즉시 기록해두고 그걸 기준으로 판단.
   let lupinOpen = false;
+  // 실제 DOM 스왑은 애니메이션 중간(300ms 지연)에야 일어나므로, 그 사이에
+  // 같은 방향으로 또 눌린 키(예: l→l, w→w)를 시간 간격으로 판단하면 한글
+  // 입력기 경합 등으로 키 이벤트 간격이 벌어질 때 오판하기 쉬움 — 그래서
+  // "지금 스왑이 진행 중인가"를 시간이 아니라 상태로 직접 들고 있음.
+  let lupinSwapPending = false;
   let lupinFocusPending = false;
+  let lupinSwapTimer = null;
 
   function isLupinOpen() {
     return lupinOpen;
@@ -2547,32 +2556,38 @@
 
   // open이 true면 뒷면(lupin) 입력창을, false면 앞면(waiting) 입력창을
   // 포커스 대상으로 삼음 — l(뒤집어 들어갈 때)과 w(뒤집어 나올 때) 양쪽의
-  // "두 번 눌러서 포커스까지" 동작을 이 함수 하나로 같이 처리하기 위함.
+  // "이미 그 면이면 바로 포커스" 동작을 이 함수 하나로 같이 처리하기 위함.
   function setLupinOpen(open, focusInput) {
     if (lupinOpen === open) {
+      // 이미 그 방향이거나(정지 상태) 그쪽으로 스왑 진행 중 — 새 애니메이션은
+      // 시작하지 않고 포커스 요청만 반영.
       if (focusInput) {
-        const faceEl = open ? lupinBackEl : lupinFrontEl;
-        if (faceEl.hidden) {
-          lupinFocusPending = true; // 아직 스왑 전이면 스왑 콜백에서 포커스
+        if (lupinSwapPending) {
+          lupinFocusPending = true; // 스왑 콜백에서 마저 포커스
         } else {
+          const faceEl = open ? lupinBackEl : lupinFrontEl;
           const input = faceEl.querySelector('[data-newtask]');
           if (input) input.focus();
         }
       }
       return;
     }
+
     lupinOpen = open;
-    if (focusInput) lupinFocusPending = true;
+    lupinSwapPending = true;
+    lupinFocusPending = !!focusInput;
+    clearTimeout(lupinSwapTimer);
 
     waitingStickyEl.classList.add('sticky-flipping');
     // 카드가 옆으로 서서 안 보이는 애니메이션 중간 지점에 표시 면을 바꿔치기
     // 해야 실제로 "뒤집는" 것처럼 보임(페이드가 아니라).
-    setTimeout(() => {
+    lupinSwapTimer = setTimeout(() => {
       lupinFrontEl.hidden = open;
       lupinBackEl.hidden = !open;
       // 인라인 style="--paper: var(--paper-waiting)"가 이미 걸려있어서
       // 클래스 규칙보다 우선순위가 높음 — 같은 인라인 자리에서 직접 덮어씀.
       waitingStickyEl.style.setProperty('--paper', open ? 'var(--paper-lupin)' : 'var(--paper-waiting)');
+      lupinSwapPending = false;
       if (lupinFocusPending) {
         lupinFocusPending = false;
         const faceEl = open ? lupinBackEl : lupinFrontEl;
@@ -2594,14 +2609,6 @@
   // 있을 때 물리적으로 같은 자리를 눌러도 자모가 들어와서 단축키가 아예
   // 안 먹는 문제가 있어서, Alt+D/Alt+E와 같은 방식으로 통일함.
   const SHORTCUT_BOARD_CODES = { KeyN: 'today', KeyW: 'waiting', KeyS: 'someday' };
-  // l 한 번 = lupin 모드로 뒤집기(이미 열려있으면 원래대로), l을 짧은 간격
-  // 안에 두 번(ll) = 뒤집힌 김에 새 항목 입력창까지 바로 포커스 — n/w/s와
-  // 같은 흐름으로 이어서 타이핑할 수 있게.
-  let lastLKeyTime = 0;
-  // w는 lupin 모드가 열려있을 때만 특별 취급 — 한 번 누르면 waiting으로
-  // 복귀, 짧은 간격 안에 두 번(ww)이면 복귀하면서 waiting 입력창까지 포커스.
-  // 평소(lupin이 안 열려있을 때)엔 아래 SHORTCUT_BOARD_CODES 경로 그대로.
-  let lastWKeyTime = 0;
 
   document.addEventListener('keydown', (e) => {
     if (e.metaKey || e.ctrlKey || e.altKey) return;
@@ -2615,24 +2622,21 @@
       return;
     }
 
+    // l: 닫혀있으면 일단 열기만(포커스 없이), 이미 보이는 중(또는 열리는
+    // 중)이면 바로 새 lupin 항목 입력창 포커스 — w와 대칭되는 규칙이라
+    // 시간 간격을 잴 필요가 없음(그래서 한글 입력 중 두 번 눌러도 안전).
     if (e.code === 'KeyL') {
       e.preventDefault();
-      const now = Date.now();
-      const isDoubleTap = isLupinOpen() && (now - lastLKeyTime < 500);
-      setLupinOpen(isDoubleTap ? true : !isLupinOpen(), isDoubleTap);
-      lastLKeyTime = now;
+      setLupinOpen(true, isLupinOpen());
       return;
     }
 
-    // isLupinOpen()만 보면 첫 w로 이미 닫힌 직후 연달아 오는 두 번째 w를
-    // "lupin 안 열려있음"으로 오판해서 일반 경로로 새서 포커스가 씹힘 —
-    // 그래서 "지금 열려있음" 뿐 아니라 "방금 w로 막 닫았음"도 같이 봄.
-    const now = Date.now();
-    if (e.code === 'KeyW' && (isLupinOpen() || now - lastWKeyTime < 500)) {
+    // w: lupin이 보이는 중(또는 보이려는 중)이면 첫 누름은 waiting으로
+    // 복귀만, 그 뒤로 또 누르면(복귀 중이든 이미 복귀했든) 곧장 waiting
+    // 입력창 포커스. 이미 완전히 waiting 화면이면 아래 일반 경로로 넘어감.
+    if (e.code === 'KeyW' && (isLupinOpen() || lupinSwapPending)) {
       e.preventDefault();
-      const isDoubleTap = now - lastWKeyTime < 500;
-      setLupinOpen(false, isDoubleTap);
-      lastWKeyTime = now;
+      setLupinOpen(false, !isLupinOpen());
       return;
     }
 
