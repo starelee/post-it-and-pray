@@ -2510,6 +2510,16 @@
       // D/E가 들어간 텍스트를 아예 칠 수 없어서(입력창이 비어있을 때만
       // 봐줘도 첫 글자가 D/E인 경우엔 여전히 충돌) Alt 조합으로 변경 —
       // 일반 타이핑으로는 절대 나오지 않는 조합이라 텍스트와 안 겹침.
+      if ((e.altKey && e.code === 'KeyD') || (e.altKey && e.code === 'KeyE')) {
+        // 아직 등록 안 하고 치고 있던 텍스트가 있으면 Shift+Enter처럼 먼저
+        // 상위 항목으로 등록함 — 안 그러면 지금 치는 중인 게 아니라
+        // 세션에서 마지막으로 등록됐던 예전 항목이 대상이 돼서 헷갈림.
+        const trimmed = input.value.trim();
+        if (trimmed) {
+          addTask(boardId, input.value);
+          input.value = '';
+        }
+      }
       if (e.altKey && e.code === 'KeyD') {
         const target = getShortcutTargetTask(boardId);
         if (!target) return;
