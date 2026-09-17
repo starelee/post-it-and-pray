@@ -189,6 +189,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
+    flex-wrap: wrap;
     gap: 8px;
     min-height: 20px;
   }
@@ -216,6 +217,26 @@
     opacity: 1;
     color: var(--accent);
     border-color: var(--accent);
+  }
+
+  .auth-btn-primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+    font-weight: 700;
+    opacity: 1;
+  }
+
+  .auth-btn-primary:hover {
+    opacity: 0.85;
+    color: #fff;
+  }
+
+  .auth-hint {
+    font-family: 'Gaegu', cursive, sans-serif;
+    font-size: 11px;
+    color: var(--ink-soft);
+    opacity: 0.8;
   }
 
   .theme-toggle {
@@ -1400,7 +1421,20 @@
         return;
       }
       if (data && data.data) {
-        boards = normalizeBoards(data.data);
+        const cloudBoards = normalizeBoards(data.data);
+        const hasLocalData = Object.keys(boards).some(id => Array.isArray(boards[id]) && boards[id].length > 0);
+        if (hasLocalData) {
+          const useCloud = window.confirm(
+            '이 계정에 이미 저장된 데이터가 있어요.\n\n' +
+            '확인 → 클라우드 데이터를 불러옵니다 (지금 이 기기에만 있던 데이터는 사라져요)\n' +
+            '취소 → 지금 이 기기의 데이터를 유지하고, 그걸로 클라우드를 덮어씁니다'
+          );
+          if (!useCloud) {
+            pushToCloud(); // 로컬을 유지하고 클라우드 쪽을 로컬로 덮어씀
+            return;
+          }
+        }
+        boards = cloudBoards;
         try {
           localStorage.setItem(STORAGE_KEY, JSON.stringify(boards));
         } catch (e) {
@@ -1437,7 +1471,7 @@
       authRowEl.appendChild(btn);
     } else {
       const btn = document.createElement('button');
-      btn.className = 'auth-btn';
+      btn.className = 'auth-btn auth-btn-primary';
       btn.type = 'button';
       btn.textContent = 'Google로 로그인';
       btn.addEventListener('click', () => {
@@ -1446,7 +1480,13 @@
           options: { redirectTo: window.location.href }
         });
       });
+
+      const hint = document.createElement('span');
+      hint.className = 'auth-hint';
+      hint.textContent = '게스트 모드 · 이 기기에만 저장됨';
+
       authRowEl.appendChild(btn);
+      authRowEl.appendChild(hint);
     }
   }
 
