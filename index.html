@@ -492,7 +492,7 @@
 
   .sticky {
     position: relative;
-    width: min(320px, 86vw);
+    width: min(380px, 86vw);
     background: var(--paper);
     padding: 30px 24px 20px;
     border-radius: 3px 14px 4px 16px;
@@ -505,9 +505,8 @@
 
   @media (max-width: 480px) {
     .sticky {
-      /* 320px 캡을 그대로 두면 화면이 넉넉한 폰(6.1~6.7인치대)에서도
-         포스트잇이 더 못 커짐 — 데스크탑 폭(320px)보다 조금 더 크게
-         허용해서 모바일에서 실제로 더 크게 보이게 함. */
+      /* 캡(380px)은 PC와 동일하게 두고, 좁은 화면에서 배경 여백을 줄이기
+         위해 vw 비율만 더 크게(86 -> 94) 잡음. */
       width: min(380px, 94vw);
     }
   }
