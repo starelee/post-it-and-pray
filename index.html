@@ -1097,6 +1097,12 @@
     margin-left: auto;
     font-size: 14px;
     color: var(--ink-soft);
+    display: inline-block;
+    transition: transform 0.15s ease;
+  }
+
+  .toggle-arrow-open {
+    transform: rotate(180deg);
   }
 
   .collapsible-body[hidden] {
@@ -1788,12 +1794,15 @@
   // call this themselves at creation time since the querySelectorAll below
   // only ever sees elements that exist at module-load time).
   function wireCollapseToggle(toggle, body, defaultOpen) {
+    // 열림/닫힘을 다른 글자(▾/▴)로 바꾸는 대신 같은 글자를 180도 돌리기만
+    // 함 — 두 글자가 폰트별로 미묘하게 다른 크기/기준선을 가져서(특히
+    // 모바일 사파리) 위아래 화살표 크기가 달라 보이는 문제가 있었음.
     const arrow = toggle.querySelector('[data-toggle-arrow]');
     body.hidden = !defaultOpen;
-    if (arrow) arrow.textContent = defaultOpen ? '▴' : '▾';
+    if (arrow) arrow.classList.toggle('toggle-arrow-open', defaultOpen);
     function setOpen(open) {
       body.hidden = !open;
-      if (arrow) arrow.textContent = open ? '▴' : '▾';
+      if (arrow) arrow.classList.toggle('toggle-arrow-open', open);
     }
     toggle.addEventListener('click', () => setOpen(body.hidden));
     return setOpen;
