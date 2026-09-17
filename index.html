@@ -30,7 +30,6 @@
     --accent: #e2727e;
     --urgent: #d43d3d;
     --urgent-bg: rgba(212, 61, 61, 0.1);
-    --highlighter: rgba(74, 144, 226, 0.55);
     --tape: rgba(255, 255, 255, 0.6);
     --tape-edge: rgba(255, 255, 255, 0.25);
     --divider: #cdbd7c;
@@ -58,7 +57,6 @@
       --accent: #e8919b;
       --urgent: #ff6b6b;
       --urgent-bg: rgba(255, 107, 107, 0.14);
-      --highlighter: rgba(94, 169, 255, 0.55);
       --tape: rgba(255, 255, 255, 0.14);
       --tape-edge: rgba(255, 255, 255, 0.05);
       --divider: #5c5537;
@@ -86,7 +84,6 @@
     --accent: #e8919b;
     --urgent: #ff6b6b;
     --urgent-bg: rgba(255, 107, 107, 0.14);
-    --highlighter: rgba(94, 169, 255, 0.55);
     --tape: rgba(255, 255, 255, 0.14);
     --tape-edge: rgba(255, 255, 255, 0.05);
     --divider: #5c5537;
@@ -508,7 +505,10 @@
 
   @media (max-width: 480px) {
     .sticky {
-      width: min(320px, 94vw);
+      /* 320px 캡을 그대로 두면 화면이 넉넉한 폰(6.1~6.7인치대)에서도
+         포스트잇이 더 못 커짐 — 데스크탑 폭(320px)보다 조금 더 크게
+         허용해서 모바일에서 실제로 더 크게 보이게 함. */
+      width: min(380px, 94vw);
     }
   }
 
@@ -658,23 +658,8 @@
     transform-origin: center left;
   }
 
-  /* waiting/someday/pray later -> gotta do 로 넘어온 항목이 도착한 자리를
-     파란 형광펜으로 슥 훑고 지나가듯 잠깐 강조했다가 사라짐. */
-  @keyframes move-arrive-highlight {
-    0% { background: transparent; }
-    20% { background: var(--highlighter); }
-    100% { background: transparent; }
-  }
-
-  .move-arrive-highlight .task-row {
-    border-radius: 4px;
-    margin: -2px -6px;
-    padding: 2px 6px;
-    animation: move-arrive-highlight 1.1s ease-out both;
-  }
-
-  /* gotta do -> waiting 으로 넘어간 항목이 잘 도착했음을 알리는 가벼운
-     흔들림 — 형광펜만큼 강조할 필요는 없는 이동이라 살짝 흔들리기만 함. */
+  /* waiting/someday/pray later -> gotta do, 그리고 gotta do -> waiting 로
+     넘어간 항목이 잘 도착했음을 알리는 가벼운 흔들림. */
   @keyframes move-arrive-wiggle {
     0%, 100% { transform: rotate(0); }
     20% { transform: rotate(-3deg); }
@@ -1803,7 +1788,13 @@
     function setOpen(open) {
       body.hidden = !open;
       if (arrow) arrow.classList.toggle('toggle-arrow-open', open);
+      // p/s 단축키가 "방금 열렸다(→ 입력창 포커스)"와 "한참 전에 열려있었다
+      // (→ 다시 누르면 닫기)"를 구분할 수 있도록 열린 시각을 함수 자체에
+      // 붙여둠 — setOpen을 그대로 들고 있는 쪽(collapseSections)이 굳이
+      // 별도 상태 객체 없이 이 값을 바로 읽을 수 있음.
+      if (open) setOpen.openedAt = Date.now();
     }
+    setOpen.openedAt = defaultOpen ? Date.now() : 0;
     toggle.addEventListener('click', () => setOpen(body.hidden));
     return setOpen;
   }
@@ -2083,6 +2074,14 @@
       if (task.dueDate) dateInput.value = task.dueDate;
       dateInput.addEventListener('change', () => {
         setDueDate(boardId, task.id, dateInput.value);
+      });
+      // 아직 값을 고르기 전(빈 칸)이면 Esc로 그냥 닫을 수 있게 — 취소
+      // 버튼(cancelBtn)과 동일한 동작이라, cancelBtn 클릭을 그대로 재사용.
+      dateInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && !dateInput.value) {
+          e.preventDefault();
+          cancelBtn.click();
+        }
       });
 
       // 내일 날짜로 지정하는 경우가 워낙 많아서 달력을 열지 않고 바로 찍을
@@ -2506,7 +2505,7 @@
     }
     boards[toBoardId].push(task);
     if (toBoardId === 'today' && (fromBoardId === 'waiting' || fromBoardId === 'someday' || fromBoardId === 'scheduled')) {
-      moveHighlight = { id, mode: 'highlight' };
+      moveHighlight = { id, mode: 'wiggle' };
     } else if (fromBoardId === 'today' && toBoardId === 'waiting') {
       moveHighlight = { id, mode: 'wiggle' };
     } else if (fromBoardId === 'today' && toBoardId === 'someday') {
@@ -2571,9 +2570,10 @@
 
   // Set right before a render caused by moveTask, so the freshly rebuilt li
   // for that one task can play a one-shot arrival animation — renderItem
-  // consumes and clears it as soon as it matches. 'highlight' is the blue
-  // flash for waiting/someday/scheduled -> today; 'wiggle' is the softer
-  // shake for today -> waiting. Any other transition gets no animation.
+  // consumes and clears it as soon as it matches. 'wiggle' is a light shake,
+  // used both for waiting/someday/scheduled -> today and for today ->
+  // waiting; 'fade' is a soft fade/rise-in for today -> someday. Any other
+  // transition gets no animation.
   let moveHighlight = null;
 
   // draft: 등록 전 입력창에서 마우스로 미리 정해둔 긴급/날짜/하위 항목
@@ -2815,6 +2815,14 @@
         dateInput.value = '';
         applyDraftDate('');
         dateRow.hidden = true;
+      });
+
+      // 아직 값을 고르기 전(빈 칸)이면 Esc로 그냥 닫을 수 있게.
+      dateInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && !dateInput.value) {
+          e.preventDefault();
+          dateClearBtn.click();
+        }
       });
 
       dateRow.appendChild(dateInput);
@@ -3064,28 +3072,40 @@
     if (input) input.focus();
   }
 
-  // s: someday 드롭다운이 닫혀있으면 일단 펼치기만(포커스 없이), 이미
-  // 펼쳐진 중이면 곧장 새 항목 입력창 포커스 — l/w와 같은 "닫혀있으면 열기,
-  // 열려있으면 포커스" 2단 패턴.
+  // 드롭다운이 열린 직후(바로 다음 키 입력으로 이어붙인 "두 번째 누름")와
+  // 한참 전에 열어두고 나중에 다시 누른 경우("이제 닫아줘")를 구분하는
+  // 기준 시간 — 자모 두 번 입력(dd/ss처럼 빠르게 이어치는 정도)보다는
+  // 확실히 크게 잡아서, 빠른 두 번째 누름은 여전히 입력창 포커스로,
+  // 그보다 늦게 다시 누르면 닫기로 처리함.
+  const REOPEN_VS_CLOSE_MS = 600;
+
+  // s: 닫혀있으면 펼치기만, 방금 펼친 직후(REOPEN_VS_CLOSE_MS 이내)면 곧장
+  // 새 항목 입력창 포커스, 그보다 오래 열려있었으면 다시 눌렀을 때 닫기 —
+  // d(보관함 토글)처럼 한 번 더 누르면 닫히되, 빠른 연타는 예외로 둠.
   function handleSomedayShortcut() {
     const section = collapseSections.someday;
-    if (section && section.body.hidden) {
+    if (!section) return;
+    if (section.body.hidden) {
       section.setOpen(true);
-    } else {
+    } else if (Date.now() - section.setOpen.openedAt < REOPEN_VS_CLOSE_MS) {
       focusSomedayInput();
+    } else {
+      section.setOpen(false);
     }
   }
 
-  // p: pray later(scheduled) 드롭다운이 닫혀있으면 일단 펼치기만, 이미
-  // 펼쳐진 중이면 새 항목 입력창을 포커스하면서 그 자리에서 바로 날짜를
-  // 지정할 수 있게 날짜 피커까지 함께 열어줌.
+  // p: someday와 같은 열기/포커스/닫기 3단 규칙이되, "방금 펼친 직후"
+  // 케이스에서는 입력창 포커스와 함께 날짜 피커까지 열어줌.
   function handlePrayLaterShortcut() {
     const section = collapseSections.scheduled;
-    if (section && section.body.hidden) {
+    if (!section) return;
+    if (section.body.hidden) {
       section.setOpen(true);
-    } else {
+    } else if (Date.now() - section.setOpen.openedAt < REOPEN_VS_CLOSE_MS) {
       focusSomedayInput();
       if (openSomedayDatePicker) openSomedayDatePicker();
+    } else {
+      section.setOpen(false);
     }
   }
 
