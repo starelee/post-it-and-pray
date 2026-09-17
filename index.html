@@ -2307,6 +2307,12 @@
     const tag = active && active.tagName;
     if (tag === 'INPUT' || tag === 'TEXTAREA') return;
 
+    if (e.key === 'd' || e.key === 'D') {
+      e.preventDefault();
+      toggleArchivePanel(); // 플래그 버튼 클릭과 같은 토글 함수 재사용
+      return;
+    }
+
     const boardId = SHORTCUT_BOARD_IDS[e.key];
     if (!boardId) return;
 
