@@ -2521,20 +2521,24 @@
     return lupinOpen;
   }
 
+  // open이 true면 뒷면(lupin) 입력창을, false면 앞면(waiting) 입력창을
+  // 포커스 대상으로 삼음 — l(뒤집어 들어갈 때)과 w(뒤집어 나올 때) 양쪽의
+  // "두 번 눌러서 포커스까지" 동작을 이 함수 하나로 같이 처리하기 위함.
   function setLupinOpen(open, focusInput) {
     if (lupinOpen === open) {
-      if (open && focusInput) {
-        if (lupinBackEl.hidden) {
+      if (focusInput) {
+        const faceEl = open ? lupinBackEl : lupinFrontEl;
+        if (faceEl.hidden) {
           lupinFocusPending = true; // 아직 스왑 전이면 스왑 콜백에서 포커스
         } else {
-          const input = lupinBackEl.querySelector('[data-newtask]');
+          const input = faceEl.querySelector('[data-newtask]');
           if (input) input.focus();
         }
       }
       return;
     }
     lupinOpen = open;
-    if (open && focusInput) lupinFocusPending = true;
+    if (focusInput) lupinFocusPending = true;
 
     waitingStickyEl.classList.add('sticky-flipping');
     // 카드가 옆으로 서서 안 보이는 애니메이션 중간 지점에 표시 면을 바꿔치기
@@ -2545,9 +2549,10 @@
       // 인라인 style="--paper: var(--paper-waiting)"가 이미 걸려있어서
       // 클래스 규칙보다 우선순위가 높음 — 같은 인라인 자리에서 직접 덮어씀.
       waitingStickyEl.style.setProperty('--paper', open ? 'var(--paper-lupin)' : 'var(--paper-waiting)');
-      if (open && lupinFocusPending) {
+      if (lupinFocusPending) {
         lupinFocusPending = false;
-        const input = lupinBackEl.querySelector('[data-newtask]');
+        const faceEl = open ? lupinBackEl : lupinFrontEl;
+        const input = faceEl.querySelector('[data-newtask]');
         if (input) input.focus();
       }
     }, 300);
@@ -2561,11 +2566,18 @@
   lupinFlipBackBtn.addEventListener('click', () => setLupinOpen(false));
 
   // n/w/s: 어떤 입력창에도 포커스가 없을 때만 각 보드의 새 항목 입력창으로 포커스 이동.
-  const SHORTCUT_BOARD_IDS = { n: 'today', w: 'waiting', s: 'someday' };
+  // 물리 키(e.code) 기준으로 감지 — e.key로 비교하면 한글 입력기가 켜져
+  // 있을 때 물리적으로 같은 자리를 눌러도 자모가 들어와서 단축키가 아예
+  // 안 먹는 문제가 있어서, Alt+D/Alt+E와 같은 방식으로 통일함.
+  const SHORTCUT_BOARD_CODES = { KeyN: 'today', KeyW: 'waiting', KeyS: 'someday' };
   // l 한 번 = lupin 모드로 뒤집기(이미 열려있으면 원래대로), l을 짧은 간격
   // 안에 두 번(ll) = 뒤집힌 김에 새 항목 입력창까지 바로 포커스 — n/w/s와
   // 같은 흐름으로 이어서 타이핑할 수 있게.
   let lastLKeyTime = 0;
+  // w는 lupin 모드가 열려있을 때만 특별 취급 — 한 번 누르면 waiting으로
+  // 복귀, 짧은 간격 안에 두 번(ww)이면 복귀하면서 waiting 입력창까지 포커스.
+  // 평소(lupin이 안 열려있을 때)엔 아래 SHORTCUT_BOARD_CODES 경로 그대로.
+  let lastWKeyTime = 0;
 
   document.addEventListener('keydown', (e) => {
     if (e.metaKey || e.ctrlKey || e.altKey) return;
@@ -2573,13 +2585,13 @@
     const tag = active && active.tagName;
     if (tag === 'INPUT' || tag === 'TEXTAREA') return;
 
-    if (e.key === 'd' || e.key === 'D') {
+    if (e.code === 'KeyD') {
       e.preventDefault();
       toggleArchivePanel(); // 플래그 버튼 클릭과 같은 토글 함수 재사용
       return;
     }
 
-    if (e.key === 'l' || e.key === 'L') {
+    if (e.code === 'KeyL') {
       e.preventDefault();
       const now = Date.now();
       const isDoubleTap = isLupinOpen() && (now - lastLKeyTime < 500);
@@ -2588,7 +2600,19 @@
       return;
     }
 
-    const boardId = SHORTCUT_BOARD_IDS[e.key];
+    // isLupinOpen()만 보면 첫 w로 이미 닫힌 직후 연달아 오는 두 번째 w를
+    // "lupin 안 열려있음"으로 오판해서 일반 경로로 새서 포커스가 씹힘 —
+    // 그래서 "지금 열려있음" 뿐 아니라 "방금 w로 막 닫았음"도 같이 봄.
+    const now = Date.now();
+    if (e.code === 'KeyW' && (isLupinOpen() || now - lastWKeyTime < 500)) {
+      e.preventDefault();
+      const isDoubleTap = now - lastWKeyTime < 500;
+      setLupinOpen(false, isDoubleTap);
+      lastWKeyTime = now;
+      return;
+    }
+
+    const boardId = SHORTCUT_BOARD_CODES[e.code];
     if (!boardId) return;
 
     const input = document.querySelector('.sticky[data-board="' + boardId + '"] [data-newtask]');
