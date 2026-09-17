@@ -126,6 +126,12 @@
     padding: 32px 20px 24px;
   }
 
+  @media (max-width: 480px) {
+    .screen {
+      padding: 20px 10px 16px;
+    }
+  }
+
   .board-row {
     display: flex;
     flex-wrap: wrap;
@@ -467,6 +473,7 @@
        달라서 waiting의 항목 텍스트만 다른 보드보다 오른쪽에서 시작함. */
     width: 20px;
     height: 20px;
+    margin-top: 3px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -497,6 +504,12 @@
       0 3px 6px var(--paper-contact);
     transform: rotate(var(--rot, -1.4deg));
     transition: transform 0.25s ease, box-shadow 0.25s ease;
+  }
+
+  @media (max-width: 480px) {
+    .sticky {
+      width: min(320px, 94vw);
+    }
   }
 
   .sticky:hover, .sticky:focus-within {
@@ -583,7 +596,7 @@
 
   .task-row {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     gap: 8px;
   }
 
@@ -691,6 +704,7 @@
     flex: 0 0 auto;
     width: 20px;
     height: 20px;
+    margin-top: 3px;
     border: 2px solid var(--ink);
     border-radius: 3px 5px 4px 6px;
     background: transparent;
