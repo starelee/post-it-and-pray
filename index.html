@@ -2223,24 +2223,21 @@
       if (task.dueDate) dateInput.value = task.dueDate;
       dateInput.addEventListener('change', () => {
         setDueDate(boardId, task.id, dateInput.value);
+        // 모바일 네이티브 달력에서 날짜를 확정(체크)하면 그걸로 볼일은
+        // 끝난 거라, 되살리기 피커처럼 곧장 닫아줌 — 다시 눌러야만
+        // 닫히던 예전 동작보다 자연스러움.
+        dateRow.hidden = true;
       });
       // 아직 값을 고르기 전(빈 칸)이면 Esc로 그냥 닫을 수 있게 — 취소
       // 버튼(cancelBtn)과 동일한 동작이라, cancelBtn 클릭을 그대로 재사용.
-      // 단, 사파리는 <input type=date">의 네이티브 달력 팝업이 Esc를 자체
-      // 소비해버려서 이 keydown이 아예 안 들어올 때가 있음 — 그런 경우를
-      // 대비해 "빈 채로 포커스를 잃으면 자동으로 닫기"도 같이 걸어둠.
+      // (예전엔 blur 시 자동으로도 닫았는데, 안드로이드 크롬의 네이티브
+      // 달력이 열리는 동안 입력창이 blur되는 경우가 있어서 고르는 도중에
+      // 피커가 먼저 닫혀버리는 문제가 있었음 — 제거함.)
       dateInput.addEventListener('keydown', (e) => {
         if (e.key === 'Escape' && !dateInput.value) {
           e.preventDefault();
           cancelBtn.click();
         }
-      });
-      dateInput.addEventListener('blur', () => {
-        setTimeout(() => {
-          if (!dateInput.value && !dateRow.contains(document.activeElement)) {
-            cancelBtn.click();
-          }
-        }, 0);
       });
 
       // 내일 날짜로 지정하는 경우가 워낙 많아서 달력을 열지 않고 바로 찍을
@@ -2475,21 +2472,15 @@
     });
     dateRow.appendChild(clearBtn);
 
-    // 다른 날짜 피커들과 동일하게: 아직 값을 고르기 전(빈 칸)이면 Esc로
-    // 닫을 수 있고, 포커스가 이 행 밖으로 빠지면(사파리의 네이티브 달력
-    // 팝업이 Esc를 자체 소비하는 경우 대비) 자동으로도 닫힘.
+    // 아직 값을 고르기 전(빈 칸)이면 Esc로 닫을 수 있게.
+    // (예전엔 blur 시 자동으로도 닫았는데, 안드로이드 크롬은 네이티브
+    // 달력이 뜨는 동안 입력창이 blur돼서 첫 탭에 피커가 바로 닫혀버리는
+    // 문제가 있었음 — 제거함.)
     dateInput.addEventListener('keydown', (e) => {
       if (e.key === 'Escape' && !dateInput.value) {
         e.preventDefault();
         clearBtn.click();
       }
-    });
-    dateInput.addEventListener('blur', () => {
-      setTimeout(() => {
-        if (!dateInput.value && !dateRow.contains(document.activeElement)) {
-          clearBtn.click();
-        }
-      }, 0);
     });
 
     reviveBtn.addEventListener('click', () => {
@@ -2579,9 +2570,6 @@
 
     li.appendChild(controls);
 
-    // 일반 항목의 날짜 피커(📅로 열고 다시 눌러야 닫힘)와 동일한 동작 —
-    // 되살리기 피커와 달리 여기선 이미 있는 카드의 날짜를 그냥 수정하는
-    // 것뿐이라 자동으로 닫아버릴 이유가 없음.
     const dateRow = document.createElement('div');
     dateRow.className = 'date-picker-row';
     dateRow.hidden = true;
@@ -2591,7 +2579,10 @@
     dateInput.type = 'date';
     dateInput.value = task.dueDate;
     dateInput.addEventListener('change', () => {
-      if (dateInput.value) setDueDate('scheduled', task.id, dateInput.value);
+      if (dateInput.value) {
+        setDueDate('scheduled', task.id, dateInput.value);
+        dateRow.hidden = true;
+      }
     });
     dateRow.appendChild(dateInput);
 
@@ -2604,16 +2595,14 @@
     });
     dateRow.appendChild(clearBtn);
 
+    // (예전엔 blur 시 자동으로도 닫았는데, 안드로이드 크롬은 네이티브
+    // 달력이 뜨는 동안 입력창이 blur돼서 첫 탭에 피커가 바로 닫혀버리는
+    // 문제가 있었음 — 제거함.)
     dateInput.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') {
         e.preventDefault();
         dateRow.hidden = true;
       }
-    });
-    dateInput.addEventListener('blur', () => {
-      setTimeout(() => {
-        if (!dateRow.contains(document.activeElement)) dateRow.hidden = true;
-      }, 0);
     });
 
     dateBtn.addEventListener('click', () => {
@@ -3125,7 +3114,13 @@
       const applyDraftDate = (value) => {
         draftDueDate = value;
         dateBadge.hidden = !value;
-        if (value) dateBadge.textContent = formatDueDateRelative(value);
+        if (value) {
+          dateBadge.textContent = formatDueDateRelative(value);
+          // 모바일 네이티브 달력에서 날짜를 확정(체크)하거나 "내일"을
+          // 누르면 그걸로 끝 — 다시 눌러야만 닫히던 예전 동작 대신
+          // 곧장 닫아줌.
+          dateRow.hidden = true;
+        }
       };
       dateInput.addEventListener('change', () => applyDraftDate(dateInput.value));
 
@@ -3148,21 +3143,15 @@
         dateRow.hidden = true;
       });
 
-      // 아직 값을 고르기 전(빈 칸)이면 Esc로 그냥 닫을 수 있게. 사파리는
-      // 네이티브 달력 팝업이 Esc를 자체 소비해서 이 keydown이 아예 안 들어올
-      // 때가 있어서, "빈 채로 포커스를 잃으면 자동으로 닫기"도 같이 걸어둠.
+      // 아직 값을 고르기 전(빈 칸)이면 Esc로 그냥 닫을 수 있게.
+      // (예전엔 blur 시 자동으로도 닫았는데, 안드로이드 크롬은 네이티브
+      // 달력이 뜨는 동안 입력창이 blur돼서 첫 탭에 피커가 바로 닫혀버리는
+      // 문제가 있었음 — 제거함.)
       dateInput.addEventListener('keydown', (e) => {
         if (e.key === 'Escape' && !dateInput.value) {
           e.preventDefault();
           dateClearBtn.click();
         }
-      });
-      dateInput.addEventListener('blur', () => {
-        setTimeout(() => {
-          if (!dateInput.value && !dateRow.contains(document.activeElement)) {
-            dateClearBtn.click();
-          }
-        }, 0);
       });
 
       dateRow.appendChild(dateInput);
