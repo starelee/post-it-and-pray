@@ -3189,6 +3189,25 @@
     input.focus();
   });
 
+  // Alt+W/Alt+N — 포커스가 today/waiting 항목(체크박스, 텍스트, 이동/삭제
+  // 버튼 등 그 task-item 안의 아무 요소) 위에 있을 때 곧장 반대쪽으로
+  // 옮김. 위 keydown 리스너는 altKey가 눌려있으면 통째로 return해버리는
+  // 별도 핸들러라, 여기서 따로 처리함.
+  document.addEventListener('keydown', (e) => {
+    if (!e.altKey || e.metaKey || e.ctrlKey) return;
+    if (e.code !== 'KeyW' && e.code !== 'KeyN') return;
+    const li = document.activeElement && document.activeElement.closest('.task-item');
+    if (!li) return;
+    const id = Number(li.dataset.id);
+    if (e.code === 'KeyW' && boards.today.some(t => t.id === id)) {
+      e.preventDefault();
+      moveTask('today', 'waiting', id);
+    } else if (e.code === 'KeyN' && boards.waiting.some(t => t.id === id)) {
+      e.preventDefault();
+      moveTask('waiting', 'today', id);
+    }
+  });
+
   renderAll();
 })();
 </script>
