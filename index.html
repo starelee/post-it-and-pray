@@ -392,29 +392,16 @@
     color: var(--ink);
   }
 
-  /* "완료 기록"/"다가오는 일" — 서로 정렬 기준이 달라서(doneAt 최신순 vs
-     dueDate 임박순) 한 리스트에 안 섞고 블록을 명확히 나눔. */
-  .archive-section-title {
-    font-family: 'NostalgicMyoeunHeullim', 'Nanum Pen Script', cursive;
-    font-size: 16px;
-    font-weight: 400;
-    color: var(--ink-soft);
-    margin: 0 0 6px;
-    padding-bottom: 4px;
+  /* "완료 기록"/"다가오는 일" 구간을 라벨 텍스트 없이 점선 하나로만
+     구분 — 정렬 기준이 서로 달라서(doneAt 최신순 vs dueDate 임박순)
+     한 리스트에 섞지는 않되, 글자 없이 선만 그어둠. */
+  .archive-section-divider {
     border-bottom: 1px dashed var(--input-line);
+    margin: 0 0 10px;
   }
 
   .archive-section-title-spaced {
     margin-top: 18px;
-  }
-
-  .archive-section-caption {
-    font-family: 'NostalgicMyoeunHeullim', 'Gaegu', cursive, sans-serif;
-    font-size: 13px;
-    font-style: italic;
-    color: var(--ink-soft);
-    opacity: 0.75;
-    margin: 0 0 8px;
   }
 
   .archive-upcoming {
@@ -1330,11 +1317,11 @@
           <button class="archive-close-btn" id="archiveCloseBtn" type="button" aria-label="닫기">✕</button>
           <h2 class="archive-title">done 📋</h2>
 
-          <h3 class="archive-section-title">완료 기록</h3>
+          <div class="archive-section-divider"></div>
           <div class="archive-groups" id="archiveGroups"></div>
 
-          <h3 class="archive-section-title archive-section-title-spaced">다가오는 일</h3>
-          <p class="archive-section-caption">not my problem... yet 😮‍💨</p>
+          <h2 class="archive-title archive-section-title-spaced">not my problem... yet 😮‍💨</h2>
+          <div class="archive-section-divider"></div>
           <ul class="archive-upcoming" id="archiveUpcoming"></ul>
         </div>
       </div>
