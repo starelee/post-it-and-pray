@@ -3198,6 +3198,34 @@
   lupinFlipBtn.addEventListener('click', () => setLupinOpen(true));
   lupinFlipBackBtn.addEventListener('click', () => setLupinOpen(false));
 
+  // lupin 모드를 켜둔 채로 탭을 다른 데로 돌리거나(visibilitychange) 다른
+  // 창/앱으로 넘어가서(window blur) 3분 넘게 자리를 비우면, 개인 메모가
+  // 계속 노출돼있지 않게 자동으로 waiting으로 되돌림. 잠깐 다른 탭
+  // 확인하고 바로 돌아오는 정도는 안 꺼지게 유예 시간을 둠.
+  const LUPIN_AWAY_CLOSE_MS = 3 * 60 * 1000;
+  let lupinAwayTimer = null;
+
+  function isAppAway() {
+    return document.hidden || !document.hasFocus();
+  }
+
+  function handleAwayChange() {
+    if (isAppAway()) {
+      if (!isLupinOpen() || lupinAwayTimer) return;
+      lupinAwayTimer = setTimeout(() => {
+        lupinAwayTimer = null;
+        if (isLupinOpen() && isAppAway()) setLupinOpen(false);
+      }, LUPIN_AWAY_CLOSE_MS);
+    } else if (lupinAwayTimer) {
+      clearTimeout(lupinAwayTimer);
+      lupinAwayTimer = null;
+    }
+  }
+
+  document.addEventListener('visibilitychange', handleAwayChange);
+  window.addEventListener('blur', handleAwayChange);
+  window.addEventListener('focus', handleAwayChange);
+
   // n/w: 어떤 입력창에도 포커스가 없을 때만 각 보드의 새 항목 입력창으로 포커스 이동.
   // 물리 키(e.code) 기준으로 감지 — e.key로 비교하면 한글 입력기가 켜져
   // 있을 때 물리적으로 같은 자리를 눌러도 자모가 들어와서 단축키가 아예
