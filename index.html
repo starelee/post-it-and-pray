@@ -366,7 +366,10 @@
       var(--legal-line) 28px
     );
     border-radius: 4px;
-    box-shadow: 0 12px 24px -10px var(--paper-shadow);
+    /* 포스트잇(.sticky)과 동일한 그림자로 통일. */
+    box-shadow:
+      0 18px 30px -12px var(--paper-shadow),
+      0 3px 6px var(--paper-contact);
     padding: 20px 20px 20px 40px;
     margin: 4px 0 4px;
   }
@@ -387,6 +390,37 @@
     font-weight: 400;
     margin: 0 0 10px;
     color: var(--ink);
+  }
+
+  /* "완료 기록"/"다가오는 일" — 서로 정렬 기준이 달라서(doneAt 최신순 vs
+     dueDate 임박순) 한 리스트에 안 섞고 블록을 명확히 나눔. */
+  .archive-section-title {
+    font-family: 'NostalgicMyoeunHeullim', 'Nanum Pen Script', cursive;
+    font-size: 16px;
+    font-weight: 400;
+    color: var(--ink-soft);
+    margin: 0 0 6px;
+    padding-bottom: 4px;
+    border-bottom: 1px dashed var(--input-line);
+  }
+
+  .archive-section-title-spaced {
+    margin-top: 18px;
+  }
+
+  .archive-section-caption {
+    font-family: 'NostalgicMyoeunHeullim', 'Gaegu', cursive, sans-serif;
+    font-size: 13px;
+    font-style: italic;
+    color: var(--ink-soft);
+    opacity: 0.75;
+    margin: 0 0 8px;
+  }
+
+  .archive-upcoming {
+    list-style: none;
+    margin: 0;
+    padding: 0;
   }
 
   .archive-close-btn {
@@ -487,6 +521,13 @@
     text-decoration: line-through;
     text-decoration-color: var(--ink-soft);
     word-break: break-word;
+  }
+
+  /* "다가오는 일" 항목은 완료된 게 아니라 그냥 대기 중인 일이라, 완료
+     기록처럼 취소선을 긋지 않고 보통 텍스트 색으로 보여줌. */
+  .upcoming-item-text {
+    text-decoration: none;
+    color: var(--ink);
   }
 
   .archive-item-controls {
@@ -1136,6 +1177,13 @@
     border-radius: 2px;
   }
 
+  /* 월 그룹 제목(예: "2026-09")은 포스트잇 제목과 같은 26px를 그대로
+     쓰기엔 done 패널 안에서 너무 커 보여서 살짝 줄임. */
+  .archive-groups .sticky-title-toggle {
+    font-size: 17px;
+    margin-bottom: 4px;
+  }
+
   .toggle-arrow {
     margin-left: auto;
     font-size: 14px;
@@ -1281,7 +1329,13 @@
         <div class="archive-panel-inner">
           <button class="archive-close-btn" id="archiveCloseBtn" type="button" aria-label="닫기">✕</button>
           <h2 class="archive-title">done 📋</h2>
+
+          <h3 class="archive-section-title">완료 기록</h3>
           <div class="archive-groups" id="archiveGroups"></div>
+
+          <h3 class="archive-section-title archive-section-title-spaced">다가오는 일</h3>
+          <p class="archive-section-caption">not my problem... yet</p>
+          <ul class="archive-upcoming" id="archiveUpcoming"></ul>
         </div>
       </div>
 
@@ -1432,6 +1486,17 @@
 
   const WEEKDAY_KO = ['일', '월', '화', '수', '목', '금', '토'];
 
+  // pray later 카드/리갈패드 "다가오는 일" 사이의 7일 경계를 실시간으로
+  // 가르는 데 씀 — 저장 시점 플래그가 아니라 매 렌더링마다 오늘 날짜
+  // 기준으로 다시 계산하므로, 하루 지나면 D+8이 자동으로 D+7이 되어
+  // 경계를 넘어감.
+  function daysUntilDue(dateStr) {
+    const d = new Date(dateStr + 'T00:00:00');
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return Math.round((d - today) / 86400000);
+  }
+
   function formatDueDateRelative(dateStr) {
     try {
       const d = new Date(dateStr + 'T00:00:00');
@@ -1512,11 +1577,15 @@
   const archiveFlagBtns = document.querySelectorAll('.archive-flag');
   const archivePanelEl = document.getElementById('archivePanel');
   const archiveGroupsEl = document.getElementById('archiveGroups');
+  const archiveUpcomingEl = document.getElementById('archiveUpcoming');
 
   function toggleArchivePanel() {
     const open = !archivePanelEl.classList.contains('open');
     archivePanelEl.classList.toggle('open', open);
-    if (open) renderArchive();
+    if (open) {
+      renderArchive();
+      renderUpcoming();
+    }
   }
   archiveFlagBtns.forEach(btn => btn.addEventListener('click', toggleArchivePanel));
 
@@ -1966,8 +2035,10 @@
     // never here, checked or not.
     const tasks = boards.scheduled.filter(t => t.dueDate !== today).sort(byDueDate);
     // Unchecked tasks overdue from before today already show under today's
-    // "oops, still here" — don't duplicate them.
-    const active = tasks.filter(t => !t.done && t.dueDate > today);
+    // "oops, still here" — don't duplicate them. Anything more than 7 days
+    // out moves to the legal pad's "다가오는 일" section instead (see
+    // renderUpcoming) so this card doesn't pile up with far-future items.
+    const active = tasks.filter(t => !t.done && t.dueDate > today && daysUntilDue(t.dueDate) <= 7);
     const done = tasks.filter(t => t.done);
 
     if (active.length === 0 && done.length === 0) {
@@ -2388,7 +2459,12 @@
     dateInput.className = 'date-picker-input';
     dateInput.type = 'date';
     dateInput.addEventListener('change', () => {
-      if (dateInput.value) reviveTask(task, dateInput.value);
+      // 일반 날짜 피커(재클릭해야 닫힘)와 다르게, 되살리기는 날짜를
+      // 고르는 순간 그걸로 끝 — 곧장 새 카드를 만들고 피커도 닫아버림.
+      if (dateInput.value) {
+        reviveTask(task, dateInput.value);
+        dateRow.hidden = true;
+      }
     });
     dateRow.appendChild(dateInput);
 
@@ -2458,6 +2534,110 @@
     return li;
   }
 
+  // "다가오는 일" — pray later 카드에 안 보이는(7일 넘게 남은) scheduled
+  // 항목들. 저장 시점 플래그가 아니라 dueDate로 매번 다시 걸러내므로,
+  // 하루 지나 7일 이내로 들어오면 다음 렌더링에서 자연스럽게 사라지고
+  // pray later 쪽에 나타남.
+  function renderUpcoming() {
+    if (!archiveUpcomingEl) return;
+    archiveUpcomingEl.innerHTML = '';
+
+    const items = boards.scheduled
+      .filter(t => !t.done && daysUntilDue(t.dueDate) > 7)
+      .sort((a, b) => a.dueDate.localeCompare(b.dueDate));
+
+    if (items.length === 0) {
+      const hint = document.createElement('li');
+      hint.className = 'empty-hint';
+      hint.textContent = '아직 먼 일정 없음';
+      archiveUpcomingEl.appendChild(hint);
+      return;
+    }
+
+    items.forEach(task => archiveUpcomingEl.appendChild(renderUpcomingItem(task)));
+  }
+
+  function renderUpcomingItem(task) {
+    const li = document.createElement('li');
+    li.className = 'archive-item';
+    li.dataset.id = task.id;
+
+    const text = document.createElement('span');
+    text.className = 'archive-item-text upcoming-item-text';
+    text.textContent = task.text;
+    li.appendChild(text);
+
+    const badge = document.createElement('span');
+    badge.className = 'due-badge';
+    badge.textContent = formatDueDateRelative(task.dueDate);
+    li.appendChild(badge);
+
+    const controls = document.createElement('div');
+    controls.className = 'archive-item-controls';
+
+    const dateBtn = document.createElement('button');
+    dateBtn.className = 'date-btn';
+    dateBtn.type = 'button';
+    dateBtn.setAttribute('aria-label', '날짜 수정');
+    dateBtn.textContent = '📅';
+    controls.appendChild(dateBtn);
+
+    const del = document.createElement('button');
+    del.className = 'delete-btn';
+    del.type = 'button';
+    del.setAttribute('aria-label', '삭제');
+    del.textContent = '🗑️';
+    del.addEventListener('click', () => deleteTask('scheduled', task.id));
+    controls.appendChild(del);
+
+    li.appendChild(controls);
+
+    // 일반 항목의 날짜 피커(📅로 열고 다시 눌러야 닫힘)와 동일한 동작 —
+    // 되살리기 피커와 달리 여기선 이미 있는 카드의 날짜를 그냥 수정하는
+    // 것뿐이라 자동으로 닫아버릴 이유가 없음.
+    const dateRow = document.createElement('div');
+    dateRow.className = 'date-picker-row';
+    dateRow.hidden = true;
+
+    const dateInput = document.createElement('input');
+    dateInput.className = 'date-picker-input';
+    dateInput.type = 'date';
+    dateInput.value = task.dueDate;
+    dateInput.addEventListener('change', () => {
+      if (dateInput.value) setDueDate('scheduled', task.id, dateInput.value);
+    });
+    dateRow.appendChild(dateInput);
+
+    const clearBtn = document.createElement('button');
+    clearBtn.className = 'date-clear-btn';
+    clearBtn.type = 'button';
+    clearBtn.textContent = '날짜 지우기';
+    clearBtn.addEventListener('click', () => {
+      dateRow.hidden = true;
+    });
+    dateRow.appendChild(clearBtn);
+
+    dateInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        dateRow.hidden = true;
+      }
+    });
+    dateInput.addEventListener('blur', () => {
+      setTimeout(() => {
+        if (!dateRow.contains(document.activeElement)) dateRow.hidden = true;
+      }, 0);
+    });
+
+    dateBtn.addEventListener('click', () => {
+      dateRow.hidden = !dateRow.hidden;
+      if (!dateRow.hidden) dateInput.focus();
+    });
+
+    li.appendChild(dateRow);
+    return li;
+  }
+
   function reviveTask(archivedTask, dateValue) {
     const clone = {
       id: Date.now(),
@@ -2475,6 +2655,7 @@
     saveBoards();
     render('today');
     render('scheduled');
+    if (archivePanelEl.classList.contains('open')) renderUpcoming();
   }
 
   function deleteArchivedTask(id) {
@@ -2641,7 +2822,10 @@
     boards[boardId] = boards[boardId].filter(t => t.id !== id);
     saveBoards();
     render(boardId);
-    if (boardId === 'scheduled') render('today');
+    if (boardId === 'scheduled') {
+      render('today');
+      if (archivePanelEl.classList.contains('open')) renderUpcoming();
+    }
   }
 
   function moveTask(fromBoardId, toBoardId, id) {
@@ -2694,6 +2878,7 @@
         render('scheduled');
         render(backTo);
       }
+      if (archivePanelEl.classList.contains('open')) renderUpcoming();
     } else if (dateValue) {
       boards[boardId].splice(idx, 1);
       task.dueDate = dateValue;
@@ -2706,6 +2891,7 @@
       render(boardId);
       render('today');
       render('scheduled');
+      if (archivePanelEl.classList.contains('open')) renderUpcoming();
     }
   }
 
@@ -2753,6 +2939,7 @@
       render(boardId);
       render('today');
       render('scheduled');
+      if (archivePanelEl.classList.contains('open')) renderUpcoming();
     } else {
       boards[boardId].push(task);
       saveBoards();
