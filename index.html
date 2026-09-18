@@ -2440,6 +2440,9 @@
       if (trimmed) task.text = trimmed;
       saveBoards();
       render(boardId);
+      // 오늘 마감인 scheduled 항목은 실제로 today 목록 안에 그려져 있어서,
+      // scheduled만 다시 그리면 방금 만든 이 input이 화면에 그대로 남음.
+      if (boardId === 'scheduled') render('today');
     };
 
     input.addEventListener('keydown', (e) => {
@@ -2518,6 +2521,7 @@
     boards[boardId] = boards[boardId].filter(t => t.id !== id);
     saveBoards();
     render(boardId);
+    if (boardId === 'scheduled') render('today');
   }
 
   function moveTask(fromBoardId, toBoardId, id) {
@@ -2653,6 +2657,7 @@
     urgentFlash = { id, mode: task.urgent ? 'in' : 'out' };
     saveBoards();
     render(boardId);
+    if (boardId === 'scheduled') render('today');
   }
 
   function startEditSubtask(boardId, taskId, subId) {
@@ -2679,6 +2684,7 @@
       if (trimmed) sub.text = trimmed;
       saveBoards();
       render(boardId);
+      if (boardId === 'scheduled') render('today');
     };
 
     input.addEventListener('keydown', (e) => {
@@ -2713,6 +2719,7 @@
     task.subtasks = task.subtasks.filter(s => s.id !== subId);
     saveBoards();
     render(boardId);
+    if (boardId === 'scheduled') render('today');
   }
 
   function addSubtask(boardId, taskId, text) {
@@ -2723,6 +2730,7 @@
     task.subtasks.push({ id: Date.now(), text: trimmed, done: false });
     saveBoards();
     render(boardId);
+    if (boardId === 'scheduled') render('today');
     openAddSubtaskRow(boardId, taskId, true);
   }
 
