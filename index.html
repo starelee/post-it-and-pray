@@ -331,7 +331,7 @@
     top: 0;
     left: 50%;
     z-index: 100;
-    width: min(700px, 94vw);
+    width: min(750px, 94vw);
     max-height: 0;
     overflow: hidden;
     opacity: 0;
@@ -408,6 +408,17 @@
     gap: 6px;
     padding: 6px 0 0;
     list-style: none;
+    break-inside: avoid;
+  }
+
+  /* 패널이 데스크탑 폭(700px 이상 뷰포트 — 다른 곳의 archive-flag 데스크탑/
+     모바일 분기와 같은 기준)일 때는 넓어진 가로 공간을 살려 2단으로,
+     좁은(모바일) 화면에서는 기존처럼 1단으로 보여줌. */
+  @media (min-width: 700px) {
+    .archive-groups .task-list {
+      column-count: 2;
+      column-gap: 28px;
+    }
   }
 
   .archive-date-heading {
@@ -2330,7 +2341,7 @@
     const reviveBtn = document.createElement('button');
     reviveBtn.className = 'archive-revive-btn';
     reviveBtn.type = 'button';
-    reviveBtn.textContent = '↻ 다시 쓰기';
+    reviveBtn.textContent = '↻ 또 하기';
 
     const dateRow = document.createElement('div');
     dateRow.className = 'date-picker-row';
@@ -2352,6 +2363,33 @@
       dateInput.dispatchEvent(new Event('change'));
     });
     dateRow.appendChild(tomorrowBtn);
+
+    const clearBtn = document.createElement('button');
+    clearBtn.className = 'date-clear-btn';
+    clearBtn.type = 'button';
+    clearBtn.textContent = '날짜 지우기';
+    clearBtn.addEventListener('click', () => {
+      dateInput.value = '';
+      dateRow.hidden = true;
+    });
+    dateRow.appendChild(clearBtn);
+
+    // 다른 날짜 피커들과 동일하게: 아직 값을 고르기 전(빈 칸)이면 Esc로
+    // 닫을 수 있고, 포커스가 이 행 밖으로 빠지면(사파리의 네이티브 달력
+    // 팝업이 Esc를 자체 소비하는 경우 대비) 자동으로도 닫힘.
+    dateInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && !dateInput.value) {
+        e.preventDefault();
+        clearBtn.click();
+      }
+    });
+    dateInput.addEventListener('blur', () => {
+      setTimeout(() => {
+        if (!dateInput.value && !dateRow.contains(document.activeElement)) {
+          clearBtn.click();
+        }
+      }, 0);
+    });
 
     reviveBtn.addEventListener('click', () => {
       dateRow.hidden = !dateRow.hidden;
