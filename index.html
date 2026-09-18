@@ -1491,6 +1491,14 @@
         if (sub.done) done++; else praying++;
       });
     });
+    // waiting은 항목 자체는 "완료" 개념이 없어(체크 없이 ←로만 돌아감) 여기
+    // 세지 않지만, 그 안의 하위 항목은 실제로 끝낸 일이니 카운터엔 포함함
+    // — 그렇다고 waiting 항목이 done 보관함(리갈패드)으로 넘어가진 않음.
+    boards.waiting.forEach(task => {
+      task.subtasks.forEach(sub => {
+        if (sub.done) done++; else praying++;
+      });
+    });
     counterEl.textContent = done + ' done · ' + praying + ' praying';
   }
 
