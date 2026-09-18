@@ -448,14 +448,23 @@
 
   .archive-item {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: 10px;
     padding: 3px 0;
     list-style: none;
   }
 
+  /* 되살리기 날짜 피커가 열리면 좁은 화면에서 제목/버튼과 한 줄에 끼어
+     들어가려다 제목 칸이 거의 0폭까지 눌려서 글자가 한 자씩 세로로
+     쪼개져 보였음 — 아예 다음 줄 전체를 차지하게 떨어뜨림. */
+  .archive-item .date-picker-row {
+    flex-basis: 100%;
+  }
+
   .archive-item-text {
     flex: 1;
+    min-width: 0;
     font-family: 'NostalgicMyoeunHeullim', 'Gaegu', cursive, sans-serif;
     font-size: 16px;
     color: var(--ink-soft);
