@@ -2167,6 +2167,14 @@
       if (e.key === 'Enter') {
         addSubtask(boardId, task.id, subInput.value);
         subInput.value = '';
+        // 등록하고 나면 포커스도 같이 빠져나가게 — 값이 비었으니 아래
+        // blur 리스너가 이어서 행을 닫아줌.
+        subInput.blur();
+      } else if (e.key === 'Escape') {
+        // 이미 등록된 하위 항목들은 그대로 두고, 아직 등록 안 한 입력
+        // 중이던 텍스트만 지운 채로 포커스를 빼서 행을 닫음.
+        subInput.value = '';
+        subInput.blur();
       }
     });
     subInput.addEventListener('blur', () => {
