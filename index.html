@@ -1655,6 +1655,27 @@
   // already exists, it's the source of truth and we pull it down; if it
   // doesn't exist yet (first login), whatever's currently on screen —
   // including pre-login guest data — gets pushed up as the initial migration.
+  // 이 기기에서 이 계정과의 최초 병합(로컬 vs 클라우드 확인창)을 이미
+  // 끝냈는지 기록 — 없으면 새로고침/재로그인 때마다 activeRowId가
+  // 메모리 변수라 초기화되면서 매번 같은 확인창이 또 뜸.
+  const SYNCED_USER_KEY = 'postit-synced-user';
+
+  function getSyncedUserId() {
+    try {
+      return localStorage.getItem(SYNCED_USER_KEY);
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function markUserSynced(rowId) {
+    try {
+      localStorage.setItem(SYNCED_USER_KEY, rowId);
+    } catch (e) {
+      /* ignore */
+    }
+  }
+
   async function syncRow(rowId) {
     if (!cloudClient) return;
     activeRowId = rowId;
@@ -1675,16 +1696,19 @@
       if (data && data.data) {
         const cloudBoards = normalizeBoards(data.data);
         const hasLocalData = Object.keys(boards).some(id => Array.isArray(boards[id]) && boards[id].length > 0);
-        if (hasLocalData) {
+        if (hasLocalData && getSyncedUserId() !== rowId) {
           const useCloud = window.confirm(
             '이 계정에 이미 저장된 데이터가 있어요.\n\n' +
             '확인 → 클라우드 데이터를 불러옵니다 (지금 이 기기에만 있던 데이터는 사라져요)\n' +
             '취소 → 지금 이 기기의 데이터를 유지하고, 그걸로 클라우드를 덮어씁니다'
           );
+          markUserSynced(rowId);
           if (!useCloud) {
             pushToCloud(); // 로컬을 유지하고 클라우드 쪽을 로컬로 덮어씀
             return;
           }
+        } else {
+          markUserSynced(rowId);
         }
         boards = cloudBoards;
         try {
@@ -1694,6 +1718,7 @@
         }
         renderAll();
       } else {
+        markUserSynced(rowId);
         pushToCloud();
       }
     } catch (e) {
