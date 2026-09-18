@@ -418,6 +418,22 @@
     break-inside: avoid;
   }
 
+  /* 모바일에서는 "18일 (금)" 라벨이 항상 옆에서 폭을 갉아먹어서 항목
+     텍스트가 더 자주/좁게 줄바꿈됨 — 날짜 라벨을 아예 위 줄로 떨어뜨려서
+     항목들이 패널 폭을 거의 그대로 쓰게 함. PC에서는 기존처럼 옆에 붙임. */
+  @media (max-width: 480px) {
+    .archive-date-group {
+      flex-direction: column;
+      align-items: stretch;
+      gap: 2px;
+    }
+
+    .archive-date-heading {
+      width: auto;
+      padding-top: 0;
+    }
+  }
+
   /* 패널이 데스크탑 폭(700px 이상 뷰포트 — 다른 곳의 archive-flag 데스크탑/
      모바일 분기와 같은 기준)일 때는 넓어진 가로 공간을 살려 2단으로,
      좁은(모바일) 화면에서는 기존처럼 1단으로 보여줌. */
