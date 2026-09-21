@@ -30,7 +30,10 @@
     --legal-paper: #fffdf0;
     --legal-line: rgba(90, 120, 180, 0.22);
     --legal-margin: rgba(212, 61, 61, 0.4);
-    --focus-box-fill: rgba(0, 0, 0, 0.045);
+    /* focus mode 카드(--paper-focus)가 다른 카드보다 채도 높은 코랄이라
+       공용 --input-line(연한 탠)이 잘 안 보임 — 전용 톤으로 대비를 확보. */
+    --focus-box-border: rgba(105, 45, 30, 0.4);
+    --focus-box-fill: rgba(255, 255, 255, 0.3);
   }
 
   @media (prefers-color-scheme: dark) {
@@ -59,7 +62,8 @@
       --legal-paper: #2e2a1c;
       --legal-line: rgba(120, 150, 200, 0.16);
       --legal-margin: rgba(255, 107, 107, 0.35);
-      --focus-box-fill: rgba(0, 0, 0, 0.18);
+      --focus-box-border: rgba(255, 210, 195, 0.4);
+      --focus-box-fill: rgba(255, 255, 255, 0.1);
     }
   }
 
@@ -88,7 +92,8 @@
     --legal-paper: #2e2a1c;
     --legal-line: rgba(120, 150, 200, 0.16);
     --legal-margin: rgba(255, 107, 107, 0.35);
-    --focus-box-fill: rgba(0, 0, 0, 0.18);
+    --focus-box-border: rgba(255, 210, 195, 0.4);
+    --focus-box-fill: rgba(255, 255, 255, 0.1);
   }
 
   * { box-sizing: border-box; }
@@ -733,7 +738,7 @@
     text-align: left;
     background: none;
     border: none;
-    border-bottom: 1px dashed var(--input-line);
+    border-bottom: 1px dashed var(--focus-box-border);
     /* 실제 할 일 텍스트를 보여주는 자리라 .task-text와 같은 폰트 스택을
        씀 — 다른 focus 버튼들(완료로 표시/분 선택 등)은 UI 액션 라벨이라
        auth-btn 등과 같은 순수 Gaegu를 그대로 씀. */
@@ -756,7 +761,7 @@
      (.focus-duration-box)가 같은 모양을 공유함. 안쪽 배경을 주변 종이보다
      살짝 어둡게 칠해서 박스 자체가 하나의 영역으로 도드라지게 함. */
   .focus-box {
-    border: 1px dashed var(--input-line);
+    border: 1px dashed var(--focus-box-border);
     border-radius: 16px;
     padding: 16px;
     text-align: center;
@@ -881,7 +886,7 @@
   /* 버튼이 있을 때만(running 단계) 점선 박스로 둘러줌 — pick-task/
      pick-duration/ended는 이 자리를 아예 안 쓰니 빈 박스가 뜨지 않음. */
   .focus-footer:not(:empty) {
-    border: 1px dashed var(--input-line);
+    border: 1px dashed var(--focus-box-border);
     border-radius: 16px;
     padding: 10px 16px;
   }
