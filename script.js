@@ -6,9 +6,9 @@
   const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl0bmxnYWJyYnJkZGZwanp6cnJuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk1MzY1NzEsImV4cCI6MjEwNTExMjU3MX0.3H3oSigr6E649McUa8HFf9JYDbM1qIdZQGlJw6-WGro';
   const REORDER_DELAY = 300;
   // 포커스 모드에서 "완료로 표시"를 눌렀을 때 뜨는 위글+빵빠레 축하
-  // 애니메이션 길이 — style.css의 celebrate-wiggle/celebrate-burst-* 지속
-  // 시간(0.6s)과 맞춰둠.
-  const FOCUS_CELEBRATE_MS = 600;
+  // 애니메이션 길이 — style.css의 celebrate-burst-* 지속 시간(0.95s, 가장
+  // 오래 걸리는 애니메이션)과 맞춰둠.
+  const FOCUS_CELEBRATE_MS = 950;
   const BOARD_IDS = ['today', 'waiting', 'someday', 'scheduled'];
   // Boards a task can be manually moved between with the move buttons.
   const MOVE_TARGET_IDS = ['today', 'waiting', 'someday'];
@@ -704,6 +704,75 @@
     return (a.dueDate || '').localeCompare(b.dueDate || '');
   }
 
+  // .task-text의 실제 텍스트 노드가 화면에서 몇 줄로 줄바꿈됐는지, 그
+  // 각 줄이 정확히 어디서 시작해 얼마나 넓은지를 Range.getClientRects()로
+  // 읽어옴 — 컨테이너(.task-text)는 flex:1이라 박스 자체는 행 전체로
+  // 늘어나 있어도, 실제 글자가 차지하는 폭만 정확히 잡아내기 위함.
+  function measureTextLineRects(textEl) {
+    const textNode = Array.prototype.find.call(textEl.childNodes, n => n.nodeType === Node.TEXT_NODE);
+    if (!textNode || !textNode.textContent) return [];
+    const range = document.createRange();
+    range.selectNodeContents(textNode);
+    const containerRect = textEl.getBoundingClientRect();
+    return Array.from(range.getClientRects()).map(r => ({
+      left: r.left - containerRect.left,
+      top: r.top - containerRect.top,
+      width: r.width,
+      height: r.height
+    }));
+  }
+
+  // 완료 표시된 항목이 처음 그려질 때(새로고침, 보드 이동 등) 이미 다
+  // 그어진 상태로 바로 보여줌 — 애니메이션은 toggleTask에서 체크하는
+  // "그 순간"에만 필요하므로 여기선 목표 너비로 바로 세팅함.
+  function layoutStrikeLines(listEl) {
+    if (!listEl) return;
+    listEl.querySelectorAll('.task-item.done .task-text').forEach(textEl => {
+      textEl.querySelectorAll('.strike-line').forEach(el => el.remove());
+      measureTextLineRects(textEl).forEach(rect => {
+        const line = document.createElement('span');
+        line.className = 'strike-line';
+        line.style.left = rect.left + 'px';
+        line.style.top = (rect.top + rect.height / 2) + 'px';
+        line.style.width = rect.width + 'px';
+        textEl.appendChild(line);
+      });
+    });
+  }
+
+  // 체크/체크해제 하는 그 순간에만 호출 — drawing=true면 줄마다 손그림
+  // 대각선을 0폭에서 실제 글자 폭까지 그어지는 것처럼 애니메이션하고,
+  // false면 있던 줄들을 다시 0폭으로 지움(엘리먼트 자체는 곧 이어지는
+  // 전체 재렌더링이 정리하므로 여기선 굳이 제거하지 않음).
+  function animateStrikeLines(li, drawing) {
+    const textEl = li.querySelector('.task-text');
+    if (!textEl) return;
+    if (!drawing) {
+      textEl.querySelectorAll('.strike-line').forEach(el => {
+        el.style.width = '0px';
+      });
+      return;
+    }
+    textEl.querySelectorAll('.strike-line').forEach(el => el.remove());
+    const lines = measureTextLineRects(textEl).map(rect => {
+      const line = document.createElement('span');
+      line.className = 'strike-line';
+      line.style.left = rect.left + 'px';
+      line.style.top = (rect.top + rect.height / 2) + 'px';
+      line.style.width = '0px';
+      textEl.appendChild(line);
+      return { line, targetWidth: rect.width };
+    });
+    // width:0으로 커밋된 다음 프레임에 목표 너비로 바꿔야 transition이
+    // 실제로 재생됨 — 같은 프레임에서 바로 바꾸면 브라우저가 중간 상태를
+    // 건너뛰고 바로 최종값으로 그려버림.
+    requestAnimationFrame(() => {
+      lines.forEach(({ line, targetWidth }) => {
+        line.style.width = targetWidth + 'px';
+      });
+    });
+  }
+
   function render(boardId) {
     if (boardId === 'today') return renderToday();
     if (boardId === 'scheduled') return renderScheduled();
@@ -733,6 +802,7 @@
       done.forEach(t => listEl.appendChild(renderItem(boardId, t)));
     }
 
+    layoutStrikeLines(listEl);
     updateCounter();
   }
 
@@ -768,6 +838,8 @@
       listEl.appendChild(divider);
       done.forEach(t => listEl.appendChild(renderItem('scheduled', t)));
     }
+
+    layoutStrikeLines(listEl);
   }
 
   function renderToday() {
@@ -813,6 +885,7 @@
 
     if (focusState) renderFocusPanel();
 
+    layoutStrikeLines(listEl);
     updateCounter();
   }
 
@@ -1599,7 +1672,10 @@
     else delete task.doneAt;
 
     const li = findTaskLi(id);
-    if (li) li.classList.toggle('done', task.done);
+    if (li) {
+      li.classList.toggle('done', task.done);
+      animateStrikeLines(li, task.done);
+    }
 
     saveBoards();
 
@@ -2229,6 +2305,10 @@
       // 인라인 style="--paper: var(--paper-waiting)"가 이미 걸려있어서
       // 클래스 규칙보다 우선순위가 높음 — 같은 인라인 자리에서 직접 덮어씀.
       waitingStickyEl.style.setProperty('--paper', open ? 'var(--paper-lupin)' : 'var(--paper-waiting)');
+      // lupin 리스트는 뒷면이 숨겨진(hidden) 채로 render()됐을 수 있어서
+      // getClientRects()가 전부 0으로 잡혀 취소선 위치 계산이 틀렸을 수
+      // 있음 — 실제로 보이게 된 지금 다시 잰다.
+      if (open) layoutStrikeLines(getListEl('lupin'));
       lupinSwapPending = false;
       if (lupinFocusPending) {
         lupinFocusPending = false;
@@ -2300,7 +2380,9 @@
     if (!focusState) {
       document.title = ORIGINAL_DOCUMENT_TITLE;
     } else if (focusState.step === 'running') {
-      document.title = formatFocusClock(focusState.remainingSec) + ' · f... focus 🍅';
+      document.title = focusState.paused
+        ? '⏸ ' + formatFocusClock(focusState.remainingSec) + ' · f... focus'
+        : formatFocusClock(focusState.remainingSec) + ' · f... focus 🍅';
     } else if (focusState.step === 'ended') {
       document.title = '⏰ 다 됐어요! · f... focus';
     } else {
@@ -2324,7 +2406,9 @@
         step: focusState.step,
         taskBoardId: focusState.taskBoardId,
         taskId: focusState.taskId,
-        endAt: focusState.endAt
+        endAt: focusState.endAt,
+        paused: !!focusState.paused,
+        remainingSec: focusState.remainingSec
       }));
     } catch (e) {
       /* ignore */
@@ -2341,7 +2425,9 @@
 
   // null이면 리스트 화면. 있으면 { step: 'pick-task'|'pick-duration'|
   // 'running'|'ended', taskBoardId, taskId, taskText, remainingSec,
-  // intervalId, exitConfirmOpen } — 어떤 보드(today/scheduled)에 실제로
+  // intervalId, exitConfirmOpen, paused } — paused는 running 단계에서만
+  // 의미 있고, true면 티커가 꺼진 채 remainingSec이 멈춘 시점 그대로임.
+  // 어떤 보드(today/scheduled)에 실제로
   // 들어있는 항목인지 taskBoardId로 들고 있어야 toggleTask/moveTask를
   // 그대로 재사용할 수 있음(scheduled로 표시된 오늘 마감/지난 마감 항목도
   // gotta do 카드에 같이 그려지므로).
@@ -2771,10 +2857,18 @@
       focusBodyEl.appendChild(makeFocusTaskBox());
       const countdownBox = document.createElement('div');
       countdownBox.className = 'focus-box focus-duration-box focus-countdown-box';
+      if (focusState.paused) countdownBox.classList.add('focus-paused');
       const num = document.createElement('div');
       num.className = 'focus-countdown-number';
       num.textContent = formatFocusClock(focusState.remainingSec);
       countdownBox.appendChild(num);
+
+      if (focusState.paused) {
+        const pausedTag = document.createElement('div');
+        pausedTag.className = 'focus-paused-tag';
+        pausedTag.textContent = '⏸ 일시정지';
+        countdownBox.appendChild(pausedTag);
+      }
 
       // 완료로 표시/시간 추가/나가기는 밑에 새 박스를 만드는 게 아니라 이
       // 숫자 박스 하단에 그대로 들어감 — #focusFooter는 running 단계에서
@@ -2802,6 +2896,12 @@
         const doneBtn = makeFocusFooterBtn('완료로 표시', 'focus-footer-btn-primary');
         doneBtn.addEventListener('click', finishFocusAsDone);
 
+        const pauseBtn = makeFocusFooterBtn(focusState.paused ? '계속하기' : '일시정지');
+        pauseBtn.addEventListener('click', () => {
+          if (focusState.paused) resumeFocusCountdown();
+          else pauseFocusCountdown();
+        });
+
         // "시간 변경"(전체 재설정) 대신 "시간 추가" — 전체 선택 화면으로
         // 안 바뀌고, 이 자리에서 버튼이 곧장 분 입력창으로 바뀌어 지금
         // 남은 시간 위에 그만큼 더해줌.
@@ -2827,7 +2927,10 @@
           if (e.key === 'Enter') {
             const min = parseInt(addTimeInput.value, 10);
             if (min > 0) {
-              focusState.endAt += min * 60 * 1000;
+              // 멈춰있는 동안엔 endAt이 재개할 때 remainingSec 기준으로
+              // 다시 잡히므로(resumeFocusCountdown), 지금 굳이 건드리지
+              // 않음 — 건드리면 재개 시 덮어써져 무의미해짐.
+              if (!focusState.paused) focusState.endAt += min * 60 * 1000;
               focusState.remainingSec += min * 60;
               saveFocusState();
               renderFocusPanel();
@@ -2846,6 +2949,7 @@
           renderFocusPanel();
         });
         actions.appendChild(doneBtn);
+        actions.appendChild(pauseBtn);
         actions.appendChild(addTimeBtn);
         actions.appendChild(addTimeInput);
         actions.appendChild(exitBtn);
@@ -2914,6 +3018,34 @@
     setLupinOpen(false);
     if (sideColEl) sideColEl.classList.add('focus-blurred');
     if (headerEl) headerEl.classList.add('focus-blurred');
+    saveFocusState();
+    renderFocusPanel();
+    startFocusTicker();
+  }
+
+  // 일시정지 — endAt까지 안 기다리고 지금 남은 시간을 굳혀서 remainingSec에
+  // 박아두고 티커를 끔. 재개 전까진 이 값이 그대로 진짜 남은 시간.
+  function pauseFocusCountdown() {
+    if (!focusState || focusState.paused) return;
+    if (focusState.intervalId) {
+      clearInterval(focusState.intervalId);
+      focusState.intervalId = null;
+    }
+    focusState.remainingSec = focusState.endAt
+      ? Math.max(0, Math.round((focusState.endAt - Date.now()) / 1000))
+      : focusState.remainingSec;
+    focusState.paused = true;
+    saveFocusState();
+    updateFocusDocumentTitle();
+    renderFocusPanel();
+  }
+
+  // 재개 — 멈춰있던 remainingSec 기준으로 endAt을 지금 시각에 새로 맞춰
+  // 잡고 티커를 다시 켬.
+  function resumeFocusCountdown() {
+    if (!focusState || !focusState.paused) return;
+    focusState.endAt = Date.now() + focusState.remainingSec * 1000;
+    focusState.paused = false;
     saveFocusState();
     renderFocusPanel();
     startFocusTicker();
@@ -3039,6 +3171,23 @@
       }
       if (data.step === 'pick-duration') {
         focusState = { step: 'pick-duration', taskBoardId: data.taskBoardId, taskId: data.taskId, taskText: task.text };
+      } else if (data.step === 'running' && data.paused) {
+        // 멈춰있던 동안은 시간이 흐르지 않으므로 endAt으로 다시 계산하지
+        // 않고 멈춘 시점의 remainingSec을 그대로 이어받음 — 티커도 다시
+        // 켜지 않음(재개 버튼을 눌러야 endAt이 새로 잡히고 티커가 시작됨).
+        focusState = {
+          step: 'running',
+          taskBoardId: data.taskBoardId,
+          taskId: data.taskId,
+          taskText: task.text,
+          endAt: data.endAt,
+          remainingSec: data.remainingSec || 0,
+          paused: true,
+          exitConfirmOpen: false
+        };
+        setLupinOpen(false);
+        if (sideColEl) sideColEl.classList.add('focus-blurred');
+        if (headerEl) headerEl.classList.add('focus-blurred');
       } else if (data.step === 'running' || data.step === 'ended') {
         const remaining = data.endAt ? Math.max(0, Math.round((data.endAt - Date.now()) / 1000)) : 0;
         focusState = {
