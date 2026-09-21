@@ -402,6 +402,33 @@
 
   .archive-section-title-spaced {
     margin-top: 18px;
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  .trash-toggle-btn {
+    background: none;
+    border: none;
+    font-family: 'Gaegu', cursive, sans-serif;
+    font-size: 13px;
+    color: var(--ink-soft);
+    cursor: pointer;
+    padding: 2px 4px;
+    opacity: 0.75;
+    white-space: nowrap;
+    transition: opacity 0.15s ease, color 0.15s ease;
+  }
+
+  .trash-toggle-btn:hover,
+  .trash-toggle-btn.trash-toggle-open {
+    opacity: 1;
+    color: var(--accent);
+  }
+
+  .trash-panel {
+    margin-top: 4px;
   }
 
   .archive-upcoming {
@@ -1319,9 +1346,17 @@
           <div class="archive-section-divider"></div>
           <div class="archive-groups" id="archiveGroups"></div>
 
-          <h2 class="archive-title archive-section-title-spaced">not my problem... yet 😮‍💨</h2>
+          <h2 class="archive-title archive-section-title-spaced">
+            not my problem... yet 😮‍💨
+            <button class="trash-toggle-btn" id="trashToggleBtn" type="button" aria-label="최근 지운 항목 보기">↺ Ctrl+Z</button>
+          </h2>
           <div class="archive-section-divider"></div>
           <ul class="archive-upcoming" id="archiveUpcoming"></ul>
+
+          <div class="trash-panel" id="trashPanel" hidden>
+            <div class="archive-section-divider"></div>
+            <ul class="archive-upcoming" id="archiveTrash"></ul>
+          </div>
         </div>
       </div>
 
@@ -1564,6 +1599,9 @@
   const archivePanelEl = document.getElementById('archivePanel');
   const archiveGroupsEl = document.getElementById('archiveGroups');
   const archiveUpcomingEl = document.getElementById('archiveUpcoming');
+  const archiveTrashEl = document.getElementById('archiveTrash');
+  const trashPanelEl = document.getElementById('trashPanel');
+  const trashToggleBtn = document.getElementById('trashToggleBtn');
 
   function toggleArchivePanel() {
     const open = !archivePanelEl.classList.contains('open');
@@ -1571,6 +1609,7 @@
     if (open) {
       renderArchive();
       renderUpcoming();
+      renderTrash();
     }
   }
   archiveFlagBtns.forEach(btn => btn.addEventListener('click', toggleArchivePanel));
@@ -1579,6 +1618,15 @@
   if (archiveCloseBtn) {
     archiveCloseBtn.addEventListener('click', () => {
       archivePanelEl.classList.remove('open');
+    });
+  }
+
+  if (trashToggleBtn && trashPanelEl) {
+    trashToggleBtn.addEventListener('click', () => {
+      const open = trashPanelEl.hidden;
+      trashPanelEl.hidden = !open;
+      trashToggleBtn.classList.toggle('trash-toggle-open', open);
+      if (open) renderTrash();
     });
   }
 
@@ -1644,6 +1692,7 @@
       };
       if (typeof t.dueDate === 'string' && t.dueDate) out.dueDate = t.dueDate;
       if (typeof t.from === 'string' && t.from) out.from = t.from;
+      if (typeof t.deletedAt === 'string' && t.deletedAt) out.deletedAt = t.deletedAt;
       if (out.done) {
         // Legacy done tasks from before doneAt existed get today's grace
         // period instead of being permanently excluded from the sweep.
@@ -1662,6 +1711,7 @@
     // lupin은 다른 보드로 옮겨지지도, done 아카이브로 넘어가지도 않는
     // 별도 은닉 보드라 BOARD_IDS/migrateArchive 양쪽 모두에서 의도적으로 제외.
     result.lupin = normalizeTasks(Array.isArray(data.lupin) ? data.lupin : []);
+    result.trash = normalizeTasks(Array.isArray(data.trash) ? data.trash : []);
     migrateArchive(result);
     return result;
   }
@@ -1691,6 +1741,10 @@
       t.done = false;
       delete t.doneAt;
     });
+    // 휴지통은 3일이 지나면 완전히 사라짐 — 매 normalizeBoards마다
+    // (초기 로드/클라우드 동기화 모두) 다시 걸러내므로 하루 지나 기한을
+    // 넘기면 다음 렌더링에서 자연스럽게 빠짐.
+    b.trash = (b.trash || []).filter(t => -daysUntilDue(t.deletedAt) <= 3);
   }
 
   // Bumped on every local edit so an in-flight cloud fetch (see syncRow)
@@ -1741,7 +1795,7 @@
   // neither side carries a tombstone — a real gap, just a much smaller one
   // than clobbering completions outright.
   function mergeBoards(serverBoards, localBoards) {
-    const allBoardIds = BOARD_IDS.concat(['archive', 'lupin']);
+    const allBoardIds = BOARD_IDS.concat(['archive', 'lupin', 'trash']);
     const winners = new Map(); // id -> { task, boardId }
 
     function progress(boardId, task) {
@@ -2705,6 +2759,69 @@
     return li;
   }
 
+  // Ctrl+Z 패널 — 최근 3일 안에 지운 항목만 보여줌(오래된 건 migrateArchive가
+  // 이미 걸러냄). doneAt이 아니라 deletedAt 기준으로 정렬해 방금 지운
+  // 게 맨 위로 오게 함.
+  function renderTrash() {
+    if (!archiveTrashEl) return;
+    archiveTrashEl.innerHTML = '';
+
+    const items = boards.trash
+      .slice()
+      .sort((a, b) => (b.deletedAt || '').localeCompare(a.deletedAt || '') || b.id - a.id);
+
+    if (items.length === 0) {
+      const hint = document.createElement('li');
+      hint.className = 'empty-hint';
+      hint.textContent = '최근 3일간 지운 항목 없음';
+      archiveTrashEl.appendChild(hint);
+      return;
+    }
+
+    items.forEach(task => archiveTrashEl.appendChild(renderTrashItem(task)));
+  }
+
+  function renderTrashItem(task) {
+    const li = document.createElement('li');
+    li.className = 'archive-item';
+    li.dataset.id = task.id;
+
+    const text = document.createElement('span');
+    text.className = 'archive-item-text upcoming-item-text';
+    text.textContent = task.text;
+    li.appendChild(text);
+
+    const badge = document.createElement('span');
+    badge.className = 'due-badge';
+    badge.textContent = formatDueDateRelative(task.deletedAt);
+    li.appendChild(badge);
+
+    const controls = document.createElement('div');
+    controls.className = 'archive-item-controls';
+
+    const restoreBtn = document.createElement('button');
+    restoreBtn.className = 'archive-revive-btn';
+    restoreBtn.type = 'button';
+    restoreBtn.textContent = '↩ 되살리기';
+    restoreBtn.addEventListener('click', () => restoreFromTrash(task.id));
+    controls.appendChild(restoreBtn);
+
+    const del = document.createElement('button');
+    del.className = 'delete-btn';
+    del.type = 'button';
+    del.setAttribute('aria-label', '완전히 삭제');
+    del.textContent = '🗑️';
+    del.addEventListener('click', () => {
+      boards.trash = boards.trash.filter(t => t.id !== task.id);
+      saveBoards();
+      renderTrash();
+    });
+    controls.appendChild(del);
+
+    li.appendChild(controls);
+    return li;
+  }
+
   function reviveTask(archivedTask, dateValue) {
     const clone = {
       id: Date.now(),
@@ -2726,9 +2843,35 @@
   }
 
   function deleteArchivedTask(id) {
-    boards.archive = boards.archive.filter(t => t.id !== id);
+    const idx = boards.archive.findIndex(t => t.id === id);
+    if (idx === -1) return;
+    const [task] = boards.archive.splice(idx, 1);
+    task.from = 'archive';
+    task.deletedAt = todayStr();
+    boards.trash.push(task);
     saveBoards();
     renderArchive();
+    if (archivePanelEl.classList.contains('open')) renderTrash();
+  }
+
+  const TRASH_RESTORE_TARGETS = ['today', 'waiting', 'someday', 'scheduled', 'lupin', 'archive'];
+
+  function restoreFromTrash(id) {
+    const idx = boards.trash.findIndex(t => t.id === id);
+    if (idx === -1) return;
+    const [task] = boards.trash.splice(idx, 1);
+    const target = TRASH_RESTORE_TARGETS.includes(task.from) ? task.from : 'today';
+    delete task.deletedAt;
+    delete task.from;
+    boards[target].push(task);
+    saveBoards();
+    if (target === 'archive') {
+      renderArchive();
+    } else {
+      render(target);
+      if (target === 'scheduled') render('today');
+    }
+    renderTrash();
   }
 
   function openAddSubtaskRow(boardId, taskId, open) {
@@ -2886,13 +3029,19 @@
   }
 
   function deleteTask(boardId, id) {
-    boards[boardId] = boards[boardId].filter(t => t.id !== id);
+    const idx = boards[boardId].findIndex(t => t.id === id);
+    if (idx === -1) return;
+    const [task] = boards[boardId].splice(idx, 1);
+    task.from = boardId;
+    task.deletedAt = todayStr();
+    boards.trash.push(task);
     saveBoards();
     render(boardId);
     if (boardId === 'scheduled') {
       render('today');
       if (archivePanelEl.classList.contains('open')) renderUpcoming();
     }
+    if (archivePanelEl.classList.contains('open')) renderTrash();
   }
 
   function moveTask(fromBoardId, toBoardId, id) {
