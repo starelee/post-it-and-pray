@@ -2420,6 +2420,17 @@
     return el;
   }
 
+  // 상위 항목 + 하위 항목을 점선 박스 하나로 묶음(시간 선택 박스와 같은
+  // 스타일) — pick-duration/running/ended 세 곳 모두 동일한 모양이라
+  // 공통 팩토리로 뽑음.
+  function makeFocusTaskBox() {
+    const box = document.createElement('div');
+    box.className = 'focus-box focus-task-box';
+    box.appendChild(makeFocusPickedTaskLabel());
+    appendFocusSubtasks(box, focusState.taskBoardId, focusState.taskId);
+    return box;
+  }
+
   function startEditFocusTask() {
     if (!focusState || !focusState.taskBoardId) return;
     const boardId = focusState.taskBoardId;
@@ -2514,13 +2525,10 @@
       // 본문 쪽에 보여줌 — 카운트다운이 시작된 뒤에야(running/ended)
       // 제목 자리가 실제 할 일 텍스트로 바뀜.
       focusTitleEl.textContent = FOCUS_TITLE_TEXT;
-      focusBodyEl.appendChild(makeFocusPickedTaskLabel());
-      // 하위 항목은 점선 박스 "위"에 — 실제 점선 테두리는 아래 박스
-      // 자체가 두르고 있으므로 그 앞에 붙이기만 하면 됨.
-      appendFocusSubtasks(focusBodyEl, focusState.taskBoardId, focusState.taskId);
+      focusBodyEl.appendChild(makeFocusTaskBox());
 
       const durationBox = document.createElement('div');
-      durationBox.className = 'focus-duration-box';
+      durationBox.className = 'focus-box focus-duration-box';
       const hint = document.createElement('p');
       hint.className = 'focus-duration-hint';
       hint.textContent = '얼마나 집중할까요?';
@@ -2531,7 +2539,7 @@
         const btn = document.createElement('button');
         btn.type = 'button';
         btn.className = 'focus-duration-btn';
-        btn.textContent = min + '분';
+        btn.textContent = '[' + min + '분]';
         btn.addEventListener('click', () => startFocusCountdown(min * 60));
         row.appendChild(btn);
       });
@@ -2544,8 +2552,7 @@
       // running/ended 단계에서도 제목은 'f... focus'로 그대로 두고, 할 일
       // 텍스트는 pick-duration과 마찬가지로 본문 쪽에 표시.
       focusTitleEl.textContent = FOCUS_TITLE_TEXT;
-      focusBodyEl.appendChild(makeFocusPickedTaskLabel());
-      appendFocusSubtasks(focusBodyEl, focusState.taskBoardId, focusState.taskId);
+      focusBodyEl.appendChild(makeFocusTaskBox());
       const num = document.createElement('div');
       num.className = 'focus-countdown-number';
       num.textContent = formatFocusClock(focusState.remainingSec);
@@ -2584,8 +2591,7 @@
 
     if (focusState.step === 'ended') {
       focusTitleEl.textContent = FOCUS_TITLE_TEXT;
-      focusBodyEl.appendChild(makeFocusPickedTaskLabel());
-      appendFocusSubtasks(focusBodyEl, focusState.taskBoardId, focusState.taskId);
+      focusBodyEl.appendChild(makeFocusTaskBox());
       const choices = document.createElement('div');
       choices.className = 'focus-end-choices';
 

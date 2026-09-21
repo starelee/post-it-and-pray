@@ -29,6 +29,7 @@
     --legal-paper: #fffdf0;
     --legal-line: rgba(90, 120, 180, 0.22);
     --legal-margin: rgba(212, 61, 61, 0.4);
+    --focus-box-fill: rgba(0, 0, 0, 0.045);
   }
 
   @media (prefers-color-scheme: dark) {
@@ -56,6 +57,7 @@
       --legal-paper: #2e2a1c;
       --legal-line: rgba(120, 150, 200, 0.16);
       --legal-margin: rgba(255, 107, 107, 0.35);
+      --focus-box-fill: rgba(0, 0, 0, 0.18);
     }
   }
 
@@ -83,6 +85,7 @@
     --legal-paper: #2e2a1c;
     --legal-line: rgba(120, 150, 200, 0.16);
     --legal-margin: rgba(255, 107, 107, 0.35);
+    --focus-box-fill: rgba(0, 0, 0, 0.18);
   }
 
   * { box-sizing: border-box; }
@@ -760,8 +763,29 @@
     padding-left: 8px;
   }
 
+  /* pick-duration/running/ended에서 공통으로 쓰는 점선 박스 — 상위 항목
+     +하위 항목을 담는 박스(.focus-task-box)와 시간 선택 박스
+     (.focus-duration-box)가 같은 모양을 공유함. 안쪽 배경을 주변 종이보다
+     살짝 어둡게 칠해서 박스 자체가 하나의 영역으로 도드라지게 함. */
+  .focus-box {
+    border: 1px dashed var(--input-line);
+    border-radius: 16px;
+    padding: 16px;
+    text-align: center;
+  }
+
+  /* 타이머(시간 선택) 박스만 살짝 어둡게 칠함 — 상위/하위 항목 박스는
+     테두리만. */
+  .focus-duration-box {
+    background: var(--focus-box-fill);
+  }
+
+  .focus-task-box {
+    margin: 0 0 16px;
+  }
+
   .focus-picked-task {
-    margin: 0 0 8px;
+    margin: 0 0 6px;
     font-family: 'NostalgicMyoeunHeullim', 'Gaegu', cursive, sans-serif;
     font-size: 20px;
     line-height: 1.35;
@@ -770,22 +794,14 @@
   }
 
   /* 하위 항목은 알약 배지가 아니라 기존 subtask-chip 그대로(평문 + 완료 시
-     취소선) — 아래 dashed 박스 바로 위에, 가운데 정렬로 배치. 박스
-     테두리(점선 스트로크)와 바로 붙지 않게 아래쪽에 여백을 둠. */
-  /* .subtask-list 기본 규칙(margin/padding 포함)이 이 클래스보다 파일
+     취소선) — 상위 항목 바로 아래, 같은 박스 안에 가운데 정렬로 배치.
+     .subtask-list 기본 규칙(margin/padding 포함)이 이 클래스보다 파일
      뒤쪽에 있어서 같은 detail(클래스 한 개)로는 순서상 거기에 덮어씀 —
      element+class로 우선순위를 올려서 확실히 이김. */
   ul.focus-subtask-list {
     justify-content: center;
     padding-left: 0;
-    margin: 0 0 22px;
-  }
-
-  .focus-duration-box {
-    border: 1px dashed var(--input-line);
-    border-radius: 16px;
-    padding: 16px;
-    text-align: center;
+    margin: 6px 0 0;
   }
 
   .focus-duration-hint {
@@ -800,24 +816,25 @@
     display: flex;
     flex-wrap: wrap;
     justify-content: center;
-    gap: 10px;
+    gap: 14px;
   }
 
+  /* 알약/배지 버튼 대신 하위 항목([텍스트])과 같은 대괄호 평문 스타일 —
+     이 카드 안에서 갑자기 튀는 버튼 UI가 되지 않도록 함. */
   .focus-duration-btn {
     font-family: 'Gaegu', cursive, sans-serif;
-    font-size: 12px;
+    font-size: 13px;
     color: var(--ink);
-    background: var(--tape);
-    border: 1px solid var(--input-line);
-    border-radius: 14px;
-    padding: 10px 18px;
+    background: none;
+    border: none;
+    padding: 2px;
     cursor: pointer;
-    transition: transform 0.15s ease, background 0.15s ease, color 0.15s ease;
+    transition: color 0.15s ease, transform 0.15s ease;
   }
 
   .focus-duration-btn:hover,
   .focus-duration-btn:focus-visible {
-    transform: scale(1.06);
+    transform: scale(1.08);
     color: var(--accent);
   }
 
