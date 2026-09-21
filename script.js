@@ -2233,6 +2233,7 @@
   const focusBodyEl = document.getElementById('focusBody');
   const focusFooterEl = document.getElementById('focusFooter');
   const focusEnterBtn = document.getElementById('focusEnterBtn');
+  const focusBackBtn = document.getElementById('focusBackBtn');
   const sideColEl = document.querySelector('.side-col');
   const FOCUS_DURATIONS_MIN = [3, 5, 15, 25];
 
@@ -2294,6 +2295,10 @@
     if (!focusState) return;
     clearEl(focusBodyEl);
     clearEl(focusFooterEl);
+    // 선택 단계(할일/시간 고르는 중)에서만 gotta do로 돌아가는 아이콘을
+    // 보여줌 — 카운트다운/종료 후엔 화면의 버튼으로만 빠져나가게 하는
+    // "몰입 강제" 규칙이라 이 버튼도 같이 숨김.
+    if (focusBackBtn) focusBackBtn.hidden = isFocusLocked();
 
     if (focusState.step === 'pick-task') {
       focusTitleEl.textContent = 'focus... 🍅';
@@ -2484,6 +2489,7 @@
   }
 
   if (focusEnterBtn) focusEnterBtn.addEventListener('click', enterFocusPickTask);
+  if (focusBackBtn) focusBackBtn.addEventListener('click', () => exitFocusMode(false));
 
   // Alt+T — Alt+D/Alt+E와 같은 자리(task-item 안 아무 요소가 포커스된 채)에서
   // 동작. 호버 시 뜨는 🍅 버튼이 있는 항목(= gotta do 카드에 그려지는
