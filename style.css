@@ -765,15 +765,17 @@
     font-family: 'NostalgicMyoeunHeullim', 'Gaegu', cursive, sans-serif;
     font-size: 20px;
     line-height: 1.35;
+    text-align: center;
     color: var(--ink);
   }
 
   /* 하위 항목은 알약 배지가 아니라 기존 subtask-chip 그대로(평문 + 완료 시
-     취소선) — 아래 dashed 박스 바로 위에, 가운데 정렬로 배치. */
+     취소선) — 아래 dashed 박스 바로 위에, 가운데 정렬로 배치. 박스
+     테두리(점선 스트로크)와 바로 붙지 않게 아래쪽에 여백을 둠. */
   .focus-subtask-list {
     justify-content: center;
     padding-left: 0;
-    margin: 0 0 14px;
+    margin: 0 0 22px;
   }
 
   .focus-duration-box {
@@ -786,8 +788,8 @@
   .focus-duration-hint {
     margin: 0 0 14px;
     color: var(--ink-soft);
-    /* 기존 14px의 200% */
-    font-size: 28px;
+    /* 기존 14px의 150% */
+    font-size: 21px;
     font-family: 'NostalgicMyoeunHeullim', 'Gaegu', cursive, sans-serif;
   }
 
