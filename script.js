@@ -1039,7 +1039,7 @@
     subInput.type = 'text';
     subInput.placeholder = '하위 항목 추가...';
     subInput.autocomplete = 'off';
-    subInput.maxLength = 60;
+    subInput.maxLength = 100;
     subInput.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') {
         // addSubtask가 내부에서 render() 후 곧장 이 행을 다시 열고
@@ -1547,7 +1547,7 @@
     input.className = 'task-edit-input';
     input.type = 'text';
     input.value = task.text;
-    input.maxLength = 60;
+    input.maxLength = 100;
     textEl.replaceWith(input);
     input.focus();
     input.select();
@@ -1811,7 +1811,7 @@
     input.className = 'subtask-edit-input';
     input.type = 'text';
     input.value = sub.text;
-    input.maxLength = 60;
+    input.maxLength = 100;
     input.size = Math.max(2, sub.text.length);
     chipEl.replaceWith(input);
     input.focus();
@@ -2045,7 +2045,7 @@
     subtaskInput.type = 'text';
     subtaskInput.placeholder = '하위 항목 추가...';
     subtaskInput.autocomplete = 'off';
-    subtaskInput.maxLength = 60;
+    subtaskInput.maxLength = 100;
 
     function renderDraftSubtasks() {
       subtaskChips.innerHTML = '';
@@ -2448,7 +2448,7 @@
     input.type = 'text';
     input.className = 'focus-add-subtask-input';
     input.placeholder = '하위 항목...';
-    input.maxLength = 60;
+    input.maxLength = 100;
     input.hidden = true;
 
     btn.addEventListener('click', () => {
@@ -2492,7 +2492,7 @@
     input.className = 'subtask-edit-input';
     input.type = 'text';
     input.value = sub.text;
-    input.maxLength = 60;
+    input.maxLength = 100;
     input.size = Math.max(2, sub.text.length);
     chipEl.replaceWith(input);
     input.focus();
@@ -2632,7 +2632,7 @@
     input.type = 'text';
     input.className = 'focus-quick-add-input';
     input.placeholder = '+ 새 할일 추가';
-    input.maxLength = 60;
+    input.maxLength = 100;
     input.addEventListener('keydown', (e) => {
       if (e.key !== 'Enter') return;
       const text = input.value;
@@ -2671,7 +2671,7 @@
     input.className = 'focus-picked-task-edit';
     input.type = 'text';
     input.value = task.text;
-    input.maxLength = 60;
+    input.maxLength = 100;
     labelEl.replaceWith(input);
     input.focus();
     input.select();
