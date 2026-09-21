@@ -658,6 +658,22 @@
     if (listEl) collapseSections[listEl.dataset.tasklist] = { body, setOpen };
   });
 
+  // 로고 클릭 — 열려있던 오버레이/펼침 상태를 전부 기본값으로: 리갈패드
+  // 닫기, waiting이 lupin 뒷면이면 앞면으로, someday/scheduled 펼침
+  // 섹션은 다시 접고, 스크롤도 맨 위로. focus 타이머가 잠긴 상태에선
+  // 로고 자체가 블러+pointer-events:none 대상이라 여기까지 오지 않음.
+  const logoEl = document.querySelector('.logo');
+  if (logoEl) {
+    logoEl.addEventListener('click', () => {
+      archivePanelEl.classList.remove('open');
+      setTrashViewOpen(false);
+      if (isLupinOpen()) setLupinOpen(false);
+      if (collapseSections.someday) collapseSections.someday.setOpen(false);
+      if (collapseSections.scheduled) collapseSections.scheduled.setOpen(false);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+  }
+
   function makeCheckSvg(iconClass) {
     const ns = 'http://www.w3.org/2000/svg';
     const svg = document.createElementNS(ns, 'svg');
@@ -2266,6 +2282,7 @@
   const focusEnterBtn = document.getElementById('focusEnterBtn');
   const focusBackBtn = document.getElementById('focusBackBtn');
   const sideColEl = document.querySelector('.side-col');
+  const headerEl = document.querySelector('.header');
   const FOCUS_DURATIONS_MIN = [3, 5, 15, 25];
   const FOCUS_TITLE_TEXT = 'f... focus 🍅';
   const FOCUS_STORAGE_KEY = 'postit-focus-session-v1';
@@ -2470,7 +2487,160 @@
     box.className = 'focus-box focus-task-box';
     box.appendChild(makeFocusPickedTaskLabel());
     appendFocusSubtasks(box, focusState.taskBoardId, focusState.taskId);
+    box.appendChild(makeFocusAddSubtaskRow(focusState.taskBoardId, focusState.taskId));
     return box;
+  }
+
+  // 3/5/15/25분 프리셋 + 직접 입력(+). pick-duration(onPick 생략 시
+  // startFocusCountdown)과 running의 "시간 변경"(onPick으로 진행 중인
+  // endAt만 다시 계산하는 콜백 전달) 둘 다 이 박스를 재사용함.
+  function makeFocusDurationBox(onPick) {
+    const pick = onPick || (sec => startFocusCountdown(sec));
+    const durationBox = document.createElement('div');
+    durationBox.className = 'focus-box focus-duration-box';
+    const hint = document.createElement('p');
+    hint.className = 'focus-duration-hint';
+    hint.textContent = '얼마나 집중할까요?';
+    durationBox.appendChild(hint);
+    const row = document.createElement('div');
+    row.className = 'focus-duration-row';
+    FOCUS_DURATIONS_MIN.forEach(min => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'focus-duration-btn';
+      btn.textContent = '[' + min + '분]';
+      btn.addEventListener('click', () => pick(min * 60));
+      row.appendChild(btn);
+    });
+
+    const customBtn = document.createElement('button');
+    customBtn.type = 'button';
+    customBtn.className = 'focus-duration-btn';
+    customBtn.textContent = '[+]';
+    customBtn.setAttribute('aria-label', '직접 입력');
+
+    const customInput = document.createElement('input');
+    customInput.type = 'number';
+    customInput.min = '1';
+    customInput.max = '180';
+    customInput.placeholder = '분';
+    customInput.className = 'focus-duration-custom-input';
+    customInput.hidden = true;
+
+    customBtn.addEventListener('click', () => {
+      customBtn.hidden = true;
+      customInput.hidden = false;
+      customInput.focus();
+    });
+    customInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        const min = parseInt(customInput.value, 10);
+        if (min > 0) pick(min * 60);
+      } else if (e.key === 'Escape') {
+        customInput.hidden = true;
+        customInput.value = '';
+        customBtn.hidden = false;
+      }
+    });
+    customInput.addEventListener('blur', () => {
+      if (!customInput.value) {
+        customInput.hidden = true;
+        customBtn.hidden = false;
+      }
+    });
+
+    row.appendChild(customBtn);
+    row.appendChild(customInput);
+    durationBox.appendChild(row);
+    return durationBox;
+  }
+
+  // "빨리 등록하고 까먹어라" — 호버 토글 없이 항상 열려있는 입력창.
+  // Enter로 등록하면 gotta do(today)에 바로 추가되고 입력창은 비워진 채
+  // 그대로 다음 입력을 받음(renderFocusPanel이 다시 그려도 이 한 줄
+  // 자체는 매번 새로 만들어지므로 자연히 비워짐).
+  function makeFocusQuickAddTaskRow() {
+    const wrap = document.createElement('div');
+    wrap.className = 'focus-quick-add-row';
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'focus-quick-add-input';
+    input.placeholder = '+ 새 할일 추가';
+    input.maxLength = 60;
+    input.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter') return;
+      const text = input.value;
+      addTask('today', text);
+      // addTask -> render('today')가 renderFocusPanel까지 다시 그려서
+      // 이 입력창도 새 노드로 바뀜 — 연달아 등록할 수 있게 그 새 입력창에
+      // 다시 포커스를 줌.
+      const fresh = focusBodyEl.querySelector('.focus-quick-add-input');
+      if (fresh) fresh.focus();
+    });
+    wrap.appendChild(input);
+    return wrap;
+  }
+
+  function addFocusSubtask(boardId, taskId, text) {
+    const trimmed = text.trim();
+    if (!trimmed) return;
+    const task = boards[boardId] && boards[boardId].find(t => t.id === taskId);
+    if (!task) return;
+    task.subtasks.push({ id: Date.now(), text: trimmed, done: false });
+    saveBoards();
+    render(boardId);
+    if (boardId === 'scheduled') render('today');
+    renderFocusPanel();
+  }
+
+  // 카운트다운 중에도(요청대로) 하위 항목을 추가할 수 있게 — pick-duration/
+  // running/ended 어디서든 makeFocusTaskBox 안에 같이 들어감.
+  function makeFocusAddSubtaskRow(boardId, taskId) {
+    const wrap = document.createElement('div');
+    wrap.className = 'focus-add-subtask-row';
+
+    const toggleBtn = document.createElement('button');
+    toggleBtn.type = 'button';
+    toggleBtn.className = 'focus-add-subtask-toggle';
+    toggleBtn.textContent = '[+ 하위 항목]';
+
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'focus-add-subtask-input';
+    input.placeholder = '하위 항목...';
+    input.maxLength = 60;
+    input.hidden = true;
+
+    toggleBtn.addEventListener('click', () => {
+      toggleBtn.hidden = true;
+      input.hidden = false;
+      input.focus();
+    });
+
+    function closeInput() {
+      input.hidden = true;
+      input.value = '';
+      toggleBtn.hidden = false;
+    }
+
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        const text = input.value;
+        input.value = '';
+        // addFocusSubtask가 renderFocusPanel()로 전체를 다시 그려서 이
+        // 행도 새로 만들어짐(닫힌 상태로) — 여기서 더 할 일 없음.
+        addFocusSubtask(boardId, taskId, text);
+      } else if (e.key === 'Escape') {
+        closeInput();
+      }
+    });
+    input.addEventListener('blur', () => {
+      if (!input.value) closeInput();
+    });
+
+    wrap.appendChild(toggleBtn);
+    wrap.appendChild(input);
+    return wrap;
   }
 
   function startEditFocusTask() {
@@ -2569,24 +2739,19 @@
       focusTitleEl.textContent = FOCUS_TITLE_TEXT;
       focusBodyEl.appendChild(makeFocusTaskBox());
 
-      const durationBox = document.createElement('div');
-      durationBox.className = 'focus-box focus-duration-box';
-      const hint = document.createElement('p');
-      hint.className = 'focus-duration-hint';
-      hint.textContent = '얼마나 집중할까요?';
-      durationBox.appendChild(hint);
-      const row = document.createElement('div');
-      row.className = 'focus-duration-row';
-      FOCUS_DURATIONS_MIN.forEach(min => {
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.className = 'focus-duration-btn';
-        btn.textContent = '[' + min + '분]';
-        btn.addEventListener('click', () => startFocusCountdown(min * 60));
-        row.appendChild(btn);
+      const reselectBtn = document.createElement('button');
+      reselectBtn.type = 'button';
+      reselectBtn.className = 'focus-reselect-btn';
+      reselectBtn.textContent = '[다시 선택]';
+      reselectBtn.addEventListener('click', () => {
+        focusState = { step: 'pick-task' };
+        saveFocusState();
+        renderFocusPanel();
       });
-      durationBox.appendChild(row);
-      focusBodyEl.appendChild(durationBox);
+      focusBodyEl.appendChild(reselectBtn);
+
+      focusBodyEl.appendChild(makeFocusDurationBox());
+      focusBodyEl.appendChild(makeFocusQuickAddTaskRow());
       return;
     }
 
@@ -2602,8 +2767,9 @@
       num.textContent = formatFocusClock(focusState.remainingSec);
       countdownBox.appendChild(num);
 
-      // 완료로 표시/나가기는 밑에 새 박스를 만드는 게 아니라 이 숫자 박스
-      // 하단에 그대로 들어감 — #focusFooter는 running 단계에서 더는 안 씀.
+      // 완료로 표시/시간 변경/나가기는 밑에 새 박스를 만드는 게 아니라 이
+      // 숫자 박스 하단에 그대로 들어감 — #focusFooter는 running 단계에서
+      // 더는 안 씀.
       if (focusState.exitConfirmOpen) {
         const confirmWrap = document.createElement('div');
         confirmWrap.className = 'focus-exit-confirm';
@@ -2621,17 +2787,37 @@
         confirmWrap.appendChild(yesBtn);
         confirmWrap.appendChild(noBtn);
         countdownBox.appendChild(confirmWrap);
+      } else if (focusState.changeDurationOpen) {
+        countdownBox.appendChild(makeFocusDurationBox(sec => {
+          focusState.endAt = Date.now() + sec * 1000;
+          focusState.remainingSec = sec;
+          focusState.changeDurationOpen = false;
+          saveFocusState();
+          renderFocusPanel();
+        }));
+        const cancelBtn = makeFocusFooterBtn('취소');
+        cancelBtn.addEventListener('click', () => {
+          focusState.changeDurationOpen = false;
+          renderFocusPanel();
+        });
+        countdownBox.appendChild(cancelBtn);
       } else {
         const actions = document.createElement('div');
         actions.className = 'focus-countdown-actions';
         const doneBtn = makeFocusFooterBtn('완료로 표시', 'focus-footer-btn-primary');
         doneBtn.addEventListener('click', finishFocusAsDone);
+        const changeBtn = makeFocusFooterBtn('시간 변경');
+        changeBtn.addEventListener('click', () => {
+          focusState.changeDurationOpen = true;
+          renderFocusPanel();
+        });
         const exitBtn = makeFocusFooterBtn('나가기');
         exitBtn.addEventListener('click', () => {
           focusState.exitConfirmOpen = true;
           renderFocusPanel();
         });
         actions.appendChild(doneBtn);
+        actions.appendChild(changeBtn);
         actions.appendChild(exitBtn);
         countdownBox.appendChild(actions);
       }
@@ -2679,6 +2865,7 @@
     // 그대로 두면 되는 거라 별도 조건 분기가 필요 없음.
     setLupinOpen(false);
     if (sideColEl) sideColEl.classList.add('focus-blurred');
+    if (headerEl) headerEl.classList.add('focus-blurred');
     saveFocusState();
     renderFocusPanel();
     startFocusTicker();
@@ -2698,8 +2885,15 @@
         focusState.intervalId = null;
         focusState.step = 'ended';
         saveFocusState();
+        renderFocusPanel();
+        return;
       }
-      renderFocusPanel();
+      // 매초 전체를 다시 그리면 그 사이 열어둔 하위 항목 추가 입력창 같은
+      // 걸 다 날려버리므로, 진행 중엔 숫자/탭 제목만 직접 갱신함 — 상태가
+      // 실제로 바뀌는 시점(0 도달)에만 전체 렌더링.
+      updateFocusDocumentTitle();
+      const numEl = focusBodyEl.querySelector('.focus-countdown-number');
+      if (numEl) numEl.textContent = formatFocusClock(remaining);
     }, 1000);
   }
 
@@ -2750,6 +2944,7 @@
     clearFocusState();
     updateFocusDocumentTitle();
     if (sideColEl) sideColEl.classList.remove('focus-blurred');
+    if (headerEl) headerEl.classList.remove('focus-blurred');
     setTodayFocusOpen(false, focusInputAfter);
   }
 
@@ -2809,6 +3004,7 @@
         };
         setLupinOpen(false);
         if (sideColEl) sideColEl.classList.add('focus-blurred');
+        if (headerEl) headerEl.classList.add('focus-blurred');
         if (remaining > 0) startFocusTicker();
         else saveFocusState();
       } else {
