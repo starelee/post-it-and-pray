@@ -421,14 +421,9 @@
     transition: opacity 0.15s ease, color 0.15s ease;
   }
 
-  .trash-toggle-btn:hover,
-  .trash-toggle-btn.trash-toggle-open {
+  .trash-toggle-btn:hover {
     opacity: 1;
     color: var(--accent);
-  }
-
-  .trash-panel {
-    margin-top: 4px;
   }
 
   .archive-upcoming {
@@ -1346,14 +1341,20 @@
           <div class="archive-section-divider"></div>
           <div class="archive-groups" id="archiveGroups"></div>
 
-          <h2 class="archive-title archive-section-title-spaced">
-            not my problem... yet 😮‍💨
-            <button class="trash-toggle-btn" id="trashToggleBtn" type="button" aria-label="최근 지운 항목 보기">↺ Ctrl+Z</button>
-          </h2>
-          <div class="archive-section-divider"></div>
-          <ul class="archive-upcoming" id="archiveUpcoming"></ul>
+          <div data-upcoming-front>
+            <h2 class="archive-title archive-section-title-spaced">
+              not my problem... yet 😮‍💨
+              <button class="trash-toggle-btn" id="trashToggleBtn" type="button" aria-label="최근 지운 항목 보기">↺ Ctrl+Z</button>
+            </h2>
+            <div class="archive-section-divider"></div>
+            <ul class="archive-upcoming" id="archiveUpcoming"></ul>
+          </div>
 
-          <div class="trash-panel" id="trashPanel" hidden>
+          <div data-upcoming-back hidden>
+            <h2 class="archive-title archive-section-title-spaced">
+              Ctrl+Z 😵‍💫
+              <button class="trash-toggle-btn" id="trashToggleBackBtn" type="button" aria-label="원래대로">↩ 되돌아가기</button>
+            </h2>
             <div class="archive-section-divider"></div>
             <ul class="archive-upcoming" id="archiveTrash"></ul>
           </div>
@@ -1600,8 +1601,10 @@
   const archiveGroupsEl = document.getElementById('archiveGroups');
   const archiveUpcomingEl = document.getElementById('archiveUpcoming');
   const archiveTrashEl = document.getElementById('archiveTrash');
-  const trashPanelEl = document.getElementById('trashPanel');
+  const upcomingFrontEl = archivePanelEl.querySelector('[data-upcoming-front]');
+  const upcomingBackEl = archivePanelEl.querySelector('[data-upcoming-back]');
   const trashToggleBtn = document.getElementById('trashToggleBtn');
+  const trashToggleBackBtn = document.getElementById('trashToggleBackBtn');
 
   function toggleArchivePanel() {
     const open = !archivePanelEl.classList.contains('open');
@@ -1609,7 +1612,8 @@
     if (open) {
       renderArchive();
       renderUpcoming();
-      renderTrash();
+    } else {
+      setTrashViewOpen(false);
     }
   }
   archiveFlagBtns.forEach(btn => btn.addEventListener('click', toggleArchivePanel));
@@ -1618,17 +1622,32 @@
   if (archiveCloseBtn) {
     archiveCloseBtn.addEventListener('click', () => {
       archivePanelEl.classList.remove('open');
+      setTrashViewOpen(false);
     });
   }
 
-  if (trashToggleBtn && trashPanelEl) {
-    trashToggleBtn.addEventListener('click', () => {
-      const open = trashPanelEl.hidden;
-      trashPanelEl.hidden = !open;
-      trashToggleBtn.classList.toggle('trash-toggle-open', open);
-      if (open) renderTrash();
-    });
+  // "not my problem... yet" 자리가 Ctrl+Z(휴지통)로 통째로 바뀌는 lupin
+  // 모드 방식 — 목록 아래에 덧붙이지 않고 같은 자리를 갈아끼움. lupin처럼
+  // 계속 열어둔 채 잊어버리지 않도록 3분 뒤 자동으로 되돌리고, done
+  // 리갈패드를 닫았다 다시 열면 항상 "not my problem"부터 다시 보여줌.
+  const TRASH_VIEW_TIMEOUT_MS = 3 * 60 * 1000;
+  let trashViewOpen = false;
+  let trashViewTimer = null;
+
+  function setTrashViewOpen(open) {
+    if (!upcomingFrontEl || !upcomingBackEl) return;
+    trashViewOpen = open;
+    upcomingFrontEl.hidden = open;
+    upcomingBackEl.hidden = !open;
+    clearTimeout(trashViewTimer);
+    if (open) {
+      renderTrash();
+      trashViewTimer = setTimeout(() => setTrashViewOpen(false), TRASH_VIEW_TIMEOUT_MS);
+    }
   }
+
+  if (trashToggleBtn) trashToggleBtn.addEventListener('click', () => setTrashViewOpen(true));
+  if (trashToggleBackBtn) trashToggleBackBtn.addEventListener('click', () => setTrashViewOpen(false));
 
   function updateCounter() {
     const today = todayStr();
@@ -2672,7 +2691,7 @@
     if (items.length === 0) {
       const hint = document.createElement('li');
       hint.className = 'empty-hint';
-      hint.textContent = '아직 먼 일정 없음';
+      hint.textContent = '아직, 없음';
       archiveUpcomingEl.appendChild(hint);
       return;
     }
