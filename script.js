@@ -2333,14 +2333,118 @@
       chip.className = 'subtask-chip';
       chip.setAttribute('aria-label', sub.done ? '완료 취소' : '완료 표시');
       chip.textContent = '[' + sub.text + ']';
+      // 원본 subtask-chip과 같은 규칙 — 더블클릭으로 이름을 바꾸려는 순간의
+      // 앞선 click 두 번이 먼저 완료 토글을 잠깐 켰다 끄는 게 거슬려서,
+      // click을 살짝 늦춰 그 사이 dblclick이 오면 토글 자체를 취소함.
+      let chipClickTimer = null;
       chip.addEventListener('click', () => {
-        toggleSubtask(boardId, taskId, sub.id);
-        renderFocusPanel();
+        clearTimeout(chipClickTimer);
+        chipClickTimer = setTimeout(() => {
+          toggleSubtask(boardId, taskId, sub.id);
+          renderFocusPanel();
+        }, 250);
+      });
+      chip.addEventListener('dblclick', (e) => {
+        e.stopPropagation();
+        clearTimeout(chipClickTimer);
+        startEditFocusSubtask(boardId, taskId, sub.id, chip);
       });
       li.appendChild(chip);
       list.appendChild(li);
     });
     container.appendChild(list);
+  }
+
+  function startEditFocusSubtask(boardId, taskId, subId, chipEl) {
+    const task = boards[boardId] && boards[boardId].find(t => t.id === taskId);
+    const sub = task && task.subtasks.find(s => s.id === subId);
+    if (!sub || !chipEl) return;
+
+    const input = document.createElement('input');
+    input.className = 'subtask-edit-input';
+    input.type = 'text';
+    input.value = sub.text;
+    input.maxLength = 60;
+    input.size = Math.max(2, sub.text.length);
+    chipEl.replaceWith(input);
+    input.focus();
+    input.select();
+
+    const commit = () => {
+      const trimmed = input.value.trim();
+      if (trimmed) sub.text = trimmed;
+      saveBoards();
+      render(boardId);
+      if (boardId === 'scheduled') render('today');
+      renderFocusPanel();
+    };
+
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        input.blur();
+      } else if (e.key === 'Escape') {
+        input.value = sub.text;
+        input.blur();
+      }
+    });
+    input.addEventListener('blur', commit);
+  }
+
+  // 상위 항목(선택된 할 일) 텍스트 — 본문에 세 단계(pick-duration/running/
+  // ended) 모두에서 같은 모양으로 나오므로 공통 팩토리로 뽑음. 클릭하면
+  // 원본 task-text와 동일하게 곧장 편집 모드로 들어감.
+  function makeFocusPickedTaskLabel() {
+    const el = document.createElement('p');
+    el.className = 'focus-picked-task';
+    el.textContent = focusState.taskText;
+    el.tabIndex = 0;
+    el.setAttribute('role', 'button');
+    el.setAttribute('aria-label', '할 일 내용 수정');
+    el.addEventListener('click', startEditFocusTask);
+    return el;
+  }
+
+  function startEditFocusTask() {
+    if (!focusState || !focusState.taskBoardId) return;
+    const boardId = focusState.taskBoardId;
+    const taskId = focusState.taskId;
+    const task = boards[boardId] && boards[boardId].find(t => t.id === taskId);
+    const labelEl = focusBodyEl.querySelector('.focus-picked-task');
+    if (!task || !labelEl) return;
+
+    const input = document.createElement('input');
+    input.className = 'focus-picked-task-edit';
+    input.type = 'text';
+    input.value = task.text;
+    input.maxLength = 60;
+    labelEl.replaceWith(input);
+    input.focus();
+    input.select();
+
+    let committed = false;
+    const commit = () => {
+      if (committed) return;
+      committed = true;
+      const trimmed = input.value.trim();
+      if (trimmed) {
+        task.text = trimmed;
+        if (focusState) focusState.taskText = trimmed;
+      }
+      saveBoards();
+      render(boardId);
+      if (boardId === 'scheduled') render('today');
+      renderFocusPanel();
+    };
+
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        input.blur();
+      } else if (e.key === 'Escape') {
+        input.value = task.text;
+        input.blur();
+      }
+    });
+    input.addEventListener('blur', commit);
   }
 
   function makeFocusFooterBtn(text, extraClass) {
@@ -2393,10 +2497,7 @@
       // 본문 쪽에 보여줌 — 카운트다운이 시작된 뒤에야(running/ended)
       // 제목 자리가 실제 할 일 텍스트로 바뀜.
       focusTitleEl.textContent = FOCUS_TITLE_TEXT;
-      const taskLabel = document.createElement('p');
-      taskLabel.className = 'focus-picked-task';
-      taskLabel.textContent = focusState.taskText;
-      focusBodyEl.appendChild(taskLabel);
+      focusBodyEl.appendChild(makeFocusPickedTaskLabel());
       // 하위 항목은 점선 박스 "위"에 — 실제 점선 테두리는 아래 박스
       // 자체가 두르고 있으므로 그 앞에 붙이기만 하면 됨.
       appendFocusSubtasks(focusBodyEl, focusState.taskBoardId, focusState.taskId);
@@ -2426,10 +2527,7 @@
       // running/ended 단계에서도 제목은 'f... focus'로 그대로 두고, 할 일
       // 텍스트는 pick-duration과 마찬가지로 본문 쪽에 표시.
       focusTitleEl.textContent = FOCUS_TITLE_TEXT;
-      const taskLabel = document.createElement('p');
-      taskLabel.className = 'focus-picked-task';
-      taskLabel.textContent = focusState.taskText;
-      focusBodyEl.appendChild(taskLabel);
+      focusBodyEl.appendChild(makeFocusPickedTaskLabel());
       appendFocusSubtasks(focusBodyEl, focusState.taskBoardId, focusState.taskId);
       const num = document.createElement('div');
       num.className = 'focus-countdown-number';
@@ -2440,7 +2538,7 @@
         const confirmWrap = document.createElement('div');
         confirmWrap.className = 'focus-exit-confirm';
         const msg = document.createElement('p');
-        msg.textContent = '타이머를 중단하고 메인화면으로 갈까요? 현재 진행 중인 타이머는 초기화됩니다.';
+        msg.textContent = '⚠️ 타이머를 중단하고 메인화면으로 갈까요? 현재 진행 중인 타이머는 초기화됩니다.';
         confirmWrap.appendChild(msg);
 
         const yesBtn = makeFocusFooterBtn('네, 나갈게요 (타이머 리셋)', 'focus-footer-btn-danger');
@@ -2469,10 +2567,7 @@
 
     if (focusState.step === 'ended') {
       focusTitleEl.textContent = FOCUS_TITLE_TEXT;
-      const taskLabel = document.createElement('p');
-      taskLabel.className = 'focus-picked-task';
-      taskLabel.textContent = focusState.taskText;
-      focusBodyEl.appendChild(taskLabel);
+      focusBodyEl.appendChild(makeFocusPickedTaskLabel());
       appendFocusSubtasks(focusBodyEl, focusState.taskBoardId, focusState.taskId);
       const choices = document.createElement('div');
       choices.className = 'focus-end-choices';
@@ -2644,6 +2739,17 @@
 
   if (focusEnterBtn) focusEnterBtn.addEventListener('click', enterFocusPickTask);
   if (focusBackBtn) focusBackBtn.addEventListener('click', () => exitFocusMode(false));
+
+  // Esc — 선택 단계(할일/시간 고르는 중)에서 곧장 gotta do 리스트로.
+  // 카운트다운/종료 후엔 isFocusLocked()에서 걸러져 기존 규칙대로 안 먹힘.
+  document.addEventListener('keydown', (e) => {
+    if (!focusState || isFocusLocked()) return;
+    if (e.key !== 'Escape') return;
+    const tag = document.activeElement && document.activeElement.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+    e.preventDefault();
+    exitFocusMode(false);
+  });
 
   // Alt+T — Alt+D/Alt+E와 같은 자리(task-item 안 아무 요소가 포커스된 채)에서
   // 동작. 호버 시 뜨는 🍅 버튼이 있는 항목(= gotta do 카드에 그려지는

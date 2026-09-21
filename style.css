@@ -772,7 +772,10 @@
   /* 하위 항목은 알약 배지가 아니라 기존 subtask-chip 그대로(평문 + 완료 시
      취소선) — 아래 dashed 박스 바로 위에, 가운데 정렬로 배치. 박스
      테두리(점선 스트로크)와 바로 붙지 않게 아래쪽에 여백을 둠. */
-  .focus-subtask-list {
+  /* .subtask-list 기본 규칙(margin/padding 포함)이 이 클래스보다 파일
+     뒤쪽에 있어서 같은 detail(클래스 한 개)로는 순서상 거기에 덮어씀 —
+     element+class로 우선순위를 올려서 확실히 이김. */
+  ul.focus-subtask-list {
     justify-content: center;
     padding-left: 0;
     margin: 0 0 22px;
@@ -889,8 +892,10 @@
 
   .focus-exit-confirm p {
     margin: 0 0 4px;
-    font-size: 13px;
-    color: var(--ink-soft);
+    font-family: 'Gaegu', cursive, sans-serif;
+    /* 기존 13px의 120% */
+    font-size: 16px;
+    color: var(--urgent);
   }
 
   /* 카운트다운이 실제로 시작된 순간부터만 — 할일/시간 고르는 선택 단계
