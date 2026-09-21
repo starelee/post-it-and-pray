@@ -300,6 +300,10 @@
     // (초기 로드/클라우드 동기화 모두) 다시 걸러내므로 하루 지나 기한을
     // 넘기면 다음 렌더링에서 자연스럽게 빠짐.
     b.trash = (b.trash || []).filter(t => -daysUntilDue(t.deletedAt) <= 3);
+    // lupin은 다른 보드처럼 archive로 넘어가는 대신, 오늘 이전에 체크한
+    // 항목은 완전히 삭제됨 — 숨겨진 개인 메모라 지난 완료 기록을 쌓아두지
+    // 않고 매일 조용히 비워짐.
+    b.lupin = (b.lupin || []).filter(t => !(t.done && t.doneAt !== today));
   }
 
   // Bumped on every local edit so an in-flight cloud fetch (see syncRow)
