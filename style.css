@@ -1242,6 +1242,19 @@
     width: 104%;
   }
 
+  /* 2줄 이상으로 줄바꿈된 항목은 손그림 취소선 하나가 박스 세로 중앙을
+     가로질러서 두 줄 사이 빈 공간에 어중간하게 걸침 — 줄 수를 감지해서
+     (applyMultilineStrike) 이 경우엔 대신 줄마다 제대로 그어지는 기본
+     text-decoration으로 바꿔치기함. */
+  .task-item.done.multiline .task-text {
+    text-decoration: line-through;
+    text-decoration-color: var(--accent);
+  }
+
+  .task-item.done.multiline .strike-line {
+    display: none;
+  }
+
   .task-controls {
     display: flex;
     align-items: center;
