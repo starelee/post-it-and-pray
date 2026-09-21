@@ -771,8 +771,13 @@
     border: 1px dashed var(--input-line);
     border-radius: 16px;
     padding: 16px;
-    background: var(--focus-box-fill);
     text-align: center;
+  }
+
+  /* 타이머(시간 선택) 박스만 살짝 어둡게 칠함 — 상위/하위 항목 박스는
+     테두리만. */
+  .focus-duration-box {
+    background: var(--focus-box-fill);
   }
 
   .focus-task-box {
