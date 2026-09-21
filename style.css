@@ -865,9 +865,18 @@
   .focus-footer {
     display: flex;
     justify-content: center;
+    align-items: center;
     gap: 10px;
     flex-wrap: wrap;
     margin-bottom: 10px;
+  }
+
+  /* 버튼이 있을 때만(running 단계) 점선 박스로 둘러줌 — pick-task/
+     pick-duration/ended는 이 자리를 아예 안 쓰니 빈 박스가 뜨지 않음. */
+  .focus-footer:not(:empty) {
+    border: 1px dashed var(--input-line);
+    border-radius: 16px;
+    padding: 10px 16px;
   }
 
   /* 알약/배지 버튼이 아니라 하위 항목·시간 선택과 같은 대괄호 평문
