@@ -1,0 +1,1307 @@
+  @font-face {
+    font-family: 'NostalgicMyoeunHeullim';
+    src: url('https://cdn.jsdelivr.net/gh/projectnoonnu/2601-1@1.0/Griun_MyoeunHeullim-Rg.woff2') format('woff2');
+    font-weight: normal;
+    font-display: swap;
+}
+
+  :root {
+    --bg-top: #e9ecdf;
+    --bg-bot: #dfe3d3;
+    --paper: #fff6c8;
+    --paper-waiting: #ffe1ac;
+    --paper-someday: #dbe2f7;
+    --paper-lupin: #d9d5c9;
+    --paper-shadow: rgba(70, 60, 20, 0.28);
+    --paper-contact: rgba(70, 60, 20, 0.16);
+    --ink: #4a4034;
+    --ink-soft: #8a8068;
+    --accent: #e2727e;
+    --urgent: #d43d3d;
+    --urgent-bg: rgba(212, 61, 61, 0.1);
+    --tape: rgba(255, 255, 255, 0.6);
+    --tape-edge: rgba(255, 255, 255, 0.25);
+    --divider: #cdbd7c;
+    --bezel-top: #48453f;
+    --bezel-bot: #2c2a26;
+    --bezel-highlight: rgba(255,255,255,0.08);
+    --input-line: #d8c98f;
+    --legal-paper: #fffdf0;
+    --legal-line: rgba(90, 120, 180, 0.22);
+    --legal-margin: rgba(212, 61, 61, 0.4);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg-top: #23261f;
+      --bg-bot: #1a1c17;
+      --paper: #3a3320;
+      --paper-waiting: #4a3a1f;
+      --paper-someday: #2c3350;
+      --paper-lupin: #2e2c27;
+      --paper-shadow: rgba(0, 0, 0, 0.5);
+      --paper-contact: rgba(0, 0, 0, 0.35);
+      --ink: #ecdfc2;
+      --ink-soft: #756c54;
+      --accent: #e8919b;
+      --urgent: #ff6b6b;
+      --urgent-bg: rgba(255, 107, 107, 0.14);
+      --tape: rgba(255, 255, 255, 0.14);
+      --tape-edge: rgba(255, 255, 255, 0.05);
+      --divider: #5c5537;
+      --bezel-top: #171613;
+      --bezel-bot: #0a0a09;
+      --bezel-highlight: rgba(255,255,255,0.05);
+      --input-line: #524b34;
+      --legal-paper: #2e2a1c;
+      --legal-line: rgba(120, 150, 200, 0.16);
+      --legal-margin: rgba(255, 107, 107, 0.35);
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --bg-top: #23261f;
+    --bg-bot: #1a1c17;
+    --paper: #3a3320;
+    --paper-waiting: #4a3a1f;
+    --paper-someday: #2c3350;
+    --paper-lupin: #2e2c27;
+    --paper-shadow: rgba(0, 0, 0, 0.5);
+    --paper-contact: rgba(0, 0, 0, 0.35);
+    --ink: #ecdfc2;
+    --ink-soft: #756c54;
+    --accent: #e8919b;
+    --urgent: #ff6b6b;
+    --urgent-bg: rgba(255, 107, 107, 0.14);
+    --tape: rgba(255, 255, 255, 0.14);
+    --tape-edge: rgba(255, 255, 255, 0.05);
+    --divider: #5c5537;
+    --bezel-top: #171613;
+    --bezel-bot: #0a0a09;
+    --bezel-highlight: rgba(255,255,255,0.05);
+    --input-line: #524b34;
+    --legal-paper: #2e2a1c;
+    --legal-line: rgba(120, 150, 200, 0.16);
+    --legal-margin: rgba(255, 107, 107, 0.35);
+  }
+
+  * { box-sizing: border-box; }
+
+  html {
+    /* 세로 스크롤바가 생겼다 없어졌다 할 때마다 뷰포트 폭이 바뀌면서
+       가운데 정렬된 포스트잇들이 미묘하게 좌우로 움직이는 게 거슬려서,
+       스크롤바 자리를 항상 미리 확보해둠. */
+    scrollbar-gutter: stable;
+  }
+
+  html, body {
+    height: 100%;
+    margin: 0;
+  }
+
+  body {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    background: radial-gradient(ellipse at 50% 0%, var(--bg-top), var(--bg-bot));
+    font-family: 'Gaegu', cursive, sans-serif;
+    color: var(--ink);
+    overflow-x: hidden;
+  }
+
+  .screen {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: clamp(18px, 4vh, 40px);
+    padding: 32px 20px 24px;
+  }
+
+  @media (max-width: 480px) {
+    .screen {
+      padding: 20px 10px 16px;
+    }
+  }
+
+  .board-row {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: flex-start;
+    gap: 30px 22px;
+  }
+
+  /* today(380px) + 간격(22px) + waiting/someday 컬럼(380px) + 화면 좌우
+     여백(40px) = 822px — 이 폭 이상이면 항상 2단(가로 배치)으로 강제 고정.
+     flex-wrap의 자연스러운 줄바꿈 계산에 맡기면 폰트/줌 등 예상 밖의
+     변수로 이 폭 이상에서도 1단으로 떨어지는 경우가 있어서 명시적으로 못박음. */
+  @media (min-width: 822px) {
+    .board-row {
+      flex-wrap: nowrap;
+    }
+  }
+
+  .side-col {
+    display: flex;
+    flex-direction: column;
+    gap: 30px;
+    perspective: 1200px;
+  }
+
+  .header {
+    text-align: center;
+  }
+
+  .logo {
+    font-family: 'Gaegu', cursive, sans-serif;
+    font-size: clamp(28px, 6vw, 42px);
+    font-weight: 700;
+    margin: 0;
+    color: var(--ink);
+    transform: rotate(-2deg);
+  }
+
+  .logo .pray {
+    font-style: italic;
+    display: inline-block;
+    transform: rotate(3deg);
+  }
+
+  .tagline {
+    font-family: 'NostalgicMyoeunHeullim', 'Nanum Pen Script', cursive;
+    font-size: clamp(14px, 2.6vw, 17px);
+    margin: 6px 0 0;
+    color: var(--ink-soft);
+  }
+
+  .date {
+    margin: 4px 0 0;
+    font-size: 16px;
+    color: var(--ink-soft);
+    letter-spacing: 0.5px;
+  }
+
+  .counter {
+    margin: 3px 0 0;
+    font-family: 'Gaegu', cursive, sans-serif;
+    font-size: 13px;
+    color: var(--ink-soft);
+    opacity: 0.75;
+    letter-spacing: 0.4px;
+  }
+
+  .header-actions {
+    margin: 8px 0 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .auth-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    min-height: 20px;
+  }
+
+  .auth-user {
+    font-family: 'Gaegu', cursive, sans-serif;
+    font-size: 12px;
+    color: var(--ink-soft);
+  }
+
+  .auth-btn {
+    font-family: 'Gaegu', cursive, sans-serif;
+    font-size: 12px;
+    color: var(--ink-soft);
+    background: none;
+    border: 1px solid var(--ink-soft);
+    border-radius: 12px;
+    padding: 3px 10px;
+    cursor: pointer;
+    opacity: 0.85;
+    transition: opacity 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+  }
+
+  .auth-btn:hover {
+    opacity: 1;
+    color: var(--accent);
+    border-color: var(--accent);
+  }
+
+  .auth-btn-primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+    font-weight: 700;
+    opacity: 1;
+  }
+
+  .auth-btn-primary:hover {
+    opacity: 0.85;
+    color: #fff;
+  }
+
+  .auth-hint {
+    font-family: 'Gaegu', cursive, sans-serif;
+    font-size: 11px;
+    color: var(--ink-soft);
+    opacity: 0.8;
+  }
+
+  .theme-toggle {
+    background: none;
+    border: 1px solid var(--ink-soft);
+    border-radius: 12px;
+    padding: 3px 10px;
+    font-family: 'Gaegu', cursive, sans-serif;
+    font-size: 13px;
+    line-height: 1.4;
+    color: var(--ink-soft);
+    cursor: pointer;
+    opacity: 0.85;
+    transition: opacity 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+  }
+
+  .theme-toggle:hover {
+    opacity: 1;
+    color: var(--accent);
+    border-color: var(--accent);
+  }
+
+  .archive-flag {
+    position: absolute;
+    top: -22px;
+    right: 18px;
+    z-index: 5;
+    width: 18px;
+    height: 34px;
+    padding: 0;
+    border: none;
+    background: var(--urgent);
+    box-shadow: 1px 2px 4px rgba(0, 0, 0, 0.2);
+    cursor: pointer;
+    opacity: 0.9;
+    transform-origin: center bottom;
+    transform: rotate(-4deg);
+    transition: opacity 0.15s ease, transform 0.15s ease;
+  }
+
+  .archive-flag:hover {
+    opacity: 1;
+    transform: rotate(-4deg) translateY(-2px);
+  }
+
+  /* On narrow (stacked) layouts the flag reads as attached to the "gotta
+     do" card since it's the top card either way; at desktop width, once
+     waiting sits beside today rather than under it, the flag moves to
+     waiting instead. */
+  .archive-flag-desktop {
+    display: none;
+  }
+
+  @media (min-width: 700px) {
+    .archive-flag-mobile {
+      display: none;
+    }
+    .archive-flag-desktop {
+      display: block;
+    }
+  }
+
+  .board-wrap {
+    position: relative;
+    width: 100%;
+    display: flex;
+    justify-content: center;
+  }
+
+  .archive-panel {
+    position: absolute;
+    top: 0;
+    left: 50%;
+    z-index: 100;
+    width: min(750px, 94vw);
+    max-height: 0;
+    overflow: hidden;
+    opacity: 0;
+    pointer-events: none;
+    transform: translateX(-50%) translateY(-10px);
+    transition: max-height 0.35s ease, opacity 0.25s ease, transform 0.35s ease;
+  }
+
+  .archive-panel.open {
+    max-height: 90vh;
+    overflow-y: auto;
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateX(-50%) translateY(0);
+  }
+
+  .archive-panel-inner {
+    position: relative;
+    background: var(--legal-paper);
+    background-image: repeating-linear-gradient(
+      to bottom,
+      transparent 0,
+      transparent 27px,
+      var(--legal-line) 27px,
+      var(--legal-line) 28px
+    );
+    border-radius: 4px;
+    /* 포스트잇(.sticky)과 동일한 그림자로 통일. */
+    box-shadow:
+      0 18px 30px -12px var(--paper-shadow),
+      0 3px 6px var(--paper-contact);
+    padding: 20px 20px 20px 40px;
+    margin: 4px 0 4px;
+  }
+
+  .archive-panel-inner::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 30px;
+    width: 1px;
+    background: var(--legal-margin);
+  }
+
+  .archive-title {
+    font-family: 'NostalgicMyoeunHeullim', 'Nanum Pen Script', cursive;
+    font-size: 22px;
+    font-weight: 400;
+    margin: 0 0 10px;
+    color: var(--ink);
+  }
+
+  /* "완료 기록"/"다가오는 일" 구간을 라벨 텍스트 없이 점선 하나로만
+     구분 — 정렬 기준이 서로 달라서(doneAt 최신순 vs dueDate 임박순)
+     한 리스트에 섞지는 않되, 글자 없이 선만 그어둠. */
+  .archive-section-divider {
+    border-bottom: 1px dashed var(--input-line);
+    margin: 0 0 10px;
+  }
+
+  .archive-section-title-spaced {
+    margin-top: 18px;
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  .trash-toggle-btn {
+    background: none;
+    border: none;
+    font-family: 'Gaegu', cursive, sans-serif;
+    font-size: 13px;
+    color: var(--ink-soft);
+    cursor: pointer;
+    padding: 2px 4px;
+    opacity: 0.75;
+    white-space: nowrap;
+    transition: opacity 0.15s ease, color 0.15s ease;
+  }
+
+  .trash-toggle-btn:hover {
+    opacity: 1;
+    color: var(--accent);
+  }
+
+  .archive-upcoming {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .archive-close-btn {
+    position: absolute;
+    top: 10px;
+    right: 14px;
+    background: none;
+    border: none;
+    font-size: 15px;
+    line-height: 1;
+    color: var(--ink-soft);
+    cursor: pointer;
+    padding: 4px;
+    opacity: 0.7;
+    transition: opacity 0.15s ease, color 0.15s ease;
+  }
+
+  .archive-close-btn:hover {
+    opacity: 1;
+    color: var(--accent);
+  }
+
+  .archive-date-group {
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+    padding: 6px 0 0;
+    list-style: none;
+    break-inside: avoid;
+  }
+
+  /* 모바일에서는 "18일 (금)" 라벨이 항상 옆에서 폭을 갉아먹어서 항목
+     텍스트가 더 자주/좁게 줄바꿈됨 — 날짜 라벨을 아예 위 줄로 떨어뜨려서
+     항목들이 패널 폭을 거의 그대로 쓰게 함. PC에서는 기존처럼 옆에 붙임. */
+  @media (max-width: 480px) {
+    .archive-date-group {
+      flex-direction: column;
+      align-items: stretch;
+      gap: 2px;
+    }
+
+    .archive-date-heading {
+      width: auto;
+      padding-top: 0;
+    }
+  }
+
+  /* 패널이 데스크탑 폭(700px 이상 뷰포트 — 다른 곳의 archive-flag 데스크탑/
+     모바일 분기와 같은 기준)일 때는 넓어진 가로 공간을 살려 2단으로,
+     좁은(모바일) 화면에서는 기존처럼 1단으로 보여줌. */
+  @media (min-width: 700px) {
+    .archive-groups .task-list {
+      column-count: 2;
+      column-gap: 28px;
+    }
+  }
+
+  .archive-date-heading {
+    flex: 0 0 auto;
+    width: 52px;
+    font-family: 'NostalgicMyoeunHeullim', 'Gaegu', cursive, sans-serif;
+    font-size: 14px;
+    color: var(--ink-soft);
+    letter-spacing: 0.4px;
+    padding-top: 3px;
+  }
+
+  .archive-date-items {
+    flex: 1;
+    min-width: 0;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .archive-item {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+    padding: 3px 0;
+    list-style: none;
+  }
+
+  /* 되살리기 날짜 피커가 열리면 좁은 화면에서 제목/버튼과 한 줄에 끼어
+     들어가려다 제목 칸이 거의 0폭까지 눌려서 글자가 한 자씩 세로로
+     쪼개져 보였음 — 아예 다음 줄 전체를 차지하게 떨어뜨림. */
+  .archive-item .date-picker-row {
+    flex-basis: 100%;
+  }
+
+  .archive-item-text {
+    flex: 1;
+    min-width: 0;
+    font-family: 'NostalgicMyoeunHeullim', 'Gaegu', cursive, sans-serif;
+    font-size: 16px;
+    color: var(--ink-soft);
+    text-decoration: line-through;
+    text-decoration-color: var(--ink-soft);
+    word-break: break-word;
+  }
+
+  /* "다가오는 일" 항목은 완료된 게 아니라 그냥 대기 중인 일이라, 완료
+     기록처럼 취소선을 긋지 않고 보통 텍스트 색으로 보여줌. */
+  .upcoming-item-text {
+    text-decoration: none;
+  }
+
+  .archive-item-controls {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .archive-revive-btn {
+    background: none;
+    border: none;
+    font-family: 'Gaegu', cursive, sans-serif;
+    font-size: 13px;
+    color: var(--ink-soft);
+    cursor: pointer;
+    padding: 2px 4px;
+    opacity: 0.75;
+    transition: opacity 0.15s ease, color 0.15s ease;
+  }
+
+  .archive-revive-btn:hover {
+    opacity: 1;
+    color: var(--accent);
+  }
+
+  .archive-groups .task-list {
+    padding-left: 4px;
+  }
+
+  .back-btn {
+    flex: 0 0 auto;
+    /* checkbox와 같은 20px 박스로 고정 — 안 그러면 이 버튼 자체 폭이
+       달라서 waiting의 항목 텍스트만 다른 보드보다 오른쪽에서 시작함. */
+    width: 20px;
+    height: 20px;
+    margin-top: 3px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: none;
+    border: none;
+    font-size: 17px;
+    line-height: 1;
+    color: var(--ink);
+    cursor: pointer;
+    padding: 0;
+    opacity: 0.75;
+    transition: opacity 0.15s ease, transform 0.15s ease;
+  }
+
+  .back-btn:hover {
+    opacity: 1;
+    transform: translateX(-2px);
+  }
+
+  .sticky {
+    position: relative;
+    width: min(380px, 86vw);
+    background: var(--paper);
+    padding: 30px 24px 20px;
+    border-radius: 3px 14px 4px 16px;
+    box-shadow:
+      0 18px 30px -12px var(--paper-shadow),
+      0 3px 6px var(--paper-contact);
+    transform: rotate(var(--rot, -1.4deg));
+    transition: transform 0.25s ease, box-shadow 0.25s ease;
+  }
+
+  @media (max-width: 480px) {
+    .sticky {
+      /* 캡(380px)은 PC와 동일하게 두고, 좁은 화면에서 배경 여백을 줄이기
+         위해 vw 비율만 더 크게(86 -> 94) 잡음. */
+      width: min(380px, 94vw);
+    }
+  }
+
+  .sticky:hover, .sticky:focus-within {
+    transform: rotate(calc(var(--rot, -1.4deg) * 0.4)) translateY(-5px);
+    box-shadow:
+      0 26px 34px -14px var(--paper-shadow),
+      0 4px 8px var(--paper-contact);
+  }
+
+  .tape {
+    position: absolute;
+    top: -14px;
+    left: 50%;
+    width: 74px;
+    height: 26px;
+    background: var(--tape);
+    border: 1px solid var(--tape-edge);
+    transform: translateX(-50%) rotate(3deg);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+  }
+
+  .sticky-title {
+    font-family: 'NostalgicMyoeunHeullim', 'Nanum Pen Script', cursive;
+    font-size: 26px;
+    margin: 0 0 14px;
+    font-weight: 400;
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+  }
+
+  /* lupin mode — waiting 스티키를 뒤집으면 나오는 개인용 숨김 메모장.
+     별도 카드가 아니라 같은 노트의 뒷면이라는 물리적 은유가 핵심이라,
+     실제로 두 면을 겹쳐 쌓지 않고 뒤집는 애니메이션의 중간 지점(카드가
+     옆으로 서서 안 보이는 순간)에 표시 중인 면만 바꿔치기함 — 그래야
+     waiting/lupin 리스트 길이가 달라도 카드 높이가 내용에 맞게 자연스럽게
+     따라감. 뒤집기 버튼은 someday 스티키의 접힘 화살표(.toggle-arrow)와
+     같은 자리 — 제목 줄 오른쪽 끝 — 에 숨김 없이 그대로 노출.  */
+  .lupin-flip-btn {
+    margin-left: auto;
+    background: none;
+    border: none;
+    font-size: 15px;
+    line-height: 1;
+    padding: 0;
+    cursor: pointer;
+    color: var(--ink-soft);
+    transition: color 0.15s ease, transform 0.15s ease;
+  }
+
+  .lupin-flip-btn:hover,
+  .lupin-flip-btn:focus-visible {
+    color: var(--accent);
+    transform: scale(1.15);
+  }
+
+  @keyframes lupin-flip {
+    0% { transform: rotate(var(--rot, 0deg)) rotateY(0deg); }
+    50% { transform: rotate(var(--rot, 0deg)) rotateY(94deg); }
+    100% { transform: rotate(var(--rot, 0deg)) rotateY(0deg); }
+  }
+
+  .sticky-flipping {
+    animation: lupin-flip 0.6s cubic-bezier(0.45, 0.05, 0.55, 0.95);
+  }
+
+  .sticky-title .flower {
+    color: var(--accent);
+    font-size: 18px;
+  }
+
+  .task-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .task-item {
+    padding: 5px 0;
+    position: relative;
+  }
+
+  .task-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .task-item.urgent .task-row {
+    background: var(--urgent-bg);
+    border-radius: 4px;
+    margin: -2px -6px;
+    padding: 2px 6px;
+  }
+
+  .urgent-btn {
+    flex: 0 0 auto;
+    background: none;
+    border: none;
+    color: var(--ink-soft);
+    font-size: 15px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 2px 3px;
+    opacity: 0.6;
+    transition: opacity 0.15s ease, color 0.15s ease, transform 0.15s ease;
+  }
+
+  .urgent-btn:hover {
+    opacity: 1;
+    transform: scale(1.1);
+  }
+
+  .task-item.urgent .urgent-btn,
+  .urgent-btn.draft-active {
+    color: var(--urgent);
+    opacity: 1;
+  }
+
+  @keyframes urgent-alert-in {
+    0% { transform: scale(1) rotate(0); box-shadow: 0 0 0 0 var(--urgent-bg); }
+    15% { transform: scale(1.05) rotate(-2deg); box-shadow: 0 0 0 5px var(--urgent-bg); }
+    30% { transform: scale(0.98) rotate(2deg); }
+    45% { transform: scale(1.04) rotate(-1.5deg); box-shadow: 0 0 0 2px var(--urgent-bg); }
+    60% { transform: scale(0.99) rotate(1deg); }
+    75% { transform: scale(1.02) rotate(-0.5deg); }
+    100% { transform: scale(1) rotate(0); box-shadow: 0 0 0 0 rgba(0, 0, 0, 0); }
+  }
+
+  .urgent-flash-in .task-row {
+    animation: urgent-alert-in 0.5s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+    transform-origin: center left;
+  }
+
+  @keyframes urgent-sigh-out {
+    0% { transform: scale(1) translateY(0); opacity: 1; }
+    35% { transform: scale(1.015) translateY(-2px); opacity: 0.85; }
+    65% { transform: scale(0.985) translateY(3px); opacity: 1; }
+    100% { transform: scale(1) translateY(0); opacity: 1; }
+  }
+
+  .urgent-flash-out .task-row {
+    animation: urgent-sigh-out 0.7s cubic-bezier(0.33, 1, 0.68, 1) both;
+    transform-origin: center left;
+  }
+
+  /* waiting/someday/pray later -> gotta do, 그리고 gotta do -> waiting 로
+     넘어간 항목이 잘 도착했음을 알리는 가벼운 흔들림. */
+  @keyframes move-arrive-wiggle {
+    0%, 100% { transform: rotate(0); }
+    20% { transform: rotate(-3deg); }
+    40% { transform: rotate(2.5deg); }
+    60% { transform: rotate(-2deg); }
+    80% { transform: rotate(1deg); }
+  }
+
+  .move-arrive-wiggle .task-row {
+    animation: move-arrive-wiggle 0.45s ease-in-out both;
+    transform-origin: center left;
+  }
+
+  /* gotta do -> someday/pray later 로 넘어간 항목 — 나중에 할 일이라 강조는
+     필요 없지만, 드롭다운을 펼쳐놓고 보고 있었을 유저를 위해 갑자기 팝인
+     하지 않고 살짝 떠오르듯 부드럽게 나타남. */
+  @keyframes move-arrive-fade {
+    0% { opacity: 0; transform: translateY(-6px); }
+    100% { opacity: 1; transform: translateY(0); }
+  }
+
+  .move-arrive-fade {
+    animation: move-arrive-fade 0.35s ease-out both;
+  }
+
+  .checkbox {
+    flex: 0 0 auto;
+    width: 20px;
+    height: 20px;
+    margin-top: 3px;
+    border: 2px solid var(--ink);
+    border-radius: 3px 5px 4px 6px;
+    background: transparent;
+    cursor: pointer;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    -webkit-appearance: none;
+    appearance: none;
+    transition: border-color 0.2s ease, transform 0.15s ease;
+  }
+
+  .checkbox:hover {
+    transform: scale(1.06);
+  }
+
+  .checkbox:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  .check-icon {
+    width: 14px;
+    height: 14px;
+    overflow: visible;
+  }
+
+  .check-path {
+    fill: none;
+    stroke: var(--accent);
+    stroke-width: 3;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-dasharray: 20;
+    stroke-dashoffset: 20;
+    transition: stroke-dashoffset 0.28s ease;
+  }
+
+  .task-item.done .checkbox {
+    border-color: var(--ink-soft);
+  }
+
+  .task-item.done .check-path {
+    stroke-dashoffset: 0;
+  }
+
+  .task-text {
+    position: relative;
+    font-family: 'NostalgicMyoeunHeullim', 'Gaegu', cursive, sans-serif;
+    font-size: 19px;
+    line-height: 1.3;
+    flex: 1;
+    word-break: break-word;
+    transition: color 0.3s ease 0.05s;
+    cursor: text;
+  }
+
+  .task-edit-input {
+    flex: 1;
+    font-family: 'NostalgicMyoeunHeullim', 'Gaegu', cursive, sans-serif;
+    font-size: 19px;
+    line-height: 1.3;
+    color: var(--ink);
+    background: transparent;
+    border: none;
+    border-bottom: 1px dashed var(--accent);
+    outline: none;
+    padding: 0;
+    min-width: 0;
+  }
+
+  .task-item.done .task-text {
+    color: var(--ink-soft);
+  }
+
+  .task-item.urgent .task-text {
+    color: var(--urgent);
+  }
+
+  .task-item.urgent.done .task-text {
+    color: var(--ink-soft);
+    font-weight: 400;
+  }
+
+  .strike-line {
+    position: absolute;
+    left: 0;
+    top: 52%;
+    height: 2px;
+    width: 0%;
+    background: var(--accent);
+    transform: translateY(-50%) rotate(-1deg);
+    transition: width 0.32s ease;
+  }
+
+  .task-item.done .strike-line {
+    width: 104%;
+  }
+
+  .task-controls {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    max-height: 0;
+    overflow: hidden;
+    opacity: 0;
+    margin-top: 0;
+    padding-left: 28px;
+    padding-right: 2px;
+    transition: max-height 0.15s ease, opacity 0.15s ease, margin-top 0.15s ease;
+  }
+
+  .task-item:hover .task-controls,
+  .task-item:focus-within .task-controls {
+    max-height: 26px;
+    opacity: 1;
+    margin-top: 4px;
+  }
+
+  .delete-btn {
+    flex: 0 0 auto;
+    margin-left: auto;
+    background: none;
+    border: none;
+    color: var(--ink-soft);
+    font-size: 14px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 2px 3px;
+    opacity: 0.7;
+    transition: opacity 0.15s ease, transform 0.15s ease;
+  }
+
+  .delete-btn:hover {
+    opacity: 1;
+    transform: scale(1.1);
+  }
+
+  .move-btn {
+    flex: 0 0 auto;
+    background: none;
+    border: none;
+    font-size: 14px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 2px 3px;
+    opacity: 0.6;
+    transition: opacity 0.15s ease, transform 0.15s ease;
+  }
+
+  .move-btn:hover {
+    opacity: 1;
+    transform: scale(1.15);
+  }
+
+  .subtask-list {
+    list-style: none;
+    margin: 5px 0 0;
+    padding: 0 0 0 28px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 2px;
+  }
+
+  /* display:flex가 브라우저 기본 [hidden] 규칙(display:none)보다 우선
+     적용돼서 hidden 속성만으론 안 접힘 — 초안 하위 항목 칩 목록을 비었을
+     때 hidden으로 감출 때 필요(실제 항목의 subtask-list는 원래 있을 때만
+     DOM에 붙여서 이 문제가 없었음). */
+  .subtask-list[hidden] {
+    display: none;
+  }
+
+  .subtask-item {
+    display: inline-flex;
+    align-items: center;
+    position: relative;
+  }
+
+  .subtask-chip {
+    background: none;
+    border: none;
+    font-family: 'NostalgicMyoeunHeullim', 'Gaegu', cursive, sans-serif;
+    font-size: 14px;
+    line-height: 1.3;
+    color: var(--ink-soft);
+    cursor: pointer;
+    padding: 1px 2px;
+    word-break: break-word;
+  }
+
+  .subtask-edit-input {
+    font-family: 'NostalgicMyoeunHeullim', 'Gaegu', cursive, sans-serif;
+    font-size: 14px;
+    line-height: 1.3;
+    color: var(--ink-soft);
+    background: transparent;
+    border: none;
+    border-bottom: 1px dashed var(--accent);
+    outline: none;
+    padding: 1px 2px;
+  }
+
+  .subtask-item.done .subtask-chip {
+    text-decoration: line-through;
+    text-decoration-color: var(--ink-soft);
+    opacity: 0.6;
+  }
+
+  .subtask-delete-btn {
+    flex: 0 0 auto;
+    background: none;
+    border: none;
+    color: var(--ink-soft);
+    font-size: 12px;
+    line-height: 1;
+    cursor: pointer;
+    opacity: 0;
+    padding: 1px 2px 1px 0;
+    transition: opacity 0.15s ease, color 0.15s ease;
+  }
+
+  .subtask-item:hover .subtask-delete-btn,
+  .subtask-item:focus-within .subtask-delete-btn {
+    opacity: 1;
+  }
+
+  .subtask-delete-btn:hover {
+    color: var(--accent);
+  }
+
+  .add-subtask-toggle[hidden] {
+    display: none;
+  }
+
+  .add-subtask-toggle {
+    flex: 0 0 auto;
+    background: none;
+    border: none;
+    color: var(--ink-soft);
+    font-size: 15px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 2px 4px;
+    opacity: 0.6;
+    transition: opacity 0.15s ease, color 0.15s ease;
+  }
+
+  .add-subtask-toggle:hover {
+    opacity: 1;
+    color: var(--accent);
+  }
+
+  .add-subtask-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 0 0 28px;
+  }
+
+  .add-subtask-row[hidden] {
+    display: none;
+  }
+
+  .add-subtask-row .plus {
+    font-size: 14px;
+  }
+
+  .new-subtask-input {
+    flex: 1;
+    border: none;
+    background: transparent;
+    font-family: 'NostalgicMyoeunHeullim', 'Gaegu', cursive, sans-serif;
+    font-size: 14px;
+    color: var(--ink-soft);
+    outline: none;
+  }
+
+  .new-subtask-input::placeholder {
+    color: var(--ink-soft);
+    opacity: 0.7;
+  }
+
+  .divider {
+    display: flex;
+    justify-content: center;
+    color: var(--divider);
+    font-size: 15px;
+    letter-spacing: 2px;
+    padding: 6px 0 2px;
+    user-select: none;
+  }
+
+  .divider-oops {
+    font-family: 'NostalgicMyoeunHeullim', 'Gaegu', cursive, sans-serif;
+    color: var(--urgent);
+    letter-spacing: 0.5px;
+    opacity: 0.85;
+  }
+
+  .date-btn {
+    flex: 0 0 auto;
+    background: none;
+    border: none;
+    font-size: 14px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 2px 3px;
+    opacity: 0.6;
+    transition: opacity 0.15s ease, transform 0.15s ease;
+  }
+
+  .date-btn:hover {
+    opacity: 1;
+    transform: scale(1.15);
+  }
+
+  .due-badge {
+    flex: 0 0 auto;
+    font-family: 'Gaegu', cursive, sans-serif;
+    font-size: 12px;
+    color: var(--ink-soft);
+    background: var(--tape-edge);
+    border-radius: 10px;
+    padding: 1px 7px;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: opacity 0.15s ease;
+  }
+
+  .due-badge:hover {
+    opacity: 0.75;
+  }
+
+  .date-picker-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 0 0 28px;
+  }
+
+  .date-picker-row[hidden] {
+    display: none;
+  }
+
+  .date-picker-input {
+    font-family: 'Gaegu', cursive, sans-serif;
+    font-size: 13px;
+    color: var(--ink);
+    background: transparent;
+    border: 1px solid var(--input-line);
+    border-radius: 4px;
+    padding: 1px 4px;
+  }
+
+  .date-clear-btn {
+    background: none;
+    border: none;
+    font-family: 'Gaegu', cursive, sans-serif;
+    font-size: 12px;
+    color: var(--ink-soft);
+    cursor: pointer;
+    padding: 1px 2px;
+    opacity: 0.75;
+  }
+
+  .date-clear-btn[hidden] {
+    display: none;
+  }
+
+  .date-clear-btn:hover {
+    opacity: 1;
+    color: var(--accent);
+  }
+
+  .sticky-title-toggle {
+    display: flex;
+    align-items: baseline;
+    width: 100%;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0;
+    text-align: left;
+    color: var(--ink);
+  }
+
+  .sticky-title-toggle:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
+
+  /* 월 그룹 제목(예: "2026-09")은 포스트잇 제목과 같은 26px를 그대로
+     쓰기엔 done 패널 안에서 너무 커 보여서 살짝 줄임. */
+  .archive-groups .sticky-title-toggle {
+    font-size: 17px;
+    margin-bottom: 4px;
+  }
+
+  .toggle-arrow {
+    margin-left: auto;
+    font-size: 14px;
+    color: var(--ink-soft);
+    display: inline-block;
+    transition: transform 0.15s ease;
+  }
+
+  .toggle-arrow-open {
+    transform: rotate(180deg);
+  }
+
+  .collapsible-body[hidden] {
+    display: none;
+  }
+
+  .sticky-title-toggle-spaced {
+    margin-top: 14px;
+  }
+
+  .empty-hint {
+    color: var(--ink-soft);
+    font-family: 'NostalgicMyoeunHeullim', 'Gaegu', cursive, sans-serif;
+    font-size: 17px;
+    padding: 4px 0 8px;
+  }
+
+  .add-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    margin-top: 12px;
+    border-top: 1px dashed var(--input-line);
+    padding-top: 12px;
+    transition: background 0.15s ease, border-radius 0.15s ease;
+  }
+
+  .add-row.draft-urgent {
+    background: var(--urgent-bg);
+    border-radius: 4px;
+  }
+
+  /* draft-controls를 add-row 안에 두면 opacity:0이어도 flex 자리는 그대로
+     차지해서 "+"/입력창이 밀려남 — 그래서 .task-controls와 똑같이 별도
+     행으로 분리하고 max-height로 접어서 평소엔 자리 자체를 안 차지함. */
+  .draft-controls {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    max-height: 0;
+    overflow: hidden;
+    opacity: 0;
+    /* .task-controls와 같은 이유로 왼쪽을 띄움 — "+" 밑이 아니라
+       그 옆 텍스트("끄적이기..." 등) 시작 지점에 맞춰서 시작하게. */
+    padding-left: 28px;
+    transition: max-height 0.15s ease, opacity 0.15s ease, margin-top 0.15s ease;
+  }
+
+  .add-row-wrap:hover .draft-controls,
+  .add-row-wrap:focus-within .draft-controls {
+    max-height: 26px;
+    opacity: 1;
+    margin-top: 6px;
+  }
+
+  .plus {
+    color: var(--ink-soft);
+    font-size: 18px;
+    background: none;
+    border: none;
+    padding: 0;
+    font-family: inherit;
+    line-height: 1;
+    cursor: pointer;
+    transition: color 0.15s ease, transform 0.15s ease;
+  }
+
+  .plus:hover,
+  .plus:focus-visible {
+    color: var(--accent);
+    transform: scale(1.15);
+  }
+
+  .new-task-input {
+    flex: 1;
+    min-width: 0;
+    border: none;
+    background: transparent;
+    font-family: 'NostalgicMyoeunHeullim', 'Gaegu', cursive, sans-serif;
+    font-size: 18px;
+    color: var(--ink);
+    outline: none;
+  }
+
+  .new-task-input::placeholder {
+    color: var(--ink-soft);
+  }
+
+  .bezel {
+    height: 22px;
+    background: linear-gradient(to bottom, var(--bezel-top), var(--bezel-bot));
+    position: relative;
+    box-shadow: inset 0 1px 0 var(--bezel-highlight);
+  }
+
+  .bezel::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--bezel-highlight);
+    transform: translate(-50%, -50%);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    * {
+      transition-duration: 0.01ms !important;
+      animation-duration: 0.01ms !important;
+    }
+  }
