@@ -780,12 +780,19 @@
     background: var(--focus-box-fill);
   }
 
+  /* flex + justify-content:center로 위아래 여백을 똑같이 맞춤 — 하위
+     항목이 없을 때 텍스트가 위쪽으로 쏠려 보이던 문제(margin으로 아래쪽
+     여백만 더 생기던 것) 해결. 항목 사이 간격은 gap으로 통일. */
   .focus-task-box {
     margin: 0 0 16px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 6px;
   }
 
   .focus-picked-task {
-    margin: 0 0 6px;
+    margin: 0;
     font-family: 'NostalgicMyoeunHeullim', 'Gaegu', cursive, sans-serif;
     font-size: 20px;
     line-height: 1.35;
@@ -801,7 +808,7 @@
   ul.focus-subtask-list {
     justify-content: center;
     padding-left: 0;
-    margin: 6px 0 0;
+    margin: 0;
   }
 
   .focus-duration-hint {
@@ -841,6 +848,18 @@
   .focus-countdown-box {
     margin: 0 0 16px;
   }
+
+  /* 완료로 표시/나가기가 숫자 박스 하단에 그대로 들어감 — 새 박스를
+     만드는 게 아니라 이미 박스 안이라 테두리는 없음. */
+  .focus-countdown-actions {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-top: 14px;
+  }
+
 
   .focus-countdown-number {
     font-family: 'NostalgicMyoeunHeullim', 'Nanum Pen Script', cursive;
@@ -911,6 +930,7 @@
     display: flex;
     flex-direction: column;
     gap: 8px;
+    margin-top: 14px;
   }
 
   .focus-exit-confirm p {
