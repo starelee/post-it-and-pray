@@ -1137,6 +1137,58 @@
     animation: move-arrive-fade 0.35s ease-out both;
   }
 
+  /* 포커스 모드에서 "완료로 표시"를 누르면 gotta do로 돌아온 항목이 체크
+     처리(취소선)되기 직전에 한 번 신나게 흔들리면서 양옆에서 컨페티
+     이모지가 터져 나갔다 사라짐 — move-arrive-wiggle보다 더 크고 들뜬
+     흔들림. */
+  @keyframes celebrate-wiggle {
+    0% { transform: scale(1) rotate(0); }
+    15% { transform: scale(1.06) rotate(-4deg); }
+    30% { transform: scale(1.04) rotate(4deg); }
+    45% { transform: scale(1.05) rotate(-3deg); }
+    60% { transform: scale(1.02) rotate(2deg); }
+    80% { transform: scale(1.01) rotate(-1deg); }
+    100% { transform: scale(1) rotate(0); }
+  }
+
+  .celebrate-flash .task-row {
+    animation: celebrate-wiggle 0.6s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+    transform-origin: center left;
+  }
+
+  @keyframes celebrate-burst-left {
+    0% { opacity: 0; transform: translate(0, 0) scale(0.6) rotate(0deg); }
+    30% { opacity: 1; transform: translate(-10px, -14px) scale(1.15) rotate(-15deg); }
+    100% { opacity: 0; transform: translate(-18px, -32px) scale(0.9) rotate(-25deg); }
+  }
+
+  @keyframes celebrate-burst-right {
+    0% { opacity: 0; transform: translate(0, 0) scale(0.6) rotate(0deg); }
+    30% { opacity: 1; transform: translate(10px, -14px) scale(1.15) rotate(15deg); }
+    100% { opacity: 0; transform: translate(18px, -32px) scale(0.9) rotate(25deg); }
+  }
+
+  .celebrate-flash::before,
+  .celebrate-flash::after {
+    content: '🎉';
+    position: absolute;
+    top: 2px;
+    font-size: 18px;
+    line-height: 1;
+    pointer-events: none;
+  }
+
+  .celebrate-flash::before {
+    left: 22px;
+    animation: celebrate-burst-left 0.6s ease-out both;
+  }
+
+  .celebrate-flash::after {
+    content: '🎊';
+    left: 22px;
+    animation: celebrate-burst-right 0.6s ease-out both;
+  }
+
   .checkbox {
     flex: 0 0 auto;
     width: 20px;

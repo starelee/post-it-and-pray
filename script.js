@@ -5,6 +5,10 @@
   const SUPABASE_URL = 'https://ytnlgabrbrddfpjzzrrn.supabase.co';
   const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl0bmxnYWJyYnJkZGZwanp6cnJuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk1MzY1NzEsImV4cCI6MjEwNTExMjU3MX0.3H3oSigr6E649McUa8HFf9JYDbM1qIdZQGlJw6-WGro';
   const REORDER_DELAY = 300;
+  // 포커스 모드에서 "완료로 표시"를 눌렀을 때 뜨는 위글+빵빠레 축하
+  // 애니메이션 길이 — style.css의 celebrate-wiggle/celebrate-burst-* 지속
+  // 시간(0.6s)과 맞춰둠.
+  const FOCUS_CELEBRATE_MS = 600;
   const BOARD_IDS = ['today', 'waiting', 'someday', 'scheduled'];
   // Boards a task can be manually moved between with the move buttons.
   const MOVE_TARGET_IDS = ['today', 'waiting', 'someday'];
@@ -2878,9 +2882,26 @@
     }
   }
 
+  // 완료로 표시를 누르면 곧장 체크 처리하는 대신: 타이머 레이아웃 → 리스트로
+  // 뒤집히는 애니메이션(setTodayFocusOpen, 300ms)이 끝나 항목이 실제로 다시
+  // 보이는 시점에 맞춰 위글+빵빠레 축하 애니메이션을 먼저 보여주고, 그게
+  // 끝난 뒤에야 toggleTask로 체크 처리(취소선 애니메이션)함.
   function finishFocusAsDone() {
-    toggleTask(focusState.taskBoardId, focusState.taskId);
+    const boardId = focusState.taskBoardId;
+    const taskId = focusState.taskId;
     exitFocusMode(false);
+    setTimeout(() => {
+      const li = findTaskLi(taskId);
+      if (!li) {
+        toggleTask(boardId, taskId);
+        return;
+      }
+      li.classList.add('celebrate-flash');
+      setTimeout(() => {
+        li.classList.remove('celebrate-flash');
+        toggleTask(boardId, taskId);
+      }, FOCUS_CELEBRATE_MS);
+    }, 300);
   }
 
   function startFocusCountdown(durationSec) {
