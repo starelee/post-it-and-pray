@@ -6,9 +6,9 @@
   const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl0bmxnYWJyYnJkZGZwanp6cnJuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk1MzY1NzEsImV4cCI6MjEwNTExMjU3MX0.3H3oSigr6E649McUa8HFf9JYDbM1qIdZQGlJw6-WGro';
   const REORDER_DELAY = 300;
   // 포커스 모드에서 "완료로 표시"를 눌렀을 때 뜨는 위글+빵빠레 축하
-  // 애니메이션 길이 — style.css의 celebrate-wiggle/celebrate-burst-* 지속
-  // 시간(0.6s)과 맞춰둠.
-  const FOCUS_CELEBRATE_MS = 600;
+  // 애니메이션 길이 — style.css의 celebrate-burst-* 지속 시간(0.95s, 가장
+  // 오래 걸리는 애니메이션)과 맞춰둠.
+  const FOCUS_CELEBRATE_MS = 950;
   const BOARD_IDS = ['today', 'waiting', 'someday', 'scheduled'];
   // Boards a task can be manually moved between with the move buttons.
   const MOVE_TARGET_IDS = ['today', 'waiting', 'someday'];
@@ -2380,7 +2380,9 @@
     if (!focusState) {
       document.title = ORIGINAL_DOCUMENT_TITLE;
     } else if (focusState.step === 'running') {
-      document.title = formatFocusClock(focusState.remainingSec) + ' · f... focus 🍅';
+      document.title = focusState.paused
+        ? '⏸ ' + formatFocusClock(focusState.remainingSec) + ' · f... focus'
+        : formatFocusClock(focusState.remainingSec) + ' · f... focus 🍅';
     } else if (focusState.step === 'ended') {
       document.title = '⏰ 다 됐어요! · f... focus';
     } else {
@@ -2404,7 +2406,9 @@
         step: focusState.step,
         taskBoardId: focusState.taskBoardId,
         taskId: focusState.taskId,
-        endAt: focusState.endAt
+        endAt: focusState.endAt,
+        paused: !!focusState.paused,
+        remainingSec: focusState.remainingSec
       }));
     } catch (e) {
       /* ignore */
@@ -2421,7 +2425,9 @@
 
   // null이면 리스트 화면. 있으면 { step: 'pick-task'|'pick-duration'|
   // 'running'|'ended', taskBoardId, taskId, taskText, remainingSec,
-  // intervalId, exitConfirmOpen } — 어떤 보드(today/scheduled)에 실제로
+  // intervalId, exitConfirmOpen, paused } — paused는 running 단계에서만
+  // 의미 있고, true면 티커가 꺼진 채 remainingSec이 멈춘 시점 그대로임.
+  // 어떤 보드(today/scheduled)에 실제로
   // 들어있는 항목인지 taskBoardId로 들고 있어야 toggleTask/moveTask를
   // 그대로 재사용할 수 있음(scheduled로 표시된 오늘 마감/지난 마감 항목도
   // gotta do 카드에 같이 그려지므로).
@@ -2851,10 +2857,18 @@
       focusBodyEl.appendChild(makeFocusTaskBox());
       const countdownBox = document.createElement('div');
       countdownBox.className = 'focus-box focus-duration-box focus-countdown-box';
+      if (focusState.paused) countdownBox.classList.add('focus-paused');
       const num = document.createElement('div');
       num.className = 'focus-countdown-number';
       num.textContent = formatFocusClock(focusState.remainingSec);
       countdownBox.appendChild(num);
+
+      if (focusState.paused) {
+        const pausedTag = document.createElement('div');
+        pausedTag.className = 'focus-paused-tag';
+        pausedTag.textContent = '⏸ 일시정지';
+        countdownBox.appendChild(pausedTag);
+      }
 
       // 완료로 표시/시간 추가/나가기는 밑에 새 박스를 만드는 게 아니라 이
       // 숫자 박스 하단에 그대로 들어감 — #focusFooter는 running 단계에서
@@ -2882,6 +2896,12 @@
         const doneBtn = makeFocusFooterBtn('완료로 표시', 'focus-footer-btn-primary');
         doneBtn.addEventListener('click', finishFocusAsDone);
 
+        const pauseBtn = makeFocusFooterBtn(focusState.paused ? '계속하기' : '일시정지');
+        pauseBtn.addEventListener('click', () => {
+          if (focusState.paused) resumeFocusCountdown();
+          else pauseFocusCountdown();
+        });
+
         // "시간 변경"(전체 재설정) 대신 "시간 추가" — 전체 선택 화면으로
         // 안 바뀌고, 이 자리에서 버튼이 곧장 분 입력창으로 바뀌어 지금
         // 남은 시간 위에 그만큼 더해줌.
@@ -2907,7 +2927,10 @@
           if (e.key === 'Enter') {
             const min = parseInt(addTimeInput.value, 10);
             if (min > 0) {
-              focusState.endAt += min * 60 * 1000;
+              // 멈춰있는 동안엔 endAt이 재개할 때 remainingSec 기준으로
+              // 다시 잡히므로(resumeFocusCountdown), 지금 굳이 건드리지
+              // 않음 — 건드리면 재개 시 덮어써져 무의미해짐.
+              if (!focusState.paused) focusState.endAt += min * 60 * 1000;
               focusState.remainingSec += min * 60;
               saveFocusState();
               renderFocusPanel();
@@ -2926,6 +2949,7 @@
           renderFocusPanel();
         });
         actions.appendChild(doneBtn);
+        actions.appendChild(pauseBtn);
         actions.appendChild(addTimeBtn);
         actions.appendChild(addTimeInput);
         actions.appendChild(exitBtn);
@@ -2994,6 +3018,34 @@
     setLupinOpen(false);
     if (sideColEl) sideColEl.classList.add('focus-blurred');
     if (headerEl) headerEl.classList.add('focus-blurred');
+    saveFocusState();
+    renderFocusPanel();
+    startFocusTicker();
+  }
+
+  // 일시정지 — endAt까지 안 기다리고 지금 남은 시간을 굳혀서 remainingSec에
+  // 박아두고 티커를 끔. 재개 전까진 이 값이 그대로 진짜 남은 시간.
+  function pauseFocusCountdown() {
+    if (!focusState || focusState.paused) return;
+    if (focusState.intervalId) {
+      clearInterval(focusState.intervalId);
+      focusState.intervalId = null;
+    }
+    focusState.remainingSec = focusState.endAt
+      ? Math.max(0, Math.round((focusState.endAt - Date.now()) / 1000))
+      : focusState.remainingSec;
+    focusState.paused = true;
+    saveFocusState();
+    updateFocusDocumentTitle();
+    renderFocusPanel();
+  }
+
+  // 재개 — 멈춰있던 remainingSec 기준으로 endAt을 지금 시각에 새로 맞춰
+  // 잡고 티커를 다시 켬.
+  function resumeFocusCountdown() {
+    if (!focusState || !focusState.paused) return;
+    focusState.endAt = Date.now() + focusState.remainingSec * 1000;
+    focusState.paused = false;
     saveFocusState();
     renderFocusPanel();
     startFocusTicker();
@@ -3119,6 +3171,23 @@
       }
       if (data.step === 'pick-duration') {
         focusState = { step: 'pick-duration', taskBoardId: data.taskBoardId, taskId: data.taskId, taskText: task.text };
+      } else if (data.step === 'running' && data.paused) {
+        // 멈춰있던 동안은 시간이 흐르지 않으므로 endAt으로 다시 계산하지
+        // 않고 멈춘 시점의 remainingSec을 그대로 이어받음 — 티커도 다시
+        // 켜지 않음(재개 버튼을 눌러야 endAt이 새로 잡히고 티커가 시작됨).
+        focusState = {
+          step: 'running',
+          taskBoardId: data.taskBoardId,
+          taskId: data.taskId,
+          taskText: task.text,
+          endAt: data.endAt,
+          remainingSec: data.remainingSec || 0,
+          paused: true,
+          exitConfirmOpen: false
+        };
+        setLupinOpen(false);
+        if (sideColEl) sideColEl.classList.add('focus-blurred');
+        if (headerEl) headerEl.classList.add('focus-blurred');
       } else if (data.step === 'running' || data.step === 'ended') {
         const remaining = data.endAt ? Math.max(0, Math.round((data.endAt - Date.now()) / 1000)) : 0;
         focusState = {

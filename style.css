@@ -944,6 +944,18 @@
     text-align: center;
     color: var(--ink);
     padding: 4px 0;
+    transition: opacity 0.2s ease;
+  }
+
+  .focus-countdown-box.focus-paused .focus-countdown-number {
+    opacity: 0.45;
+  }
+
+  .focus-paused-tag {
+    text-align: center;
+    font-size: 14px;
+    color: var(--ink-soft);
+    margin-top: -6px;
   }
 
   .focus-empty-hint {
@@ -1158,14 +1170,16 @@
 
   @keyframes celebrate-burst-left {
     0% { opacity: 0; transform: translate(0, 0) scale(0.6) rotate(0deg); }
-    30% { opacity: 1; transform: translate(-10px, -14px) scale(1.15) rotate(-15deg); }
-    100% { opacity: 0; transform: translate(-18px, -32px) scale(0.9) rotate(-25deg); }
+    20% { opacity: 1; transform: translate(-10px, -14px) scale(1.15) rotate(-15deg); }
+    65% { opacity: 1; transform: translate(-15px, -25px) scale(1.05) rotate(-20deg); }
+    100% { opacity: 0; transform: translate(-20px, -36px) scale(0.9) rotate(-25deg); }
   }
 
   @keyframes celebrate-burst-right {
     0% { opacity: 0; transform: translate(0, 0) scale(0.6) rotate(0deg); }
-    30% { opacity: 1; transform: translate(10px, -14px) scale(1.15) rotate(15deg); }
-    100% { opacity: 0; transform: translate(18px, -32px) scale(0.9) rotate(25deg); }
+    20% { opacity: 1; transform: translate(10px, -14px) scale(1.15) rotate(15deg); }
+    65% { opacity: 1; transform: translate(15px, -25px) scale(1.05) rotate(20deg); }
+    100% { opacity: 0; transform: translate(20px, -36px) scale(0.9) rotate(25deg); }
   }
 
   .celebrate-flash::before,
@@ -1180,13 +1194,13 @@
 
   .celebrate-flash::before {
     left: 22px;
-    animation: celebrate-burst-left 0.6s ease-out both;
+    animation: celebrate-burst-left 0.95s ease-out both;
   }
 
   .celebrate-flash::after {
     content: '🎊';
     left: 22px;
-    animation: celebrate-burst-right 0.6s ease-out both;
+    animation: celebrate-burst-right 0.95s ease-out both;
   }
 
   .checkbox {
