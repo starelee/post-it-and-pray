@@ -2296,7 +2296,7 @@
     clearEl(focusFooterEl);
 
     if (focusState.step === 'pick-task') {
-      focusTitleEl.textContent = '뭐에 집중할까? 🍅';
+      focusTitleEl.textContent = 'focus... 🍅';
       const tasks = getTodayFocusableTasks();
       if (tasks.length === 0) {
         const hint = document.createElement('p');
