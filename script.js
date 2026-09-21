@@ -1697,6 +1697,10 @@
       if (task.done && !gracedToday) {
         archiveNow(boardId, id);
       } else {
+        // gotta do 카드 안에서 체크 후 구분선 아래 done 자리로 다시 나타나는
+        // 항목은 뚝 끊기지 않게 살짝 떠오르며 페이드인 — move-arrive-fade를
+        // 그대로 재사용(체크 해제해서 되돌아갈 때는 굳이 안 넣음).
+        if (task.done) moveHighlight = { id, mode: 'fade' };
         render(boardId);
         // A scheduled task due today/overdue is displayed inside today's
         // list, not scheduled's — refresh both so it lands in the right one.
