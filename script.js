@@ -2430,11 +2430,11 @@
       taskLabel.className = 'focus-picked-task';
       taskLabel.textContent = focusState.taskText;
       focusBodyEl.appendChild(taskLabel);
+      appendFocusSubtasks(focusBodyEl, focusState.taskBoardId, focusState.taskId);
       const num = document.createElement('div');
       num.className = 'focus-countdown-number';
       num.textContent = formatFocusClock(focusState.remainingSec);
       focusBodyEl.appendChild(num);
-      appendFocusSubtasks(focusBodyEl, focusState.taskBoardId, focusState.taskId);
 
       if (focusState.exitConfirmOpen) {
         const confirmWrap = document.createElement('div');
