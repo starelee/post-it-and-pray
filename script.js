@@ -953,9 +953,19 @@
         }
       });
 
-      // 내일 날짜로 지정하는 경우가 워낙 많아서 달력을 열지 않고 바로 찍을
-      // 수 있게 — dateInput의 change 리스너를 그대로 재사용하도록 값만
+      // someday/pray later(그리고 거기서 마감이 지나 today의 "oops, still
+      // here"로 넘어온 항목)에 달력을 열지 않고 바로 오늘/내일로 찍을 수
+      // 있게 — dateInput의 change 리스너를 그대로 재사용하도록 값만
       // 채워넣고 change 이벤트를 직접 쏨.
+      const todayBtn = document.createElement('button');
+      todayBtn.className = 'date-clear-btn';
+      todayBtn.type = 'button';
+      todayBtn.textContent = '오늘';
+      todayBtn.addEventListener('click', () => {
+        dateInput.value = todayStr();
+        dateInput.dispatchEvent(new Event('change'));
+      });
+
       const tomorrowBtn = document.createElement('button');
       tomorrowBtn.className = 'date-clear-btn';
       tomorrowBtn.type = 'button';
@@ -986,6 +996,7 @@
       });
 
       dateRow.appendChild(dateInput);
+      dateRow.appendChild(todayBtn);
       dateRow.appendChild(tomorrowBtn);
       dateRow.appendChild(clearBtn);
       dateRow.appendChild(cancelBtn);
@@ -1469,19 +1480,32 @@
     // 더블클릭으로 이름을 바꾸려는 순간에도 그 앞의 두 번의 click이 먼저
     // 따로 fire돼서 완료 표시가 잠깐 켜졌다 꺼지는 게 거슬렸음 — 클릭을
     // 곧장 처리하지 않고 살짝 늦춰서, 그 사이 dblclick이 오면 완료 토글
-    // 자체를 아예 취소하고 편집 모드로만 들어가게 함.
+    // 자체를 아예 취소하고 편집 모드로만 들어가게 함. 250ms는 실제
+    // 더블클릭 속도(보통 300~500ms 간격)보다 짧아서 놓치는 경우가 있어
+    // 400ms로 늘림 — 단일 클릭 반응이 아주 살짝 늦어지지만 더블클릭
+    // 인식이 훨씬 안정적임.
     let chipClickTimer = null;
     chip.addEventListener('click', () => {
       clearTimeout(chipClickTimer);
       chipClickTimer = setTimeout(() => {
         toggleSubtask(boardId, taskId, sub.id);
-      }, 250);
+      }, 400);
     });
     chip.addEventListener('dblclick', (e) => {
       e.stopPropagation();
       clearTimeout(chipClickTimer);
       startEditSubtask(boardId, taskId, sub.id);
     });
+
+    // 더블클릭으로 편집 들어가는 게 클릭 타이밍과 겹쳐서 헷갈린다는 피드백
+    // 때문에 추가한, 호버하면 삭제(×) 옆에 같이 뜨는 명시적 수정 버튼 —
+    // 더블클릭은 그대로 남겨두되(익숙한 사람은 계속 씀) 이게 기본 경로.
+    const edit = document.createElement('button');
+    edit.className = 'subtask-edit-btn';
+    edit.type = 'button';
+    edit.setAttribute('aria-label', '수정');
+    edit.textContent = '✎';
+    edit.addEventListener('click', () => startEditSubtask(boardId, taskId, sub.id));
 
     const del = document.createElement('button');
     del.className = 'subtask-delete-btn';
@@ -1491,6 +1515,7 @@
     del.addEventListener('click', () => deleteSubtask(boardId, taskId, sub.id));
 
     li.appendChild(chip);
+    li.appendChild(edit);
     li.appendChild(del);
     return li;
   }
@@ -1653,7 +1678,13 @@
         render('scheduled');
       } else {
         boards.scheduled.splice(idx, 1);
-        const backTo = task.from || 'today';
+        // 오늘 마감이거나 지난 마감이면 pray later... 카드가 아니라 이미
+        // gotta do 카드 안(dueToday/oops)에 그려지고 있었던 항목이라,
+        // 날짜를 지우면 원래 왔던 someday 등으로 돌아가는 대신 지금 보고
+        // 있던 그대로 today에 남아야 자연스러움. 아직 pray later...에만
+        // 있던(미래 날짜) 항목만 기존처럼 원래 보드로 돌려보냄.
+        const wasInTodayCard = task.dueDate <= todayStr();
+        const backTo = wasInTodayCard ? 'today' : (task.from || 'today');
         delete task.dueDate;
         delete task.from;
         boards[backTo].push(task);
@@ -2224,8 +2255,8 @@
 
   // focus mode (뽀모도로) — gotta do 카드 자체가 리스트 ↔ 타이머 레이아웃으로
   // 전환됨(별도 오버레이 없이 같은 카드 안에서 내용물만 갈아끼움). lupin
-  // 모드와 달리 "뒤집는" 은유가 아니라 "상태가 바뀌는" 것이라 3D 플립
-  // 대신 크로스페이드/스케일 전환을 씀.
+  // 모드와 똑같이 3D 플립 + 종이색 전환(--paper-focus)으로 "뒤집혀서
+  // 다른 용도의 카드가 된다"는 은유를 그대로 씀.
   const todayStickyEl = document.getElementById('todaySticky');
   const todayListEl = todayStickyEl.querySelector('[data-today-list]');
   const todayFocusEl = todayStickyEl.querySelector('[data-today-focus]');
@@ -2349,23 +2380,34 @@
       chip.className = 'subtask-chip';
       chip.setAttribute('aria-label', sub.done ? '완료 취소' : '완료 표시');
       chip.textContent = '[' + sub.text + ']';
-      // 원본 subtask-chip과 같은 규칙 — 더블클릭으로 이름을 바꾸려는 순간의
-      // 앞선 click 두 번이 먼저 완료 토글을 잠깐 켰다 끄는 게 거슬려서,
-      // click을 살짝 늦춰 그 사이 dblclick이 오면 토글 자체를 취소함.
+      // 원본 subtask-chip과 같은 규칙(400ms — 실제 더블클릭 속도보다 짧으면
+      // 놓침) — click을 살짝 늦춰 그 사이 dblclick이 오면 완료 토글 자체를
+      // 취소함.
       let chipClickTimer = null;
       chip.addEventListener('click', () => {
         clearTimeout(chipClickTimer);
         chipClickTimer = setTimeout(() => {
           toggleSubtask(boardId, taskId, sub.id);
           renderFocusPanel();
-        }, 250);
+        }, 400);
       });
       chip.addEventListener('dblclick', (e) => {
         e.stopPropagation();
         clearTimeout(chipClickTimer);
         startEditFocusSubtask(boardId, taskId, sub.id, chip);
       });
+
+      // 호버하면 뜨는 명시적 수정 버튼 — 더블클릭 타이밍과 헷갈리지 않는
+      // 기본 경로(메인 리스트의 subtask-edit-btn과 동일).
+      const editBtn = document.createElement('button');
+      editBtn.type = 'button';
+      editBtn.className = 'subtask-edit-btn';
+      editBtn.setAttribute('aria-label', '수정');
+      editBtn.textContent = '✎';
+      editBtn.addEventListener('click', () => startEditFocusSubtask(boardId, taskId, sub.id, chip));
+
       li.appendChild(chip);
+      li.appendChild(editBtn);
       list.appendChild(li);
     });
     container.appendChild(list);
@@ -2661,9 +2703,10 @@
     }, 1000);
   }
 
-  // 리스트 ↔ 타이머 레이아웃 크로스페이드 — lupin의 3D 플립과 달리
-  // "변신"이 아니라 "상태 전환"이라 애니메이션 중간(스케일이 가장 작아지는
-  // 지점)에 두 레이아웃을 갈아끼움.
+  // 리스트 ↔ 타이머 레이아웃 전환 — lupin 모드와 똑같은 3D 플립(같은
+  // .sticky-flipping 애니메이션 재사용)과 종이색 전환(--paper를 토마토색
+  // 으로) 방식을 그대로 씀. 카드가 "뒤집혀서" 다른 용도의 카드로 바뀐다는
+  // 물리적 은유가 lupin과 같은 맥락이라는 피드백을 반영.
   function setTodayFocusOpen(open, focusInputAfter) {
     if (todayFocusVisible === open) {
       if (!open && focusInputAfter && !todaySwapPending) {
@@ -2675,18 +2718,28 @@
     todayFocusVisible = open;
     todaySwapPending = true;
     clearTimeout(todaySwapTimer);
-    todayStickyEl.classList.add('today-swapping');
+    todayStickyEl.classList.add('sticky-flipping');
     todaySwapTimer = setTimeout(() => {
       todayListEl.hidden = open;
       todayFocusEl.hidden = !open;
+      // lupin은 원래 상태(waiting)도 --paper-waiting이라는 별도 변수라
+      // 그대로 세팅하면 되지만, today의 기본 종이색 변수 이름 자체가
+      // --paper라서 "닫힐 때 --paper를 var(--paper)로" 쓰면 자기 자신을
+      // 참조하는 순환 참조가 되어 무효화됨 — 닫힐 땐 아예 인라인 오버라이드를
+      // 지워서 전역 --paper를 그대로 물려받게 함.
+      if (open) {
+        todayStickyEl.style.setProperty('--paper', 'var(--paper-focus)');
+      } else {
+        todayStickyEl.style.removeProperty('--paper');
+      }
       todaySwapPending = false;
       if (!open && focusInputAfter) {
         const input = todayListEl.querySelector('[data-newtask]');
         if (input) input.focus();
       }
-    }, 160);
+    }, 300);
     todayStickyEl.addEventListener('animationend', function handler() {
-      todayStickyEl.classList.remove('today-swapping');
+      todayStickyEl.classList.remove('sticky-flipping');
       todayStickyEl.removeEventListener('animationend', handler);
     });
   }
@@ -2766,6 +2819,7 @@
     todayFocusVisible = true;
     todayListEl.hidden = true;
     todayFocusEl.hidden = false;
+    todayStickyEl.style.setProperty('--paper', 'var(--paper-focus)');
     renderFocusPanel();
   }
 

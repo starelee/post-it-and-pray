@@ -12,6 +12,7 @@
     --paper-waiting: #ffe1ac;
     --paper-someday: #dbe2f7;
     --paper-lupin: #d9d5c9;
+    --paper-focus: #ffb9a8;
     --paper-shadow: rgba(70, 60, 20, 0.28);
     --paper-contact: rgba(70, 60, 20, 0.16);
     --ink: #4a4034;
@@ -40,6 +41,7 @@
       --paper-waiting: #55371b;
       --paper-someday: #2c3350;
       --paper-lupin: #2e2c27;
+      --paper-focus: #6e3326;
       --paper-shadow: rgba(0, 0, 0, 0.5);
       --paper-contact: rgba(0, 0, 0, 0.35);
       --ink: #ecdfc2;
@@ -68,6 +70,7 @@
     --paper-waiting: #55371b;
     --paper-someday: #2c3350;
     --paper-lupin: #2e2c27;
+    --paper-focus: #6e3326;
     --paper-shadow: rgba(0, 0, 0, 0.5);
     --paper-contact: rgba(0, 0, 0, 0.35);
     --ink: #ecdfc2;
@@ -672,21 +675,6 @@
     animation: lupin-flip 0.6s cubic-bezier(0.45, 0.05, 0.55, 0.95);
   }
 
-  /* focus mode(뽀모도로) — gotta do 카드가 리스트 ↔ 타이머 레이아웃으로
-     전환됨. lupin처럼 "뒤집는" 물리적 은유가 아니라 "상태가 바뀌는"
-     것이므로 3D 플립 대신 스케일이 살짝 줄었다 돌아오는 크로스페이드를
-     씀 — 실제 레이아웃 교체는 스케일이 가장 작아지는 중간 지점(JS에서
-     타이밍 맞춰 hidden 토글)에 일어남. */
-  @keyframes today-crossfade {
-    0% { opacity: 1; transform: scale(1); }
-    50% { opacity: 0; transform: scale(0.97); }
-    100% { opacity: 1; transform: scale(1); }
-  }
-
-  .today-swapping {
-    animation: today-crossfade 0.32s ease;
-  }
-
   .focus-enter-btn {
     margin-left: auto;
     background: none;
@@ -1275,6 +1263,7 @@
     opacity: 0.6;
   }
 
+  .subtask-edit-btn,
   .subtask-delete-btn {
     flex: 0 0 auto;
     background: none;
@@ -1288,11 +1277,14 @@
     transition: opacity 0.15s ease, color 0.15s ease;
   }
 
+  .subtask-item:hover .subtask-edit-btn,
+  .subtask-item:focus-within .subtask-edit-btn,
   .subtask-item:hover .subtask-delete-btn,
   .subtask-item:focus-within .subtask-delete-btn {
     opacity: 1;
   }
 
+  .subtask-edit-btn:hover,
   .subtask-delete-btn:hover {
     color: var(--accent);
   }
