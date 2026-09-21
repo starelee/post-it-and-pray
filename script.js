@@ -2237,6 +2237,38 @@
   const sideColEl = document.querySelector('.side-col');
   const FOCUS_DURATIONS_MIN = [3, 5, 15, 25];
   const FOCUS_TITLE_TEXT = 'f... focus 🍅';
+  const FOCUS_STORAGE_KEY = 'postit-focus-session-v1';
+
+  // 새로고침해도 타이머가 강제로 끊기지 않게 진행 상황을 localStorage에
+  // 같이 저장해둠 — 남은 시간은 초 단위 카운터 대신 "언제 0에 도달하는지"
+  // (endAt, 절대 시각)로 들고 있다가 매번 그 시각과 현재 시각의 차이로
+  // 다시 계산함. 그래야 새로고침/짧은 절전 등으로 흐른 시간이 자동으로
+  // 반영되고, setInterval이 배경 탭에서 늦게 불려도 화면 숫자가 밀리지
+  // 않음.
+  function saveFocusState() {
+    try {
+      if (!focusState) {
+        localStorage.removeItem(FOCUS_STORAGE_KEY);
+        return;
+      }
+      localStorage.setItem(FOCUS_STORAGE_KEY, JSON.stringify({
+        step: focusState.step,
+        taskBoardId: focusState.taskBoardId,
+        taskId: focusState.taskId,
+        endAt: focusState.endAt
+      }));
+    } catch (e) {
+      /* ignore */
+    }
+  }
+
+  function clearFocusState() {
+    try {
+      localStorage.removeItem(FOCUS_STORAGE_KEY);
+    } catch (e) {
+      /* ignore */
+    }
+  }
 
   // null이면 리스트 화면. 있으면 { step: 'pick-task'|'pick-duration'|
   // 'running'|'ended', taskBoardId, taskId, taskText, remainingSec,
@@ -2346,6 +2378,7 @@
           btn.textContent = t.text;
           btn.addEventListener('click', () => {
             focusState = { step: 'pick-duration', taskBoardId: t.boardId, taskId: t.id, taskText: t.text };
+            saveFocusState();
             renderFocusPanel();
           });
           list.appendChild(btn);
@@ -2364,11 +2397,16 @@
       taskLabel.className = 'focus-picked-task';
       taskLabel.textContent = focusState.taskText;
       focusBodyEl.appendChild(taskLabel);
+      // 하위 항목은 점선 박스 "위"에 — 실제 점선 테두리는 아래 박스
+      // 자체가 두르고 있으므로 그 앞에 붙이기만 하면 됨.
       appendFocusSubtasks(focusBodyEl, focusState.taskBoardId, focusState.taskId);
+
+      const durationBox = document.createElement('div');
+      durationBox.className = 'focus-duration-box';
       const hint = document.createElement('p');
       hint.className = 'focus-duration-hint';
       hint.textContent = '얼마나 집중할까요?';
-      focusBodyEl.appendChild(hint);
+      durationBox.appendChild(hint);
       const row = document.createElement('div');
       row.className = 'focus-duration-row';
       FOCUS_DURATIONS_MIN.forEach(min => {
@@ -2379,7 +2417,8 @@
         btn.addEventListener('click', () => startFocusCountdown(min * 60));
         row.appendChild(btn);
       });
-      focusBodyEl.appendChild(row);
+      durationBox.appendChild(row);
+      focusBodyEl.appendChild(durationBox);
       return;
     }
 
@@ -2465,21 +2504,32 @@
 
   function startFocusCountdown(durationSec) {
     focusState.step = 'running';
+    focusState.endAt = Date.now() + durationSec * 1000;
     focusState.remainingSec = durationSec;
     focusState.exitConfirmOpen = false;
     // waiting 카드는 무조건 앞면 상태로 만들고 들어감 — 이미 앞면이어도
     // 그대로 두면 되는 거라 별도 조건 분기가 필요 없음.
     setLupinOpen(false);
     if (sideColEl) sideColEl.classList.add('focus-blurred');
+    saveFocusState();
     renderFocusPanel();
+    startFocusTicker();
+  }
+
+  // endAt(0에 도달하는 절대 시각)과 지금 시각의 차이로 매번 다시 계산 —
+  // 새로고침 직후 복원할 때도, 배경 탭이라 setInterval이 늦게 불릴 때도
+  // 그냥 이 함수 하나로 항상 정확한 남은 시간이 나옴.
+  function startFocusTicker() {
+    if (!focusState || !focusState.endAt) return;
     focusState.intervalId = setInterval(() => {
       if (!focusState) return;
-      focusState.remainingSec--;
-      if (focusState.remainingSec <= 0) {
-        focusState.remainingSec = 0;
+      const remaining = Math.max(0, Math.round((focusState.endAt - Date.now()) / 1000));
+      focusState.remainingSec = remaining;
+      if (remaining <= 0) {
         clearInterval(focusState.intervalId);
         focusState.intervalId = null;
         focusState.step = 'ended';
+        saveFocusState();
       }
       renderFocusPanel();
     }, 1000);
@@ -2518,12 +2568,14 @@
   function exitFocusMode(focusInputAfter) {
     if (focusState && focusState.intervalId) clearInterval(focusState.intervalId);
     focusState = null;
+    clearFocusState();
     if (sideColEl) sideColEl.classList.remove('focus-blurred');
     setTodayFocusOpen(false, focusInputAfter);
   }
 
   function enterFocusPickTask() {
     focusState = { step: 'pick-task' };
+    saveFocusState();
     renderFocusPanel();
     setTodayFocusOpen(true);
   }
@@ -2532,8 +2584,62 @@
     const task = boards[boardId] && boards[boardId].find(t => t.id === taskId);
     if (!task) return;
     focusState = { step: 'pick-duration', taskBoardId: boardId, taskId: taskId, taskText: task.text };
+    saveFocusState();
     renderFocusPanel();
     setTodayFocusOpen(true);
+  }
+
+  // 새로고침 직후 저장된 세션을 그대로 복원 — 카운트다운 중이었다면 흐른
+  // 시간만큼 remainingSec을 다시 계산해서 이어붙이고(다 됐으면 곧장 ended
+  // 단계로), waiting 리셋/블러 등 진입 시 부수효과도 startFocusCountdown과
+  // 동일하게 다시 적용함. 대상 항목이 그새 지워졌거나 완료됐으면 그냥
+  // 포기하고 리스트 화면으로 둠. 페이드 애니메이션 없이 처음부터 그
+  // 화면으로 떠야 하므로 setTodayFocusOpen 대신 hidden을 직접 건드림.
+  function restoreFocusSession() {
+    let data;
+    try {
+      const raw = localStorage.getItem(FOCUS_STORAGE_KEY);
+      if (!raw) return;
+      data = JSON.parse(raw);
+    } catch (e) {
+      return;
+    }
+    if (!data || !data.step) return;
+
+    if (data.step === 'pick-task') {
+      focusState = { step: 'pick-task' };
+    } else {
+      const task = boards[data.taskBoardId] && boards[data.taskBoardId].find(t => t.id === data.taskId);
+      if (!task || task.done) {
+        clearFocusState();
+        return;
+      }
+      if (data.step === 'pick-duration') {
+        focusState = { step: 'pick-duration', taskBoardId: data.taskBoardId, taskId: data.taskId, taskText: task.text };
+      } else if (data.step === 'running' || data.step === 'ended') {
+        const remaining = data.endAt ? Math.max(0, Math.round((data.endAt - Date.now()) / 1000)) : 0;
+        focusState = {
+          step: remaining > 0 ? 'running' : 'ended',
+          taskBoardId: data.taskBoardId,
+          taskId: data.taskId,
+          taskText: task.text,
+          endAt: data.endAt,
+          remainingSec: remaining,
+          exitConfirmOpen: false
+        };
+        setLupinOpen(false);
+        if (sideColEl) sideColEl.classList.add('focus-blurred');
+        if (remaining > 0) startFocusTicker();
+        else saveFocusState();
+      } else {
+        return;
+      }
+    }
+
+    todayFocusVisible = true;
+    todayListEl.hidden = true;
+    todayFocusEl.hidden = false;
+    renderFocusPanel();
   }
 
   if (focusEnterBtn) focusEnterBtn.addEventListener('click', enterFocusPickTask);
@@ -2715,5 +2821,6 @@
     openAddSubtaskRow(null, Number(li.dataset.id), true);
   });
 
+  restoreFocusSession();
   renderAll();
 })();
