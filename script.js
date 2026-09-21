@@ -2559,8 +2559,9 @@
       num.className = 'focus-countdown-number';
       num.textContent = formatFocusClock(focusState.remainingSec);
       countdownBox.appendChild(num);
-      focusBodyEl.appendChild(countdownBox);
 
+      // 완료로 표시/나가기는 밑에 새 박스를 만드는 게 아니라 이 숫자 박스
+      // 하단에 그대로 들어감 — #focusFooter는 running 단계에서 더는 안 씀.
       if (focusState.exitConfirmOpen) {
         const confirmWrap = document.createElement('div');
         confirmWrap.className = 'focus-exit-confirm';
@@ -2577,8 +2578,10 @@
         });
         confirmWrap.appendChild(yesBtn);
         confirmWrap.appendChild(noBtn);
-        focusFooterEl.appendChild(confirmWrap);
+        countdownBox.appendChild(confirmWrap);
       } else {
+        const actions = document.createElement('div');
+        actions.className = 'focus-countdown-actions';
         const doneBtn = makeFocusFooterBtn('완료로 표시', 'focus-footer-btn-primary');
         doneBtn.addEventListener('click', finishFocusAsDone);
         const exitBtn = makeFocusFooterBtn('나가기');
@@ -2586,9 +2589,11 @@
           focusState.exitConfirmOpen = true;
           renderFocusPanel();
         });
-        focusFooterEl.appendChild(doneBtn);
-        focusFooterEl.appendChild(exitBtn);
+        actions.appendChild(doneBtn);
+        actions.appendChild(exitBtn);
+        countdownBox.appendChild(actions);
       }
+      focusBodyEl.appendChild(countdownBox);
       return;
     }
 
