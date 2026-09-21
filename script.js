@@ -2236,6 +2236,7 @@
   const focusBackBtn = document.getElementById('focusBackBtn');
   const sideColEl = document.querySelector('.side-col');
   const FOCUS_DURATIONS_MIN = [3, 5, 15, 25];
+  const FOCUS_TITLE_TEXT = 'f... focus 🍅';
 
   // null이면 리스트 화면. 있으면 { step: 'pick-task'|'pick-duration'|
   // 'running'|'ended', taskBoardId, taskId, taskText, remainingSec,
@@ -2283,6 +2284,33 @@
     return active.concat(dueToday, oops);
   }
 
+  // 카운트다운 화면에서도 하위 항목을 하나씩 체크할 수 있게 — 기존
+  // toggleSubtask를 그대로 재사용하되, 그쪽은 원본 task-item(지금은 숨겨진
+  // gotta do 리스트 쪽)의 DOM만 직접 건드리고 focus 패널은 모르기 때문에
+  // 토글 후 renderFocusPanel을 우리가 직접 다시 불러줌.
+  function appendFocusSubtasks(container, boardId, taskId) {
+    const task = boards[boardId] && boards[boardId].find(t => t.id === taskId);
+    if (!task || !task.subtasks || task.subtasks.length === 0) return;
+    const list = document.createElement('ul');
+    list.className = 'subtask-list focus-subtask-list';
+    task.subtasks.forEach(sub => {
+      const li = document.createElement('li');
+      li.className = 'subtask-item' + (sub.done ? ' done' : '');
+      const chip = document.createElement('button');
+      chip.type = 'button';
+      chip.className = 'subtask-chip';
+      chip.setAttribute('aria-label', sub.done ? '완료 취소' : '완료 표시');
+      chip.textContent = '[' + sub.text + ']';
+      chip.addEventListener('click', () => {
+        toggleSubtask(boardId, taskId, sub.id);
+        renderFocusPanel();
+      });
+      li.appendChild(chip);
+      list.appendChild(li);
+    });
+    container.appendChild(list);
+  }
+
   function makeFocusFooterBtn(text, extraClass) {
     const btn = document.createElement('button');
     btn.type = 'button';
@@ -2301,7 +2329,7 @@
     if (focusBackBtn) focusBackBtn.hidden = isFocusLocked();
 
     if (focusState.step === 'pick-task') {
-      focusTitleEl.textContent = 'focus... 🍅';
+      focusTitleEl.textContent = FOCUS_TITLE_TEXT;
       const tasks = getTodayFocusableTasks();
       if (tasks.length === 0) {
         const hint = document.createElement('p');
@@ -2328,7 +2356,15 @@
     }
 
     if (focusState.step === 'pick-duration') {
-      focusTitleEl.textContent = focusState.taskText;
+      // 선택 단계에선 제목을 'f... focus'로 고정해두고, 고른 할 일은
+      // 본문 쪽에 보여줌 — 카운트다운이 시작된 뒤에야(running/ended)
+      // 제목 자리가 실제 할 일 텍스트로 바뀜.
+      focusTitleEl.textContent = FOCUS_TITLE_TEXT;
+      const taskLabel = document.createElement('p');
+      taskLabel.className = 'focus-picked-task';
+      taskLabel.textContent = focusState.taskText;
+      focusBodyEl.appendChild(taskLabel);
+      appendFocusSubtasks(focusBodyEl, focusState.taskBoardId, focusState.taskId);
       const hint = document.createElement('p');
       hint.className = 'focus-duration-hint';
       hint.textContent = '얼마나 집중할까요?';
@@ -2353,6 +2389,7 @@
       num.className = 'focus-countdown-number';
       num.textContent = formatFocusClock(focusState.remainingSec);
       focusBodyEl.appendChild(num);
+      appendFocusSubtasks(focusBodyEl, focusState.taskBoardId, focusState.taskId);
 
       if (focusState.exitConfirmOpen) {
         const confirmWrap = document.createElement('div');
@@ -2387,6 +2424,7 @@
 
     if (focusState.step === 'ended') {
       focusTitleEl.textContent = focusState.taskText;
+      appendFocusSubtasks(focusBodyEl, focusState.taskBoardId, focusState.taskId);
       const choices = document.createElement('div');
       choices.className = 'focus-end-choices';
 

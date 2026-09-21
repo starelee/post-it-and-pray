@@ -702,6 +702,19 @@
     transform: scale(1.15);
   }
 
+  /* 뒤로가기 아이콘은 "gotta do... ✿"의 그 ✿(.flower)와 같은 기호라
+     색도 항상 똑같이 맞춤 — 나머지 focus-enter-btn들처럼 평소엔 흐리다가
+     호버해야 진해지는 방식이 아니라 처음부터 accent 색 고정. */
+  .focus-back-btn {
+    color: var(--accent);
+    font-size: 18px;
+  }
+
+  .focus-back-btn:hover,
+  .focus-back-btn:focus-visible {
+    color: var(--accent);
+  }
+
   .focus-btn {
     flex: 0 0 auto;
     background: none;
@@ -745,6 +758,18 @@
   .focus-task-pick-btn:focus-visible {
     color: var(--accent);
     padding-left: 8px;
+  }
+
+  .focus-picked-task {
+    margin: 0 0 4px;
+    font-family: 'NostalgicMyoeunHeullim', 'Gaegu', cursive, sans-serif;
+    font-size: 20px;
+    color: var(--ink);
+  }
+
+  .focus-subtask-list {
+    padding-left: 0;
+    margin: 2px 0 14px;
   }
 
   .focus-duration-hint {
