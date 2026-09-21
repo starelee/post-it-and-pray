@@ -35,7 +35,7 @@
     :root:not([data-theme="light"]) {
       --bg-top: #23261f;
       --bg-bot: #1a1c17;
-      --paper: #3a3320;
+      --paper: #554a26;
       --paper-waiting: #55371b;
       --paper-someday: #2c3350;
       --paper-lupin: #2e2c27;
@@ -62,7 +62,7 @@
   :root[data-theme="dark"] {
     --bg-top: #23261f;
     --bg-bot: #1a1c17;
-    --paper: #3a3320;
+    --paper: #554a26;
     --paper-waiting: #55371b;
     --paper-someday: #2c3350;
     --paper-lupin: #2e2c27;
