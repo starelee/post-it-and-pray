@@ -1434,21 +1434,22 @@
     opacity: 0.6;
   }
 
-  /* 호버 전에도 opacity:0인 채로 자리는 계속 차지해서(호버 시 밀리지
-     않게) 칩 사이 여백처럼 보이는 빈 공간의 대부분이 사실 이 버튼들
-     자리였음 — 글자 크기/패딩을 줄여서 그 자리 자체를 절반쯤으로 줄임. */
+  /* 평소엔 아예 폭 0으로 접어서 칩 사이에 빈자리를 안 남김 — 호버/포커스
+     때만 펼쳐지면서 옆 칩들이 살짝 밀리는 건 괜찮다는 피드백 반영. */
   .subtask-edit-btn,
   .subtask-delete-btn {
     flex: 0 0 auto;
     background: none;
     border: none;
     color: var(--ink-soft);
-    font-size: 10px;
+    font-size: 12px;
     line-height: 1;
     cursor: pointer;
     opacity: 0;
-    padding: 1px 1px 1px 0;
-    transition: opacity 0.15s ease, color 0.15s ease;
+    width: 0;
+    padding: 1px 0;
+    overflow: hidden;
+    transition: opacity 0.15s ease, color 0.15s ease, width 0.15s ease, padding 0.15s ease;
   }
 
   .subtask-item:hover .subtask-edit-btn,
@@ -1456,6 +1457,8 @@
   .subtask-item:hover .subtask-delete-btn,
   .subtask-item:focus-within .subtask-delete-btn {
     opacity: 1;
+    width: 13px;
+    padding: 1px 2px 1px 0;
   }
 
   .subtask-edit-btn:hover,
