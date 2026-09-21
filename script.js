@@ -2386,10 +2386,10 @@
   // 토글 후 renderFocusPanel을 우리가 직접 다시 불러줌.
   function appendFocusSubtasks(container, boardId, taskId) {
     const task = boards[boardId] && boards[boardId].find(t => t.id === taskId);
-    if (!task || !task.subtasks || task.subtasks.length === 0) return;
+    if (!task) return;
     const list = document.createElement('ul');
     list.className = 'subtask-list focus-subtask-list';
-    task.subtasks.forEach(sub => {
+    (task.subtasks || []).forEach(sub => {
       const li = document.createElement('li');
       li.className = 'subtask-item' + (sub.done ? ' done' : '');
       const chip = document.createElement('button');
@@ -2427,7 +2427,60 @@
       li.appendChild(editBtn);
       list.appendChild(li);
     });
+    // 하위 항목이 하나도 없어도 이 [+추가]는 항상 마지막 칩 자리에 보임 —
+    // 별도 줄로 뺀 add-row는 없앰.
+    list.appendChild(makeFocusAddSubtaskItem(boardId, taskId));
     container.appendChild(list);
+  }
+
+  // 마지막 하위 항목 칩 옆에 나란히 붙는 [+추가] — 누르면 그 자리에서
+  // 바로 인라인 입력창으로 바뀜.
+  function makeFocusAddSubtaskItem(boardId, taskId) {
+    const li = document.createElement('li');
+    li.className = 'subtask-item focus-subtask-add-item';
+
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'subtask-chip focus-subtask-add-btn';
+    btn.textContent = '[+추가]';
+
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'focus-add-subtask-input';
+    input.placeholder = '하위 항목...';
+    input.maxLength = 60;
+    input.hidden = true;
+
+    btn.addEventListener('click', () => {
+      btn.hidden = true;
+      input.hidden = false;
+      input.focus();
+    });
+
+    function closeInput() {
+      input.hidden = true;
+      input.value = '';
+      btn.hidden = false;
+    }
+
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        const text = input.value;
+        input.value = '';
+        // addFocusSubtask가 renderFocusPanel()로 전체를 다시 그려서 이
+        // 항목도 새로 만들어짐(닫힌 상태로) — 여기서 더 할 일 없음.
+        addFocusSubtask(boardId, taskId, text);
+      } else if (e.key === 'Escape') {
+        closeInput();
+      }
+    });
+    input.addEventListener('blur', () => {
+      if (!input.value) closeInput();
+    });
+
+    li.appendChild(btn);
+    li.appendChild(input);
+    return li;
   }
 
   function startEditFocusSubtask(boardId, taskId, subId, chipEl) {
@@ -2481,13 +2534,26 @@
 
   // 상위 항목 + 하위 항목을 점선 박스 하나로 묶음(시간 선택 박스와 같은
   // 스타일) — pick-duration/running/ended 세 곳 모두 동일한 모양이라
-  // 공통 팩토리로 뽑음.
-  function makeFocusTaskBox() {
+  // 공통 팩토리로 뽑음. showReselect는 pick-duration에서만 true로 넘어와
+  // "다시 선택"을 박스 맨 아래(예전 add-subtask-row 자리)에 붙여줌 —
+  // 진행 중/종료 후엔 안 보임.
+  function makeFocusTaskBox(showReselect) {
     const box = document.createElement('div');
     box.className = 'focus-box focus-task-box';
     box.appendChild(makeFocusPickedTaskLabel());
     appendFocusSubtasks(box, focusState.taskBoardId, focusState.taskId);
-    box.appendChild(makeFocusAddSubtaskRow(focusState.taskBoardId, focusState.taskId));
+    if (showReselect) {
+      const reselectBtn = document.createElement('button');
+      reselectBtn.type = 'button';
+      reselectBtn.className = 'focus-reselect-btn';
+      reselectBtn.textContent = '[다시 선택]';
+      reselectBtn.addEventListener('click', () => {
+        focusState = { step: 'pick-task' };
+        saveFocusState();
+        renderFocusPanel();
+      });
+      box.appendChild(reselectBtn);
+    }
     return box;
   }
 
@@ -2593,56 +2659,6 @@
     renderFocusPanel();
   }
 
-  // 카운트다운 중에도(요청대로) 하위 항목을 추가할 수 있게 — pick-duration/
-  // running/ended 어디서든 makeFocusTaskBox 안에 같이 들어감.
-  function makeFocusAddSubtaskRow(boardId, taskId) {
-    const wrap = document.createElement('div');
-    wrap.className = 'focus-add-subtask-row';
-
-    const toggleBtn = document.createElement('button');
-    toggleBtn.type = 'button';
-    toggleBtn.className = 'focus-add-subtask-toggle';
-    toggleBtn.textContent = '[+ 하위 항목]';
-
-    const input = document.createElement('input');
-    input.type = 'text';
-    input.className = 'focus-add-subtask-input';
-    input.placeholder = '하위 항목...';
-    input.maxLength = 60;
-    input.hidden = true;
-
-    toggleBtn.addEventListener('click', () => {
-      toggleBtn.hidden = true;
-      input.hidden = false;
-      input.focus();
-    });
-
-    function closeInput() {
-      input.hidden = true;
-      input.value = '';
-      toggleBtn.hidden = false;
-    }
-
-    input.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') {
-        const text = input.value;
-        input.value = '';
-        // addFocusSubtask가 renderFocusPanel()로 전체를 다시 그려서 이
-        // 행도 새로 만들어짐(닫힌 상태로) — 여기서 더 할 일 없음.
-        addFocusSubtask(boardId, taskId, text);
-      } else if (e.key === 'Escape') {
-        closeInput();
-      }
-    });
-    input.addEventListener('blur', () => {
-      if (!input.value) closeInput();
-    });
-
-    wrap.appendChild(toggleBtn);
-    wrap.appendChild(input);
-    return wrap;
-  }
-
   function startEditFocusTask() {
     if (!focusState || !focusState.taskBoardId) return;
     const boardId = focusState.taskBoardId;
@@ -2737,27 +2753,15 @@
       // 본문 쪽에 보여줌 — 카운트다운이 시작된 뒤에야(running/ended)
       // 제목 자리가 실제 할 일 텍스트로 바뀜.
       focusTitleEl.textContent = FOCUS_TITLE_TEXT;
-      focusBodyEl.appendChild(makeFocusTaskBox());
-
-      const reselectBtn = document.createElement('button');
-      reselectBtn.type = 'button';
-      reselectBtn.className = 'focus-reselect-btn';
-      reselectBtn.textContent = '[다시 선택]';
-      reselectBtn.addEventListener('click', () => {
-        focusState = { step: 'pick-task' };
-        saveFocusState();
-        renderFocusPanel();
-      });
-      focusBodyEl.appendChild(reselectBtn);
-
+      focusBodyEl.appendChild(makeFocusTaskBox(true));
       focusBodyEl.appendChild(makeFocusDurationBox());
-      focusBodyEl.appendChild(makeFocusQuickAddTaskRow());
       return;
     }
 
     if (focusState.step === 'running') {
       // running/ended 단계에서도 제목은 'f... focus'로 그대로 두고, 할 일
-      // 텍스트는 pick-duration과 마찬가지로 본문 쪽에 표시.
+      // 텍스트는 pick-duration과 마찬가지로 본문 쪽에 표시. "다시 선택"은
+      // 진행 중엔 안 보임(showReselect 생략).
       focusTitleEl.textContent = FOCUS_TITLE_TEXT;
       focusBodyEl.appendChild(makeFocusTaskBox());
       const countdownBox = document.createElement('div');
@@ -2767,7 +2771,7 @@
       num.textContent = formatFocusClock(focusState.remainingSec);
       countdownBox.appendChild(num);
 
-      // 완료로 표시/시간 변경/나가기는 밑에 새 박스를 만드는 게 아니라 이
+      // 완료로 표시/시간 추가/나가기는 밑에 새 박스를 만드는 게 아니라 이
       // 숫자 박스 하단에 그대로 들어감 — #focusFooter는 running 단계에서
       // 더는 안 씀.
       if (focusState.exitConfirmOpen) {
@@ -2787,41 +2791,63 @@
         confirmWrap.appendChild(yesBtn);
         confirmWrap.appendChild(noBtn);
         countdownBox.appendChild(confirmWrap);
-      } else if (focusState.changeDurationOpen) {
-        countdownBox.appendChild(makeFocusDurationBox(sec => {
-          focusState.endAt = Date.now() + sec * 1000;
-          focusState.remainingSec = sec;
-          focusState.changeDurationOpen = false;
-          saveFocusState();
-          renderFocusPanel();
-        }));
-        const cancelBtn = makeFocusFooterBtn('취소');
-        cancelBtn.addEventListener('click', () => {
-          focusState.changeDurationOpen = false;
-          renderFocusPanel();
-        });
-        countdownBox.appendChild(cancelBtn);
       } else {
         const actions = document.createElement('div');
         actions.className = 'focus-countdown-actions';
         const doneBtn = makeFocusFooterBtn('완료로 표시', 'focus-footer-btn-primary');
         doneBtn.addEventListener('click', finishFocusAsDone);
-        const changeBtn = makeFocusFooterBtn('시간 변경');
-        changeBtn.addEventListener('click', () => {
-          focusState.changeDurationOpen = true;
-          renderFocusPanel();
+
+        // "시간 변경"(전체 재설정) 대신 "시간 추가" — 전체 선택 화면으로
+        // 안 바뀌고, 이 자리에서 버튼이 곧장 분 입력창으로 바뀌어 지금
+        // 남은 시간 위에 그만큼 더해줌.
+        const addTimeBtn = makeFocusFooterBtn('시간 추가');
+        const addTimeInput = document.createElement('input');
+        addTimeInput.type = 'number';
+        addTimeInput.min = '1';
+        addTimeInput.max = '180';
+        addTimeInput.placeholder = '분';
+        addTimeInput.className = 'focus-duration-custom-input';
+        addTimeInput.hidden = true;
+        addTimeBtn.addEventListener('click', () => {
+          addTimeBtn.hidden = true;
+          addTimeInput.hidden = false;
+          addTimeInput.focus();
         });
+        function closeAddTimeInput() {
+          addTimeInput.hidden = true;
+          addTimeInput.value = '';
+          addTimeBtn.hidden = false;
+        }
+        addTimeInput.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') {
+            const min = parseInt(addTimeInput.value, 10);
+            if (min > 0) {
+              focusState.endAt += min * 60 * 1000;
+              focusState.remainingSec += min * 60;
+              saveFocusState();
+              renderFocusPanel();
+            }
+          } else if (e.key === 'Escape') {
+            closeAddTimeInput();
+          }
+        });
+        addTimeInput.addEventListener('blur', () => {
+          if (!addTimeInput.value) closeAddTimeInput();
+        });
+
         const exitBtn = makeFocusFooterBtn('나가기');
         exitBtn.addEventListener('click', () => {
           focusState.exitConfirmOpen = true;
           renderFocusPanel();
         });
         actions.appendChild(doneBtn);
-        actions.appendChild(changeBtn);
+        actions.appendChild(addTimeBtn);
+        actions.appendChild(addTimeInput);
         actions.appendChild(exitBtn);
         countdownBox.appendChild(actions);
       }
       focusBodyEl.appendChild(countdownBox);
+      focusBodyEl.appendChild(makeFocusQuickAddTaskRow());
       return;
     }
 
