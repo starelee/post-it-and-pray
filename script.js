@@ -704,6 +704,13 @@
     return (a.dueDate || '').localeCompare(b.dueDate || '');
   }
 
+  // getClientRects()가 주는 줄 높이는 line-height(1.3)까지 포함한 "줄
+  // 상자" 전체라, 손글씨체(NostalgicMyoeunHeullim)처럼 잉크가 위쪽에
+  // 몰리고 아래쪽에 여백이 많은 폰트에서는 그 상자의 기하학적 중앙이
+  // 실제 글자보다 낮게 잡혀서 취소선이 밑줄처럼 보임 — 0.5(정중앙) 대신
+  // 위로 조금 당긴 비율을 씀. 폰트가 바뀌면 다시 눈대중으로 맞출 값.
+  const STRIKE_LINE_MID_RATIO = 0.4;
+
   // .task-text의 실제 텍스트 노드가 화면에서 몇 줄로 줄바꿈됐는지, 그
   // 각 줄이 정확히 어디서 시작해 얼마나 넓은지를 Range.getClientRects()로
   // 읽어옴 — 컨테이너(.task-text)는 flex:1이라 박스 자체는 행 전체로
@@ -717,6 +724,7 @@
     return Array.from(range.getClientRects()).map(r => ({
       left: r.left - containerRect.left,
       top: r.top - containerRect.top,
+      mid: r.top - containerRect.top + r.height * STRIKE_LINE_MID_RATIO,
       width: r.width,
       height: r.height
     }));
@@ -733,7 +741,7 @@
         const line = document.createElement('span');
         line.className = 'strike-line';
         line.style.left = rect.left + 'px';
-        line.style.top = (rect.top + rect.height / 2) + 'px';
+        line.style.top = rect.mid + 'px';
         line.style.width = rect.width + 'px';
         textEl.appendChild(line);
       });
@@ -758,7 +766,7 @@
       const line = document.createElement('span');
       line.className = 'strike-line';
       line.style.left = rect.left + 'px';
-      line.style.top = (rect.top + rect.height / 2) + 'px';
+      line.style.top = rect.mid + 'px';
       line.style.width = '0px';
       textEl.appendChild(line);
       return { line, targetWidth: rect.width };
@@ -1661,7 +1669,13 @@
         if (btn) btn.click();
       }
     });
-    input.addEventListener('blur', commit);
+    // 삭제/긴급/날짜 등 옆 버튼을 탭하면 이 입력창이 먼저 blur되는데,
+    // commit()을 바로 실행하면 render()가 리스트를 통째로 다시 그려서
+    // 지금 막 탭한 그 버튼 엘리먼트 자체가 DOM에서 사라짐 — 이어서 와야 할
+    // click 이벤트가 죽은 노드를 향해 날아가 아무 일도 안 일어남(모바일
+    // 휴지통 눌러도 삭제 안 되던 원인). 한 틱 미뤄서 그 버튼의 click이
+    // 먼저 끝나고 나서 commit이 실행되게 함.
+    input.addEventListener('blur', () => setTimeout(commit, 0));
   }
 
   function toggleTask(boardId, id) {
@@ -1918,7 +1932,10 @@
         input.blur();
       }
     });
-    input.addEventListener('blur', commit);
+    // 삭제 버튼을 탭해서 blur됐을 때, commit()의 render()가 그 버튼을
+    // 곧장 지워버려 뒤이은 click이 허공에 날아가는 걸 막기 위해 한 틱 미룸
+    // (startEditTask와 동일한 이유).
+    input.addEventListener('blur', () => setTimeout(commit, 0));
   }
 
   function toggleSubtask(boardId, taskId, subId) {
@@ -2610,7 +2627,9 @@
         input.blur();
       }
     });
-    input.addEventListener('blur', commit);
+    // 삭제 버튼 탭으로 blur됐을 때 commit()의 render()가 그 버튼을 먼저
+    // 지워버리지 않게 한 틱 미룸(startEditTask와 동일한 이유).
+    input.addEventListener('blur', () => setTimeout(commit, 0));
   }
 
   // 상위 항목(선택된 할 일) 텍스트 — 본문에 세 단계(pick-duration/running/
@@ -2794,7 +2813,9 @@
         input.blur();
       }
     });
-    input.addEventListener('blur', commit);
+    // 옆 버튼 탭으로 blur됐을 때 commit()의 render()가 그 버튼을 먼저
+    // 지워버리지 않게 한 틱 미룸(startEditTask와 동일한 이유).
+    input.addEventListener('blur', () => setTimeout(commit, 0));
   }
 
   function makeFocusFooterBtn(text, extraClass) {
