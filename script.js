@@ -700,20 +700,6 @@
     return (a.dueDate || '').localeCompare(b.dueDate || '');
   }
 
-  // 손그림 취소선(.strike-line)은 한 줄짜리 텍스트를 가정한 단일 대각선이라
-  // 2줄 이상으로 줄바꿈되면 박스 세로 중앙(두 줄 사이)에 어중간하게 걸림 —
-  // 실제로 줄바꿈됐는지 높이로 판별해서 'multiline' 클래스를 붙이고, CSS
-  // 쪽에서 그 경우엔 기본 text-decoration(줄마다 제대로 그어짐)으로 대체함.
-  function applyMultilineStrike(listEl) {
-    if (!listEl) return;
-    listEl.querySelectorAll('.task-item.done .task-text').forEach(text => {
-      const lineHeight = parseFloat(getComputedStyle(text).lineHeight) || 0;
-      const item = text.closest('.task-item');
-      if (!item) return;
-      item.classList.toggle('multiline', lineHeight > 0 && text.offsetHeight > lineHeight * 1.5);
-    });
-  }
-
   function render(boardId) {
     if (boardId === 'today') return renderToday();
     if (boardId === 'scheduled') return renderScheduled();
@@ -743,7 +729,6 @@
       done.forEach(t => listEl.appendChild(renderItem(boardId, t)));
     }
 
-    applyMultilineStrike(listEl);
     updateCounter();
   }
 
@@ -779,8 +764,6 @@
       listEl.appendChild(divider);
       done.forEach(t => listEl.appendChild(renderItem('scheduled', t)));
     }
-
-    applyMultilineStrike(listEl);
   }
 
   function renderToday() {
@@ -826,7 +809,6 @@
 
     if (focusState) renderFocusPanel();
 
-    applyMultilineStrike(listEl);
     updateCounter();
   }
 
@@ -874,9 +856,6 @@
     text.setAttribute('role', 'button');
     text.setAttribute('aria-label', '내용 수정');
     text.addEventListener('click', () => startEditTask(boardId, task.id));
-    const line = document.createElement('span');
-    line.className = 'strike-line';
-    text.appendChild(line);
 
     row.appendChild(text);
 
@@ -2246,10 +2225,6 @@
       // 인라인 style="--paper: var(--paper-waiting)"가 이미 걸려있어서
       // 클래스 규칙보다 우선순위가 높음 — 같은 인라인 자리에서 직접 덮어씀.
       waitingStickyEl.style.setProperty('--paper', open ? 'var(--paper-lupin)' : 'var(--paper-waiting)');
-      // lupin 리스트는 뒷면이 숨겨진(hidden) 채로 render()됐을 수 있어서
-      // offsetHeight가 0으로 잡혀 줄바꿈 판정이 틀렸을 수 있음 — 실제로
-      // 보이게 된 지금 다시 재본다.
-      if (open) applyMultilineStrike(getListEl('lupin'));
       lupinSwapPending = false;
       if (lupinFocusPending) {
         lupinFocusPending = false;
