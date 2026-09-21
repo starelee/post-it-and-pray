@@ -851,16 +851,18 @@
     text-align: center;
   }
 
+  /* 상위 항목과 같은 톤(--ink)으로 한 단계 올림 — 하위 항목 add-row가
+     있던 자리(박스 맨 아래)로 옮겨왔으니 그쪽과 톤을 맞춤. */
   .focus-reselect-btn {
     display: block;
-    margin: -8px auto 14px;
+    margin: 10px auto 0;
     background: none;
     border: none;
     font-family: 'Gaegu', cursive, sans-serif;
-    font-size: 12px;
-    color: var(--ink-soft);
+    font-size: 13px;
+    color: var(--ink);
     cursor: pointer;
-    opacity: 0.8;
+    opacity: 0.85;
     transition: opacity 0.15s ease, color 0.15s ease;
   }
 
@@ -870,31 +872,20 @@
     color: var(--accent);
   }
 
-  .focus-add-subtask-row {
-    margin-top: 8px;
-    text-align: center;
+  /* 마지막 하위 항목 칩 옆에 나란히 붙는 [+추가] — 기존 subtask-chip과
+     같은 자리를 쓰되 살짝 흐리게 시작해서 "추가 전용" 느낌만 줌. */
+  .focus-subtask-add-btn {
+    opacity: 0.7;
   }
 
-  .focus-add-subtask-toggle {
-    background: none;
-    border: none;
-    font-family: 'Gaegu', cursive, sans-serif;
-    font-size: 13px;
-    color: var(--ink-soft);
-    cursor: pointer;
-    opacity: 0.75;
-    transition: opacity 0.15s ease, color 0.15s ease;
-  }
-
-  .focus-add-subtask-toggle:hover,
-  .focus-add-subtask-toggle:focus-visible {
+  .focus-subtask-add-btn:hover,
+  .focus-subtask-add-btn:focus-visible {
     opacity: 1;
     color: var(--accent);
   }
 
   .focus-add-subtask-input {
-    width: 100%;
-    max-width: 220px;
+    width: 90px;
     font-family: 'NostalgicMyoeunHeullim', 'Gaegu', cursive, sans-serif;
     font-size: 14px;
     color: var(--ink);
@@ -902,8 +893,7 @@
     border: none;
     border-bottom: 1px dashed var(--focus-box-border);
     outline: none;
-    text-align: center;
-    padding: 2px 0;
+    padding: 1px 2px;
   }
 
   .focus-add-subtask-input::placeholder {
