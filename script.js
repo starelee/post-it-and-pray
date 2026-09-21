@@ -704,6 +704,75 @@
     return (a.dueDate || '').localeCompare(b.dueDate || '');
   }
 
+  // .task-text의 실제 텍스트 노드가 화면에서 몇 줄로 줄바꿈됐는지, 그
+  // 각 줄이 정확히 어디서 시작해 얼마나 넓은지를 Range.getClientRects()로
+  // 읽어옴 — 컨테이너(.task-text)는 flex:1이라 박스 자체는 행 전체로
+  // 늘어나 있어도, 실제 글자가 차지하는 폭만 정확히 잡아내기 위함.
+  function measureTextLineRects(textEl) {
+    const textNode = Array.prototype.find.call(textEl.childNodes, n => n.nodeType === Node.TEXT_NODE);
+    if (!textNode || !textNode.textContent) return [];
+    const range = document.createRange();
+    range.selectNodeContents(textNode);
+    const containerRect = textEl.getBoundingClientRect();
+    return Array.from(range.getClientRects()).map(r => ({
+      left: r.left - containerRect.left,
+      top: r.top - containerRect.top,
+      width: r.width,
+      height: r.height
+    }));
+  }
+
+  // 완료 표시된 항목이 처음 그려질 때(새로고침, 보드 이동 등) 이미 다
+  // 그어진 상태로 바로 보여줌 — 애니메이션은 toggleTask에서 체크하는
+  // "그 순간"에만 필요하므로 여기선 목표 너비로 바로 세팅함.
+  function layoutStrikeLines(listEl) {
+    if (!listEl) return;
+    listEl.querySelectorAll('.task-item.done .task-text').forEach(textEl => {
+      textEl.querySelectorAll('.strike-line').forEach(el => el.remove());
+      measureTextLineRects(textEl).forEach(rect => {
+        const line = document.createElement('span');
+        line.className = 'strike-line';
+        line.style.left = rect.left + 'px';
+        line.style.top = (rect.top + rect.height / 2) + 'px';
+        line.style.width = rect.width + 'px';
+        textEl.appendChild(line);
+      });
+    });
+  }
+
+  // 체크/체크해제 하는 그 순간에만 호출 — drawing=true면 줄마다 손그림
+  // 대각선을 0폭에서 실제 글자 폭까지 그어지는 것처럼 애니메이션하고,
+  // false면 있던 줄들을 다시 0폭으로 지움(엘리먼트 자체는 곧 이어지는
+  // 전체 재렌더링이 정리하므로 여기선 굳이 제거하지 않음).
+  function animateStrikeLines(li, drawing) {
+    const textEl = li.querySelector('.task-text');
+    if (!textEl) return;
+    if (!drawing) {
+      textEl.querySelectorAll('.strike-line').forEach(el => {
+        el.style.width = '0px';
+      });
+      return;
+    }
+    textEl.querySelectorAll('.strike-line').forEach(el => el.remove());
+    const lines = measureTextLineRects(textEl).map(rect => {
+      const line = document.createElement('span');
+      line.className = 'strike-line';
+      line.style.left = rect.left + 'px';
+      line.style.top = (rect.top + rect.height / 2) + 'px';
+      line.style.width = '0px';
+      textEl.appendChild(line);
+      return { line, targetWidth: rect.width };
+    });
+    // width:0으로 커밋된 다음 프레임에 목표 너비로 바꿔야 transition이
+    // 실제로 재생됨 — 같은 프레임에서 바로 바꾸면 브라우저가 중간 상태를
+    // 건너뛰고 바로 최종값으로 그려버림.
+    requestAnimationFrame(() => {
+      lines.forEach(({ line, targetWidth }) => {
+        line.style.width = targetWidth + 'px';
+      });
+    });
+  }
+
   function render(boardId) {
     if (boardId === 'today') return renderToday();
     if (boardId === 'scheduled') return renderScheduled();
@@ -733,6 +802,7 @@
       done.forEach(t => listEl.appendChild(renderItem(boardId, t)));
     }
 
+    layoutStrikeLines(listEl);
     updateCounter();
   }
 
@@ -768,6 +838,8 @@
       listEl.appendChild(divider);
       done.forEach(t => listEl.appendChild(renderItem('scheduled', t)));
     }
+
+    layoutStrikeLines(listEl);
   }
 
   function renderToday() {
@@ -813,6 +885,7 @@
 
     if (focusState) renderFocusPanel();
 
+    layoutStrikeLines(listEl);
     updateCounter();
   }
 
@@ -1599,7 +1672,10 @@
     else delete task.doneAt;
 
     const li = findTaskLi(id);
-    if (li) li.classList.toggle('done', task.done);
+    if (li) {
+      li.classList.toggle('done', task.done);
+      animateStrikeLines(li, task.done);
+    }
 
     saveBoards();
 
@@ -2229,6 +2305,10 @@
       // 인라인 style="--paper: var(--paper-waiting)"가 이미 걸려있어서
       // 클래스 규칙보다 우선순위가 높음 — 같은 인라인 자리에서 직접 덮어씀.
       waitingStickyEl.style.setProperty('--paper', open ? 'var(--paper-lupin)' : 'var(--paper-waiting)');
+      // lupin 리스트는 뒷면이 숨겨진(hidden) 채로 render()됐을 수 있어서
+      // getClientRects()가 전부 0으로 잡혀 취소선 위치 계산이 틀렸을 수
+      // 있음 — 실제로 보이게 된 지금 다시 잰다.
+      if (open) layoutStrikeLines(getListEl('lupin'));
       lupinSwapPending = false;
       if (lupinFocusPending) {
         lupinFocusPending = false;
