@@ -823,7 +823,7 @@
      이 카드 안에서 갑자기 튀는 버튼 UI가 되지 않도록 함. */
   .focus-duration-btn {
     font-family: 'Gaegu', cursive, sans-serif;
-    font-size: 13px;
+    font-size: 16px;
     color: var(--ink);
     background: none;
     border: none;
@@ -838,12 +838,16 @@
     color: var(--accent);
   }
 
+  .focus-countdown-box {
+    margin: 0 0 16px;
+  }
+
   .focus-countdown-number {
     font-family: 'NostalgicMyoeunHeullim', 'Nanum Pen Script', cursive;
     font-size: 64px;
     text-align: center;
     color: var(--ink);
-    padding: 20px 0;
+    padding: 4px 0;
   }
 
   .focus-empty-hint {
@@ -866,39 +870,31 @@
     margin-bottom: 10px;
   }
 
+  /* 알약/배지 버튼이 아니라 하위 항목·시간 선택과 같은 대괄호 평문
+     스타일로 통일 — primary/danger는 배경색 대신 글자색으로만 구분. */
   .focus-footer-btn {
     font-family: 'Gaegu', cursive, sans-serif;
-    font-size: 14px;
+    font-size: 15px;
     color: var(--ink-soft);
     background: none;
-    border: 1px solid var(--ink-soft);
-    border-radius: 14px;
-    padding: 6px 14px;
+    border: none;
+    padding: 4px 6px;
     cursor: pointer;
-    opacity: 0.85;
-    transition: opacity 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+    transition: color 0.15s ease, transform 0.15s ease;
   }
 
-  .focus-footer-btn:hover {
-    opacity: 1;
+  .focus-footer-btn:hover,
+  .focus-footer-btn:focus-visible {
     color: var(--accent);
-    border-color: var(--accent);
+    transform: scale(1.06);
   }
 
   .focus-footer-btn-primary {
-    background: var(--accent);
-    border-color: var(--accent);
-    color: #fff;
-    opacity: 1;
-  }
-
-  .focus-footer-btn-primary:hover {
-    color: #fff;
-    opacity: 0.85;
+    color: var(--accent);
+    font-weight: 700;
   }
 
   .focus-footer-btn-danger {
-    border-color: var(--urgent);
     color: var(--urgent);
   }
 
