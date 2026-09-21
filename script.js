@@ -2238,6 +2238,22 @@
   const FOCUS_DURATIONS_MIN = [3, 5, 15, 25];
   const FOCUS_TITLE_TEXT = 'f... focus 🍅';
   const FOCUS_STORAGE_KEY = 'postit-focus-session-v1';
+  const ORIGINAL_DOCUMENT_TITLE = document.title;
+
+  // 카운트다운 중엔 탭을 다른 데 두고도 남은 시간을 볼 수 있게 탭
+  // 제목표시줄에 같이 띄움 — 매 렌더링(매초)마다 다시 불러서 항상
+  // 최신 값으로 맞춤.
+  function updateFocusDocumentTitle() {
+    if (!focusState) {
+      document.title = ORIGINAL_DOCUMENT_TITLE;
+    } else if (focusState.step === 'running') {
+      document.title = formatFocusClock(focusState.remainingSec) + ' · f... focus 🍅';
+    } else if (focusState.step === 'ended') {
+      document.title = '⏰ 다 됐어요! · f... focus';
+    } else {
+      document.title = ORIGINAL_DOCUMENT_TITLE;
+    }
+  }
 
   // 새로고침해도 타이머가 강제로 끊기지 않게 진행 상황을 localStorage에
   // 같이 저장해둠 — 남은 시간은 초 단위 카운터 대신 "언제 0에 도달하는지"
@@ -2457,6 +2473,7 @@
 
   function renderFocusPanel() {
     if (!focusState) return;
+    updateFocusDocumentTitle();
     clearEl(focusBodyEl);
     clearEl(focusFooterEl);
     // 선택 단계(할일/시간 고르는 중)에서만 gotta do로 돌아가는 아이콘을
@@ -2664,6 +2681,7 @@
     if (focusState && focusState.intervalId) clearInterval(focusState.intervalId);
     focusState = null;
     clearFocusState();
+    updateFocusDocumentTitle();
     if (sideColEl) sideColEl.classList.remove('focus-blurred');
     setTodayFocusOpen(false, focusInputAfter);
   }
