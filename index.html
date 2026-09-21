@@ -1722,13 +1722,99 @@
   // that user's own cloud row.
   let activeRowId = null;
 
-  function pushToCloudNow() {
+  // The updated_at this client last actually saw on the server (from a pull
+  // or from its own last successful push). A plain upsert here would let a
+  // stale tab/device — one that hasn't picked up a completion made
+  // elsewhere yet — silently overwrite the whole row and resurrect
+  // "already done" tasks. Instead every push is conditioned on this value:
+  // if the row moved since we last saw it, someone else wrote in between,
+  // so we pull their version, merge it forward, and retry.
+  let lastKnownServerUpdatedAt = null;
+
+  // Merges a server snapshot with the local one after a lost write. This is
+  // NOT a full CRDT merge, just enough to stop the specific failure above:
+  // each task id resolves to whichever side shows more progress —
+  // archived > done-in-place > still-active — so a stale "not done yet"
+  // copy can never erase a real completion, and brand-new tasks added
+  // independently on either side survive (union by id). A task deleted on
+  // one side while left untouched on the other will resurrect, since
+  // neither side carries a tombstone — a real gap, just a much smaller one
+  // than clobbering completions outright.
+  function mergeBoards(serverBoards, localBoards) {
+    const allBoardIds = BOARD_IDS.concat(['archive', 'lupin']);
+    const winners = new Map(); // id -> { task, boardId }
+
+    function progress(boardId, task) {
+      if (boardId === 'archive') return 2;
+      if (task.done) return 1;
+      return 0;
+    }
+
+    function consider(boardId, task) {
+      const cur = winners.get(task.id);
+      if (!cur) { winners.set(task.id, { task, boardId }); return; }
+      const curP = progress(cur.boardId, cur.task);
+      const newP = progress(boardId, task);
+      if (newP > curP || (newP === curP && (task.doneAt || '') > (cur.task.doneAt || ''))) {
+        winners.set(task.id, { task, boardId });
+      }
+    }
+
+    allBoardIds.forEach(boardId => (serverBoards[boardId] || []).forEach(t => consider(boardId, t)));
+    allBoardIds.forEach(boardId => (localBoards[boardId] || []).forEach(t => consider(boardId, t)));
+
+    const merged = {};
+    allBoardIds.forEach(id => { merged[id] = []; });
+    winners.forEach(({ task, boardId }) => merged[boardId].push(task));
+    return merged;
+  }
+
+  async function pushToCloudNow() {
     if (!cloudClient || !activeRowId) return;
-    cloudClient
-      .from('postit_data')
-      .upsert({ id: activeRowId, data: boards, updated_at: new Date().toISOString() })
-      .then(() => {})
-      .catch(() => {});
+    const newUpdatedAt = new Date().toISOString();
+    try {
+      const { data, error } = await cloudClient
+        .from('postit_data')
+        .update({ data: boards, updated_at: newUpdatedAt })
+        .eq('id', activeRowId)
+        .eq('updated_at', lastKnownServerUpdatedAt)
+        .select('updated_at');
+      if (error) throw error;
+      if (data && data.length > 0) {
+        // No one else wrote since we last synced — our write landed clean.
+        lastKnownServerUpdatedAt = newUpdatedAt;
+        return;
+      }
+      // Either the row moved (someone else wrote after our last known
+      // snapshot) or it doesn't exist yet. Either way, find out which and
+      // reconcile instead of blindly upserting over it.
+      const { data: current, error: fetchErr } = await cloudClient
+        .from('postit_data')
+        .select('data, updated_at')
+        .eq('id', activeRowId)
+        .maybeSingle();
+      if (fetchErr) throw fetchErr;
+      if (!current) {
+        // Row genuinely doesn't exist yet (first sync for this account) —
+        // safe to create it outright.
+        await cloudClient.from('postit_data').insert({ id: activeRowId, data: boards, updated_at: newUpdatedAt });
+        lastKnownServerUpdatedAt = newUpdatedAt;
+        return;
+      }
+      boards = mergeBoards(normalizeBoards(current.data), boards);
+      migrateArchive(boards);
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(boards));
+      } catch (e) {
+        /* ignore */
+      }
+      renderAll();
+      lastKnownServerUpdatedAt = current.updated_at;
+      pushToCloud(); // retry with the merged state, now conditioned on the version we just saw
+    } catch (e) {
+      /* offline or cloud unavailable — local state is still saved; the
+         next successful push will reconcile */
+    }
   }
 
   // Checking off five tasks in a row shouldn't fire five full-document
@@ -1787,13 +1873,16 @@
     try {
       const { data, error } = await cloudClient
         .from('postit_data')
-        .select('data')
+        .select('data, updated_at')
         .eq('id', rowId)
         .maybeSingle();
       if (error) throw error;
       if (localVersion !== versionAtStart) {
         // The user edited boards locally while this fetch was in flight —
         // that edit is newer, so push it up instead of overwriting it.
+        // (pushToCloudNow's own conflict check reconciles against whatever
+        // the server actually has, so it's fine that we don't know
+        // data.updated_at here.)
         pushToCloud();
         return;
       }
@@ -1808,7 +1897,8 @@
           );
           markUserSynced(rowId);
           if (!useCloud) {
-            pushToCloud(); // 로컬을 유지하고 클라우드 쪽을 로컬로 덮어씀
+            lastKnownServerUpdatedAt = data.updated_at; // 로컬을 유지하고 클라우드 쪽을 로컬로 덮어씀
+            pushToCloud();
             return;
           }
         } else {
@@ -1821,8 +1911,10 @@
           /* ignore */
         }
         renderAll();
+        lastKnownServerUpdatedAt = data.updated_at;
       } else {
         markUserSynced(rowId);
+        lastKnownServerUpdatedAt = null; // row doesn't exist yet — pushToCloudNow will insert it
         pushToCloud();
       }
     } catch (e) {
