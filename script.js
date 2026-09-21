@@ -2384,7 +2384,13 @@
     }
 
     if (focusState.step === 'running') {
-      focusTitleEl.textContent = focusState.taskText;
+      // running/ended 단계에서도 제목은 'f... focus'로 그대로 두고, 할 일
+      // 텍스트는 pick-duration과 마찬가지로 본문 쪽에 표시.
+      focusTitleEl.textContent = FOCUS_TITLE_TEXT;
+      const taskLabel = document.createElement('p');
+      taskLabel.className = 'focus-picked-task';
+      taskLabel.textContent = focusState.taskText;
+      focusBodyEl.appendChild(taskLabel);
       const num = document.createElement('div');
       num.className = 'focus-countdown-number';
       num.textContent = formatFocusClock(focusState.remainingSec);
@@ -2423,7 +2429,11 @@
     }
 
     if (focusState.step === 'ended') {
-      focusTitleEl.textContent = focusState.taskText;
+      focusTitleEl.textContent = FOCUS_TITLE_TEXT;
+      const taskLabel = document.createElement('p');
+      taskLabel.className = 'focus-picked-task';
+      taskLabel.textContent = focusState.taskText;
+      focusBodyEl.appendChild(taskLabel);
       appendFocusSubtasks(focusBodyEl, focusState.taskBoardId, focusState.taskId);
       const choices = document.createElement('div');
       choices.className = 'focus-end-choices';

@@ -761,15 +761,33 @@
   }
 
   .focus-picked-task {
-    margin: 0 0 4px;
+    margin: 0 0 10px;
+    padding-bottom: 10px;
+    border-bottom: 1px dashed var(--input-line);
     font-family: 'NostalgicMyoeunHeullim', 'Gaegu', cursive, sans-serif;
     font-size: 20px;
+    line-height: 1.35;
     color: var(--ink);
   }
 
   .focus-subtask-list {
     padding-left: 0;
-    margin: 2px 0 14px;
+    margin: 0 0 16px;
+    gap: 8px 10px;
+  }
+
+  .focus-subtask-list .subtask-chip {
+    font-size: 14px;
+    padding: 5px 10px;
+    border: 1px solid var(--input-line);
+    border-radius: 12px;
+    background: var(--tape);
+    transition: opacity 0.15s ease, border-color 0.15s ease;
+  }
+
+  .focus-subtask-list .subtask-item.done .subtask-chip {
+    border-style: dashed;
+    opacity: 0.6;
   }
 
   .focus-duration-hint {
