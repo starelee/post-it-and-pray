@@ -730,7 +730,10 @@
     background: none;
     border: none;
     border-bottom: 1px dashed var(--input-line);
-    font-family: 'Gaegu', cursive, sans-serif;
+    /* 실제 할 일 텍스트를 보여주는 자리라 .task-text와 같은 폰트 스택을
+       씀 — 다른 focus 버튼들(완료로 표시/분 선택 등)은 UI 액션 라벨이라
+       auth-btn 등과 같은 순수 Gaegu를 그대로 씀. */
+    font-family: 'NostalgicMyoeunHeullim', 'Gaegu', cursive, sans-serif;
     font-size: 16px;
     color: var(--ink);
     padding: 8px 4px;
