@@ -54,22 +54,37 @@
       </div>
 
       <div class="board-row">
-      <div class="sticky" data-board="today" style="--rot: -1.4deg;">
+      <div class="sticky" data-board="today" id="todaySticky" style="--rot: -1.4deg;">
         <button class="archive-flag archive-flag-mobile" type="button" aria-label="다 한 일 보기"></button>
         <div class="tape"></div>
-        <h2 class="sticky-title">gotta do... <span class="flower">✿</span></h2>
 
-        <ul class="task-list" data-tasklist="today"></ul>
+        <div data-today-list>
+          <h2 class="sticky-title">gotta do... <span class="flower">✿</span>
+            <button class="focus-enter-btn" id="focusEnterBtn" type="button" aria-label="포커스 모드">🍅</button>
+          </h2>
 
-        <div class="add-row">
-          <button type="button" class="plus" aria-label="새 항목 등록">+</button>
-          <input
-            class="new-task-input"
-            data-newtask
-            placeholder="끄적이기..."
-            autocomplete="off"
-            maxlength="60"
-          />
+          <ul class="task-list" data-tasklist="today"></ul>
+
+          <div class="add-row">
+            <button type="button" class="plus" aria-label="새 항목 등록">+</button>
+            <input
+              class="new-task-input"
+              data-newtask
+              placeholder="끄적이기..."
+              autocomplete="off"
+              maxlength="60"
+            />
+          </div>
+        </div>
+
+        <div data-today-focus hidden>
+          <h2 class="sticky-title">
+            <span class="focus-title-text" id="focusTitleText">focus 🍅</span>
+          </h2>
+
+          <div class="focus-body" id="focusBody"></div>
+
+          <div class="focus-footer" id="focusFooter"></div>
         </div>
       </div>
 

@@ -669,6 +669,195 @@
     animation: lupin-flip 0.6s cubic-bezier(0.45, 0.05, 0.55, 0.95);
   }
 
+  /* focus mode(뽀모도로) — gotta do 카드가 리스트 ↔ 타이머 레이아웃으로
+     전환됨. lupin처럼 "뒤집는" 물리적 은유가 아니라 "상태가 바뀌는"
+     것이므로 3D 플립 대신 스케일이 살짝 줄었다 돌아오는 크로스페이드를
+     씀 — 실제 레이아웃 교체는 스케일이 가장 작아지는 중간 지점(JS에서
+     타이밍 맞춰 hidden 토글)에 일어남. */
+  @keyframes today-crossfade {
+    0% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0; transform: scale(0.97); }
+    100% { opacity: 1; transform: scale(1); }
+  }
+
+  .today-swapping {
+    animation: today-crossfade 0.32s ease;
+  }
+
+  .focus-enter-btn {
+    margin-left: auto;
+    background: none;
+    border: none;
+    font-size: 15px;
+    line-height: 1;
+    padding: 0;
+    cursor: pointer;
+    color: var(--ink-soft);
+    transition: color 0.15s ease, transform 0.15s ease;
+  }
+
+  .focus-enter-btn:hover,
+  .focus-enter-btn:focus-visible {
+    color: var(--accent);
+    transform: scale(1.15);
+  }
+
+  .focus-btn {
+    flex: 0 0 auto;
+    background: none;
+    border: none;
+    font-size: 14px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 2px 3px;
+    opacity: 0.6;
+    transition: opacity 0.15s ease, transform 0.15s ease;
+  }
+
+  .focus-btn:hover {
+    opacity: 1;
+    transform: scale(1.15);
+  }
+
+  .focus-task-pick-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .focus-task-pick-btn {
+    text-align: left;
+    background: none;
+    border: none;
+    border-bottom: 1px dashed var(--input-line);
+    font-family: 'Gaegu', cursive, sans-serif;
+    font-size: 16px;
+    color: var(--ink);
+    padding: 8px 4px;
+    cursor: pointer;
+    transition: color 0.15s ease, padding-left 0.15s ease;
+  }
+
+  .focus-task-pick-btn:hover,
+  .focus-task-pick-btn:focus-visible {
+    color: var(--accent);
+    padding-left: 8px;
+  }
+
+  .focus-duration-hint {
+    margin: 0 0 10px;
+    color: var(--ink-soft);
+    font-size: 14px;
+  }
+
+  .focus-duration-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .focus-duration-btn {
+    font-family: 'Gaegu', cursive, sans-serif;
+    font-size: 16px;
+    color: var(--ink);
+    background: var(--tape);
+    border: 1px solid var(--input-line);
+    border-radius: 14px;
+    padding: 10px 18px;
+    cursor: pointer;
+    transition: transform 0.15s ease, background 0.15s ease, color 0.15s ease;
+  }
+
+  .focus-duration-btn:hover,
+  .focus-duration-btn:focus-visible {
+    transform: scale(1.06);
+    color: var(--accent);
+  }
+
+  .focus-countdown-number {
+    font-family: 'NostalgicMyoeunHeullim', 'Nanum Pen Script', cursive;
+    font-size: 64px;
+    text-align: center;
+    color: var(--ink);
+    padding: 20px 0;
+  }
+
+  .focus-empty-hint {
+    color: var(--ink-soft);
+    font-size: 15px;
+  }
+
+  .focus-end-choices {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    align-items: stretch;
+  }
+
+  .focus-footer {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .focus-footer-btn {
+    font-family: 'Gaegu', cursive, sans-serif;
+    font-size: 14px;
+    color: var(--ink-soft);
+    background: none;
+    border: 1px solid var(--ink-soft);
+    border-radius: 14px;
+    padding: 6px 14px;
+    cursor: pointer;
+    opacity: 0.85;
+    transition: opacity 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+  }
+
+  .focus-footer-btn:hover {
+    opacity: 1;
+    color: var(--accent);
+    border-color: var(--accent);
+  }
+
+  .focus-footer-btn-primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+    opacity: 1;
+  }
+
+  .focus-footer-btn-primary:hover {
+    color: #fff;
+    opacity: 0.85;
+  }
+
+  .focus-footer-btn-danger {
+    border-color: var(--urgent);
+    color: var(--urgent);
+  }
+
+  .focus-exit-confirm {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .focus-exit-confirm p {
+    margin: 0 0 4px;
+    font-size: 13px;
+    color: var(--ink-soft);
+  }
+
+  /* 카운트다운이 실제로 시작된 순간부터만 — 할일/시간 고르는 선택 단계
+     에서는 다른 카드가 그대로 보임. desk 배경 자체는 그대로 두고
+     waiting/pray later/someday를 담은 side-col 컨테이너만 흐리게. */
+  .focus-blurred {
+    filter: blur(4px);
+    opacity: 0.5;
+    pointer-events: none;
+    transition: filter 0.25s ease, opacity 0.25s ease;
+  }
+
   .sticky-title .flower {
     color: var(--accent);
     font-size: 18px;

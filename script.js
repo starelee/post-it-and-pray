@@ -767,8 +767,8 @@
       listEl.appendChild(hint);
     }
 
-    active.forEach(t => listEl.appendChild(renderItem('today', t)));
-    dueToday.forEach(t => listEl.appendChild(renderItem('scheduled', t)));
+    active.forEach(t => listEl.appendChild(renderItem('today', t, { showFocusBtn: true })));
+    dueToday.forEach(t => listEl.appendChild(renderItem('scheduled', t, { showFocusBtn: true })));
 
     if (done.length > 0 || doneToday.length > 0) {
       const divider = document.createElement('li');
@@ -784,13 +784,16 @@
       divider.className = 'divider divider-oops';
       divider.textContent = 'oops, still here';
       listEl.appendChild(divider);
-      oops.forEach(t => listEl.appendChild(renderItem('scheduled', t)));
+      oops.forEach(t => listEl.appendChild(renderItem('scheduled', t, { showFocusBtn: true })));
     }
+
+    if (focusState) renderFocusPanel();
 
     updateCounter();
   }
 
-  function renderItem(boardId, task) {
+  function renderItem(boardId, task, opts) {
+    opts = opts || {};
     const li = document.createElement('li');
     li.className = 'task-item' + (task.done ? ' done' : '') + (task.urgent ? ' urgent' : '');
     if (urgentFlash && urgentFlash.id === task.id) {
@@ -874,6 +877,16 @@
 
     controls.appendChild(urgentBtn);
     controls.appendChild(addToggle);
+
+    if (opts.showFocusBtn) {
+      const focusBtn = document.createElement('button');
+      focusBtn.className = 'focus-btn';
+      focusBtn.type = 'button';
+      focusBtn.setAttribute('aria-label', '포커스 모드로 집중하기');
+      focusBtn.textContent = '🍅';
+      focusBtn.addEventListener('click', () => enterFocusPickDuration(boardId, task.id));
+      controls.appendChild(focusBtn);
+    }
 
     const canDate = DATE_ENABLED_IDS.includes(boardId) || boardId === 'scheduled';
     let dateBtn = null;
@@ -2209,6 +2222,284 @@
   window.addEventListener('blur', handleAwayChange);
   window.addEventListener('focus', handleAwayChange);
 
+  // focus mode (뽀모도로) — gotta do 카드 자체가 리스트 ↔ 타이머 레이아웃으로
+  // 전환됨(별도 오버레이 없이 같은 카드 안에서 내용물만 갈아끼움). lupin
+  // 모드와 달리 "뒤집는" 은유가 아니라 "상태가 바뀌는" 것이라 3D 플립
+  // 대신 크로스페이드/스케일 전환을 씀.
+  const todayStickyEl = document.getElementById('todaySticky');
+  const todayListEl = todayStickyEl.querySelector('[data-today-list]');
+  const todayFocusEl = todayStickyEl.querySelector('[data-today-focus]');
+  const focusTitleEl = document.getElementById('focusTitleText');
+  const focusBodyEl = document.getElementById('focusBody');
+  const focusFooterEl = document.getElementById('focusFooter');
+  const focusEnterBtn = document.getElementById('focusEnterBtn');
+  const sideColEl = document.querySelector('.side-col');
+  const FOCUS_DURATIONS_MIN = [3, 5, 15, 25];
+
+  // null이면 리스트 화면. 있으면 { step: 'pick-task'|'pick-duration'|
+  // 'running'|'ended', taskBoardId, taskId, taskText, remainingSec,
+  // intervalId, exitConfirmOpen } — 어떤 보드(today/scheduled)에 실제로
+  // 들어있는 항목인지 taskBoardId로 들고 있어야 toggleTask/moveTask를
+  // 그대로 재사용할 수 있음(scheduled로 표시된 오늘 마감/지난 마감 항목도
+  // gotta do 카드에 같이 그려지므로).
+  let focusState = null;
+  let todayFocusVisible = false;
+  let todaySwapPending = false;
+  let todaySwapTimer = null;
+
+  // 카운트다운 진행 중이거나(러닝) 다 끝나서 결과를 고르는 중(엔디드)이면
+  // "몰입 강제" 상태 — 마우스로 화면에 뜬 버튼을 눌러야만 빠져나갈 수
+  // 있고, 그 어떤 키보드 단축키도 먹지 않음.
+  function isFocusLocked() {
+    return !!focusState && (focusState.step === 'running' || focusState.step === 'ended');
+  }
+
+  function clearEl(el) {
+    while (el.firstChild) el.removeChild(el.firstChild);
+  }
+
+  function formatFocusClock(sec) {
+    const m = Math.floor(sec / 60);
+    const s = sec % 60;
+    return String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
+  }
+
+  // gotta do 카드에 지금 그려지는 항목들 그대로(체크 안 된 today 순수 항목
+  // + 오늘 마감 + 지난 마감) — 순서도 renderToday와 동일하게.
+  function getTodayFocusableTasks() {
+    const today = todayStr();
+    const active = boards.today
+      .filter(t => !t.done)
+      .map(t => ({ boardId: 'today', id: t.id, text: t.text }));
+    const dueToday = boards.scheduled
+      .filter(t => !t.done && t.dueDate === today)
+      .sort(byDueDate)
+      .map(t => ({ boardId: 'scheduled', id: t.id, text: t.text }));
+    const oops = boards.scheduled
+      .filter(t => !t.done && t.dueDate < today)
+      .sort(byDueDate)
+      .map(t => ({ boardId: 'scheduled', id: t.id, text: t.text }));
+    return active.concat(dueToday, oops);
+  }
+
+  function makeFocusFooterBtn(text, extraClass) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'focus-footer-btn' + (extraClass ? ' ' + extraClass : '');
+    btn.textContent = text;
+    return btn;
+  }
+
+  function renderFocusPanel() {
+    if (!focusState) return;
+    clearEl(focusBodyEl);
+    clearEl(focusFooterEl);
+
+    if (focusState.step === 'pick-task') {
+      focusTitleEl.textContent = '뭐에 집중할까? 🍅';
+      const tasks = getTodayFocusableTasks();
+      if (tasks.length === 0) {
+        const hint = document.createElement('p');
+        hint.className = 'focus-empty-hint';
+        hint.textContent = '집중할 일이 없어요';
+        focusBodyEl.appendChild(hint);
+      } else {
+        const list = document.createElement('div');
+        list.className = 'focus-task-pick-list';
+        tasks.forEach(t => {
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'focus-task-pick-btn';
+          btn.textContent = t.text;
+          btn.addEventListener('click', () => {
+            focusState = { step: 'pick-duration', taskBoardId: t.boardId, taskId: t.id, taskText: t.text };
+            renderFocusPanel();
+          });
+          list.appendChild(btn);
+        });
+        focusBodyEl.appendChild(list);
+      }
+      return;
+    }
+
+    if (focusState.step === 'pick-duration') {
+      focusTitleEl.textContent = focusState.taskText;
+      const hint = document.createElement('p');
+      hint.className = 'focus-duration-hint';
+      hint.textContent = '얼마나 집중할까요?';
+      focusBodyEl.appendChild(hint);
+      const row = document.createElement('div');
+      row.className = 'focus-duration-row';
+      FOCUS_DURATIONS_MIN.forEach(min => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'focus-duration-btn';
+        btn.textContent = min + '분';
+        btn.addEventListener('click', () => startFocusCountdown(min * 60));
+        row.appendChild(btn);
+      });
+      focusBodyEl.appendChild(row);
+      return;
+    }
+
+    if (focusState.step === 'running') {
+      focusTitleEl.textContent = focusState.taskText;
+      const num = document.createElement('div');
+      num.className = 'focus-countdown-number';
+      num.textContent = formatFocusClock(focusState.remainingSec);
+      focusBodyEl.appendChild(num);
+
+      if (focusState.exitConfirmOpen) {
+        const confirmWrap = document.createElement('div');
+        confirmWrap.className = 'focus-exit-confirm';
+        const msg = document.createElement('p');
+        msg.textContent = '타이머를 중단하고 메인화면으로 갈까요? 현재 진행 중인 타이머는 초기화됩니다.';
+        confirmWrap.appendChild(msg);
+
+        const yesBtn = makeFocusFooterBtn('네, 나갈게요 (타이머 리셋)', 'focus-footer-btn-danger');
+        yesBtn.addEventListener('click', () => exitFocusMode(false));
+        const noBtn = makeFocusFooterBtn('아니, 계속할게요');
+        noBtn.addEventListener('click', () => {
+          focusState.exitConfirmOpen = false;
+          renderFocusPanel();
+        });
+        confirmWrap.appendChild(yesBtn);
+        confirmWrap.appendChild(noBtn);
+        focusFooterEl.appendChild(confirmWrap);
+      } else {
+        const doneBtn = makeFocusFooterBtn('완료로 표시', 'focus-footer-btn-primary');
+        doneBtn.addEventListener('click', finishFocusAsDone);
+        const exitBtn = makeFocusFooterBtn('나가기');
+        exitBtn.addEventListener('click', () => {
+          focusState.exitConfirmOpen = true;
+          renderFocusPanel();
+        });
+        focusFooterEl.appendChild(doneBtn);
+        focusFooterEl.appendChild(exitBtn);
+      }
+      return;
+    }
+
+    if (focusState.step === 'ended') {
+      focusTitleEl.textContent = focusState.taskText;
+      const choices = document.createElement('div');
+      choices.className = 'focus-end-choices';
+
+      const doneBtn = makeFocusFooterBtn('완료로 표시', 'focus-footer-btn-primary');
+      doneBtn.addEventListener('click', finishFocusAsDone);
+
+      const waitBtn = makeFocusFooterBtn('대기중으로 변경');
+      waitBtn.addEventListener('click', () => {
+        moveTask(focusState.taskBoardId, 'waiting', focusState.taskId);
+        exitFocusMode(false);
+      });
+
+      const failBtn = makeFocusFooterBtn('앗.. 못했어요');
+      failBtn.addEventListener('click', () => exitFocusMode(false));
+
+      choices.appendChild(doneBtn);
+      choices.appendChild(waitBtn);
+      choices.appendChild(failBtn);
+      focusBodyEl.appendChild(choices);
+      return;
+    }
+  }
+
+  function finishFocusAsDone() {
+    toggleTask(focusState.taskBoardId, focusState.taskId);
+    exitFocusMode(false);
+  }
+
+  function startFocusCountdown(durationSec) {
+    focusState.step = 'running';
+    focusState.remainingSec = durationSec;
+    focusState.exitConfirmOpen = false;
+    // waiting 카드는 무조건 앞면 상태로 만들고 들어감 — 이미 앞면이어도
+    // 그대로 두면 되는 거라 별도 조건 분기가 필요 없음.
+    setLupinOpen(false);
+    if (sideColEl) sideColEl.classList.add('focus-blurred');
+    renderFocusPanel();
+    focusState.intervalId = setInterval(() => {
+      if (!focusState) return;
+      focusState.remainingSec--;
+      if (focusState.remainingSec <= 0) {
+        focusState.remainingSec = 0;
+        clearInterval(focusState.intervalId);
+        focusState.intervalId = null;
+        focusState.step = 'ended';
+      }
+      renderFocusPanel();
+    }, 1000);
+  }
+
+  // 리스트 ↔ 타이머 레이아웃 크로스페이드 — lupin의 3D 플립과 달리
+  // "변신"이 아니라 "상태 전환"이라 애니메이션 중간(스케일이 가장 작아지는
+  // 지점)에 두 레이아웃을 갈아끼움.
+  function setTodayFocusOpen(open, focusInputAfter) {
+    if (todayFocusVisible === open) {
+      if (!open && focusInputAfter && !todaySwapPending) {
+        const input = todayListEl.querySelector('[data-newtask]');
+        if (input) input.focus();
+      }
+      return;
+    }
+    todayFocusVisible = open;
+    todaySwapPending = true;
+    clearTimeout(todaySwapTimer);
+    todayStickyEl.classList.add('today-swapping');
+    todaySwapTimer = setTimeout(() => {
+      todayListEl.hidden = open;
+      todayFocusEl.hidden = !open;
+      todaySwapPending = false;
+      if (!open && focusInputAfter) {
+        const input = todayListEl.querySelector('[data-newtask]');
+        if (input) input.focus();
+      }
+    }, 160);
+    todayStickyEl.addEventListener('animationend', function handler() {
+      todayStickyEl.classList.remove('today-swapping');
+      todayStickyEl.removeEventListener('animationend', handler);
+    });
+  }
+
+  function exitFocusMode(focusInputAfter) {
+    if (focusState && focusState.intervalId) clearInterval(focusState.intervalId);
+    focusState = null;
+    if (sideColEl) sideColEl.classList.remove('focus-blurred');
+    setTodayFocusOpen(false, focusInputAfter);
+  }
+
+  function enterFocusPickTask() {
+    focusState = { step: 'pick-task' };
+    renderFocusPanel();
+    setTodayFocusOpen(true);
+  }
+
+  function enterFocusPickDuration(boardId, taskId) {
+    const task = boards[boardId] && boards[boardId].find(t => t.id === taskId);
+    if (!task) return;
+    focusState = { step: 'pick-duration', taskBoardId: boardId, taskId: taskId, taskText: task.text };
+    renderFocusPanel();
+    setTodayFocusOpen(true);
+  }
+
+  if (focusEnterBtn) focusEnterBtn.addEventListener('click', enterFocusPickTask);
+
+  // Alt+T — Alt+D/Alt+E와 같은 자리(task-item 안 아무 요소가 포커스된 채)에서
+  // 동작. 호버 시 뜨는 🍅 버튼이 있는 항목(= gotta do 카드에 그려지는
+  // 항목)에서만 의미가 있으므로, 그 버튼을 실제로 찾아 클릭을 재사용함.
+  document.addEventListener('keydown', (e) => {
+    if (isFocusLocked()) return;
+    if (!e.altKey || e.metaKey || e.ctrlKey) return;
+    if (e.code !== 'KeyT') return;
+    const li = document.activeElement && document.activeElement.closest('.task-item');
+    const btn = li && li.querySelector('.focus-btn');
+    if (btn) {
+      e.preventDefault();
+      btn.click();
+    }
+  });
+
   // n/w: 어떤 입력창에도 포커스가 없을 때만 각 보드의 새 항목 입력창으로 포커스 이동.
   // 물리 키(e.code) 기준으로 감지 — e.key로 비교하면 한글 입력기가 켜져
   // 있을 때 물리적으로 같은 자리를 눌러도 자모가 들어와서 단축키가 아예
@@ -2266,6 +2557,19 @@
     const active = document.activeElement;
     const tag = active && active.tagName;
     if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+    // 카운트다운 진행 중/종료 후 선택 대기 중엔 모든 단축키 비활성 —
+    // 화면에 뜬 버튼을 마우스로 눌러야만 빠져나갈 수 있게 의도적으로 막음.
+    if (isFocusLocked()) return;
+
+    // t: gotta do가 리스트 화면일 때만 timer 레이아웃(할일 고르는 단계)으로
+    // 전환. 이미 timer 레이아웃이면(선택 단계) 아무 동작 없음.
+    if (e.code === 'KeyT') {
+      if (!focusState) {
+        e.preventDefault();
+        enterFocusPickTask();
+      }
+      return;
+    }
 
     if (e.code === 'KeyD') {
       e.preventDefault();
@@ -2303,6 +2607,15 @@
       return;
     }
 
+    // n: timer 레이아웃의 선택 단계(할일/시간 고르는 중)에서 눌리면 gotta
+    // do 리스트 화면으로 복귀 + 새 항목 입력창 포커스. 카운트다운 중엔 위
+    // isFocusLocked() 가드에서 이미 걸러짐.
+    if (e.code === 'KeyN' && focusState) {
+      e.preventDefault();
+      exitFocusMode(true);
+      return;
+    }
+
     const boardId = SHORTCUT_BOARD_CODES[e.code];
     if (!boardId) return;
 
@@ -2318,6 +2631,7 @@
   // 옮김. 위 keydown 리스너는 altKey가 눌려있으면 통째로 return해버리는
   // 별도 핸들러라, 여기서 따로 처리함.
   document.addEventListener('keydown', (e) => {
+    if (isFocusLocked()) return;
     if (!e.altKey || e.metaKey || e.ctrlKey) return;
     if (e.code !== 'KeyW' && e.code !== 'KeyN') return;
     const li = document.activeElement && document.activeElement.closest('.task-item');
@@ -2338,6 +2652,7 @@
   // 나름의 키다운 처리를 이미 갖고 있는 입력창들은 그쪽에서 먼저 처리되고
   // (Enter에 blur가 걸려 activeElement가 바뀌므로) 여기까지 안 넘어옴.
   document.addEventListener('keydown', (e) => {
+    if (isFocusLocked()) return;
     if (!e.shiftKey || e.metaKey || e.ctrlKey || e.altKey) return;
     if (e.key !== 'Enter') return;
     const li = document.activeElement && document.activeElement.closest('.task-item');
