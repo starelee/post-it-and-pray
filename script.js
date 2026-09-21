@@ -2478,7 +2478,7 @@
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'focus-footer-btn' + (extraClass ? ' ' + extraClass : '');
-    btn.textContent = text;
+    btn.textContent = '[' + text + ']';
     return btn;
   }
 
@@ -2553,10 +2553,13 @@
       // 텍스트는 pick-duration과 마찬가지로 본문 쪽에 표시.
       focusTitleEl.textContent = FOCUS_TITLE_TEXT;
       focusBodyEl.appendChild(makeFocusTaskBox());
+      const countdownBox = document.createElement('div');
+      countdownBox.className = 'focus-box focus-duration-box focus-countdown-box';
       const num = document.createElement('div');
       num.className = 'focus-countdown-number';
       num.textContent = formatFocusClock(focusState.remainingSec);
-      focusBodyEl.appendChild(num);
+      countdownBox.appendChild(num);
+      focusBodyEl.appendChild(countdownBox);
 
       if (focusState.exitConfirmOpen) {
         const confirmWrap = document.createElement('div');
