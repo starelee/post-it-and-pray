@@ -2867,13 +2867,6 @@
       num.textContent = formatFocusClock(focusState.remainingSec);
       countdownBox.appendChild(num);
 
-      if (focusState.paused) {
-        const pausedTag = document.createElement('div');
-        pausedTag.className = 'focus-paused-tag';
-        pausedTag.textContent = '⏸ 일시정지';
-        countdownBox.appendChild(pausedTag);
-      }
-
       // 일시정지/재개는 완료로 표시·시간 추가·나가기랑 한 줄에 묶지 않고
       // 시간 숫자 바로 밑에 따로 뗌 — 다른 버튼들보다 훨씬 자주 누르게
       // 될 버튼이라 눈에 먼저 띄어야 함. 나가기 확인 중엔 그 확인 버튼만
