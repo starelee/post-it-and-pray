@@ -2874,6 +2874,22 @@
         countdownBox.appendChild(pausedTag);
       }
 
+      // 일시정지/재개는 완료로 표시·시간 추가·나가기랑 한 줄에 묶지 않고
+      // 시간 숫자 바로 밑에 따로 뗌 — 다른 버튼들보다 훨씬 자주 누르게
+      // 될 버튼이라 눈에 먼저 띄어야 함. 나가기 확인 중엔 그 확인 버튼만
+      // 보여야 하니 같이 숨김.
+      if (!focusState.exitConfirmOpen) {
+        const pauseRow = document.createElement('div');
+        pauseRow.className = 'focus-pause-row';
+        const pauseBtn = makeFocusFooterBtn(focusState.paused ? '▶ 재개' : '⏸ 일시정지', 'focus-pause-btn');
+        pauseBtn.addEventListener('click', () => {
+          if (focusState.paused) resumeFocusCountdown();
+          else pauseFocusCountdown();
+        });
+        pauseRow.appendChild(pauseBtn);
+        countdownBox.appendChild(pauseRow);
+      }
+
       // 완료로 표시/시간 추가/나가기는 밑에 새 박스를 만드는 게 아니라 이
       // 숫자 박스 하단에 그대로 들어감 — #focusFooter는 running 단계에서
       // 더는 안 씀.
@@ -2899,12 +2915,6 @@
         actions.className = 'focus-countdown-actions';
         const doneBtn = makeFocusFooterBtn('완료로 표시', 'focus-footer-btn-primary');
         doneBtn.addEventListener('click', finishFocusAsDone);
-
-        const pauseBtn = makeFocusFooterBtn(focusState.paused ? '계속하기' : '일시정지');
-        pauseBtn.addEventListener('click', () => {
-          if (focusState.paused) resumeFocusCountdown();
-          else pauseFocusCountdown();
-        });
 
         // "시간 변경"(전체 재설정) 대신 "시간 추가" — 전체 선택 화면으로
         // 안 바뀌고, 이 자리에서 버튼이 곧장 분 입력창으로 바뀌어 지금
@@ -2953,7 +2963,6 @@
           renderFocusPanel();
         });
         actions.appendChild(doneBtn);
-        actions.appendChild(pauseBtn);
         actions.appendChild(addTimeBtn);
         actions.appendChild(addTimeInput);
         actions.appendChild(exitBtn);

@@ -963,6 +963,18 @@
     margin-top: -6px;
   }
 
+  /* 일시정지/재개는 완료로 표시·시간 추가·나가기보다 훨씬 자주 누르게
+     되는 버튼이라 시간 숫자 바로 밑에 혼자 떼어 강조함. */
+  .focus-pause-row {
+    display: flex;
+    justify-content: center;
+    margin: 6px 0 10px;
+  }
+
+  .focus-pause-btn {
+    font-size: 16px;
+  }
+
   .focus-empty-hint {
     color: var(--ink-soft);
     font-size: 15px;
