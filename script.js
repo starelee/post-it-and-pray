@@ -1775,6 +1775,11 @@
     saveBoards();
     render(fromBoardId);
     render(toBoardId);
+    // scheduled 항목(오늘 마감/지난 마감분)은 실제로 today 카드 안에
+    // 그려져 있어서, scheduled 쪽이 오가면 today도 같이 다시 그려야
+    // 화면에서 바로 사라지거나 나타남 — 안 하면 새로고침 전까진 그대로
+    // 남아있는 것처럼 보임.
+    if (fromBoardId === 'scheduled' || toBoardId === 'scheduled') render('today');
   }
 
   // Assigning a date on a today/someday task moves it into `scheduled`;
