@@ -34,6 +34,10 @@
        공용 --input-line(연한 탠)이 잘 안 보임 — 전용 톤으로 대비를 확보. */
     --focus-box-border: rgba(105, 45, 30, 0.4);
     --focus-box-fill: rgba(255, 255, 255, 0.3);
+    /* 같은 이유로 공용 --ink-soft(연한 탠 계열 회갈색)도 코랄 위에서는
+       거의 안 보여서 버튼 글자용 전용 회색을 따로 둠 — 검은색까진 아니고
+       은은한 회색 톤으로. */
+    --focus-ink-soft: #5c5652;
   }
 
   @media (prefers-color-scheme: dark) {
@@ -64,6 +68,7 @@
       --legal-margin: rgba(255, 107, 107, 0.35);
       --focus-box-border: rgba(255, 210, 195, 0.4);
       --focus-box-fill: rgba(255, 255, 255, 0.1);
+      --focus-ink-soft: #d6c9c0;
     }
   }
 
@@ -94,6 +99,7 @@
     --legal-margin: rgba(255, 107, 107, 0.35);
     --focus-box-border: rgba(255, 210, 195, 0.4);
     --focus-box-fill: rgba(255, 255, 255, 0.1);
+    --focus-ink-soft: #d6c9c0;
   }
 
   * { box-sizing: border-box; }
@@ -969,7 +975,7 @@
   }
 
   .focus-empty-hint {
-    color: var(--ink-soft);
+    color: var(--focus-ink-soft);
     font-size: 15px;
   }
 
@@ -1002,7 +1008,7 @@
   .focus-footer-btn {
     font-family: 'Gaegu', cursive, sans-serif;
     font-size: 15px;
-    color: var(--ink-soft);
+    color: var(--focus-ink-soft);
     background: none;
     border: none;
     padding: 4px 6px;
