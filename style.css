@@ -1741,13 +1741,19 @@
     vertical-align: middle;
   }
 
+  /* 카드마다 종이색이 다 달라서(--paper, --paper-waiting, --paper-someday,
+     되살리기 카드/"done" 패널의 --legal-paper 등) 힌트 배경에 특정 종이색
+     변수를 골라 쓰면 그 카드에서만 안 맞아 튀어 보임(예: done 패널에서
+     --paper를 썼더니 legal-paper와 달라서 뜬금없는 색 블록으로 보였음) —
+     대신 검은색을 살짝만 얹는 식으로 "그 자리의 배경을 그대로 살짝
+     어둡게"만 만들어서, 어떤 종이 위에서도 자연스럽게 얹힘. */
   .date-input-hint {
     position: absolute;
     inset: 0;
     display: flex;
     align-items: center;
     padding: 1px 4px;
-    background: var(--paper);
+    background: rgba(0, 0, 0, 0.12);
     color: var(--ink-soft);
     font-family: 'Gaegu', cursive, sans-serif;
     font-size: 12px;
@@ -1870,6 +1876,51 @@
     max-height: 26px;
     opacity: 1;
     margin-top: 6px;
+  }
+
+  /* 터치 기기는 :hover를 안정적으로 감지하지 못함 — iOS/Android 브라우저마다
+     탭을 "호버 흉내"로 먼저 처리했다가 뒤늦게 진짜 클릭을 보내거나, 네이티브
+     날짜 피커가 뜨는 순간 focus-within을 잠깐 놓치는 등 타이밍이 제각각이라,
+     호버로만 펼쳐지던 날짜/긴급/+(하위 항목 추가) 버튼이 누르자마자 다시
+     접혀버리는 문제가 반복됐음. 마우스가 아예 없는(hover:none) 환경에서는
+     이 요소들을 애초에 hover/focus-within에 기대지 않고 항상 펼쳐둠 —
+     row-pinned 같은 개별 땜질보다 근본적으로 안전함. */
+  /* 다 펼쳐두면 아이콘이 한꺼번에 너무 많아 보인다는 피드백 반영 — 터치
+     기기에서는 hover 대신, 탭한 그 항목만 별도 클래스(controls-open)로
+     펼침. 이 클래스는 아래 .more-btn 탭으로 켜고 끔. */
+  .task-item.controls-open .task-controls {
+    max-height: 26px;
+    opacity: 1;
+    margin-top: 4px;
+  }
+
+  .add-row-wrap.controls-open .draft-controls {
+    max-height: 26px;
+    opacity: 1;
+    margin-top: 6px;
+  }
+
+  /* "⋯" 더보기 버튼 — 데스크톱은 그대로 hover로 펼치니 평소엔 숨겨두고,
+     호버를 못 쓰는(hover:none) 터치 기기에서만 보여서 그걸로 펼치고
+     접게 함. */
+  .more-btn {
+    display: none;
+    flex: 0 0 auto;
+    margin-left: auto;
+    background: none;
+    border: none;
+    color: var(--ink-soft);
+    font-size: 15px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 2px 6px;
+    opacity: 0.55;
+  }
+
+  @media (hover: none) {
+    .more-btn {
+      display: inline-flex;
+    }
   }
 
   .plus {

@@ -650,6 +650,26 @@
     return document.querySelector('.task-item[data-id="' + id + '"]');
   }
 
+  // 상위 항목 텍스트가 지금 편집 중(startEditTask로 만든 입력창이 살아
+  // 있음)일 때 날짜/긴급/+(하위 항목 추가) 같은 옆 버튼을 그대로 누르면,
+  // 그 클릭은 아직 수정 전인 옛 DOM 위에서 먼저 실행되고 — 입력창의 blur
+  // 핸들러가 한 틱 뒤에야 커밋 + render()를 실행하도록 일부러 미뤄뒀기
+  // 때문에(모바일에서 옆 버튼 클릭이 죽은 노드로 날아가는 걸 막으려고) —
+  // 그 뒤늦은 render()가 li를 통째로 새로 그리면서, 방금 그 클릭이 열어둔
+  // 상태(날짜 행 등)를 흔적도 없이 지워버림. 이 버튼들의 클릭 핸들러
+  // 맨 앞에서 먼저 이 함수로 커밋을 앞당기고, 새로 그려진 li에서 같은
+  // 버튼을 다시 찾아 클릭을 재발사함(Alt+D/E 단축키가 이미 쓰던 방식과
+  // 동일) — 처리했으면 true를 돌려주므로 호출 쪽은 자기 로직을 건너뜀.
+  function commitPendingEditThenRetry(li, taskId, selector) {
+    const commit = li._activeEditCommit;
+    if (!commit) return false;
+    commit();
+    const freshLi = findTaskLi(taskId);
+    const freshEl = freshLi && freshLi.querySelector(selector);
+    if (freshEl) freshEl.click();
+    return true;
+  }
+
   // Wires a collapse toggle button to a body element (used for the
   // scheduled/someday sections present in the static HTML, and reused for
   // the archive panel's dynamically-created month groups, which need to
@@ -975,6 +995,22 @@
       row.appendChild(badge);
     }
 
+    // 데스크톱은 hover로 아이콘 줄이 펼쳐지지만, 터치 기기는 hover를
+    // 안정적으로 감지 못해서(호버 흉내→지연된 클릭 등) 그 방식에 기대면
+    // 누르자마자 다시 접히는 문제가 있었음 — 호버가 없는 환경에서만
+    // 보이는 이 버튼으로 "이 항목만" 펼치고 접을 수 있게 함(전부 다
+    // 펼쳐두면 아이콘이 너무 많아진다는 피드백 반영).
+    const moreBtn = document.createElement('button');
+    moreBtn.className = 'more-btn';
+    moreBtn.type = 'button';
+    moreBtn.setAttribute('aria-label', '메뉴 더보기');
+    moreBtn.textContent = '⋯';
+    moreBtn.addEventListener('click', () => {
+      if (commitPendingEditThenRetry(li, task.id, '.more-btn')) return;
+      li.classList.toggle('controls-open');
+    });
+    row.appendChild(moreBtn);
+
     li.appendChild(row);
 
     if (task.subtasks.length > 0) {
@@ -999,7 +1035,10 @@
     // 표시라서 플랫폼에 따라 이모지가 아니라 얇은 흑백 "+"로 렌더링돼
     // 옆 이모지들과 두께/여백이 달라 보였음 — 강제로 이모지 표시를 요청.
     urgentBtn.textContent = '❗️';
-    urgentBtn.addEventListener('click', () => toggleUrgent(boardId, task.id));
+    urgentBtn.addEventListener('click', () => {
+      if (commitPendingEditThenRetry(li, task.id, '.urgent-btn')) return;
+      toggleUrgent(boardId, task.id);
+    });
 
     const addToggle = document.createElement('button');
     addToggle.className = 'add-subtask-toggle';
@@ -1183,8 +1222,14 @@
           requestAnimationFrame(() => dateInput.focus());
         }
       };
-      dateBtn.addEventListener('click', toggleDateRow);
-      if (badge) badge.addEventListener('click', toggleDateRow);
+      dateBtn.addEventListener('click', () => {
+        if (commitPendingEditThenRetry(li, task.id, '.date-btn')) return;
+        toggleDateRow();
+      });
+      if (badge) badge.addEventListener('click', () => {
+        if (commitPendingEditThenRetry(li, task.id, '.due-badge')) return;
+        toggleDateRow();
+      });
     }
 
     const addSubRow = document.createElement('div');
@@ -1234,7 +1279,10 @@
       if (trimmed) addSubtask(boardId, task.id, subInput.value);
       else subInput.focus();
     });
-    addToggle.addEventListener('click', () => openAddSubtaskRow(boardId, task.id, true));
+    addToggle.addEventListener('click', () => {
+      if (commitPendingEditThenRetry(li, task.id, '.add-subtask-toggle')) return;
+      openAddSubtaskRow(boardId, task.id, true);
+    });
 
     addSubRow.appendChild(plus);
     addSubRow.appendChild(subInput);
@@ -1987,6 +2035,7 @@
     const commit = () => {
       if (committed) return;
       committed = true;
+      delete li._activeEditCommit;
       const trimmed = input.value.trim();
       if (trimmed) task.text = trimmed;
       saveBoards();
@@ -1995,6 +2044,15 @@
       // scheduled만 다시 그리면 방금 만든 이 input이 화면에 그대로 남음.
       if (boardId === 'scheduled') render('today');
     };
+    // 날짜/긴급/하위 항목 버튼이 지금 수정 중인 텍스트를 두고 그냥 눌리면,
+    // 그 클릭은 (아래 blur 핸들러의 설계대로) 옛(수정 전) DOM 위에서 먼저
+    // 실행된 뒤에야 commit()의 render()가 뒤늦게 실행됨 — 문제는 날짜 행을
+    // "연" 상태처럼 그 클릭이 남겨놓은 UI 상태가, 뒤이은 render()가 li를
+    // 통째로 새로 그리면서 흔적도 없이 지워져버린다는 것(연 순간 바로 원래
+    // 값으로 돌아가 보이는 원인). 해당 버튼들이 클릭 시점에 이 함수를 먼저
+    // 불러 커밋+재렌더링을 앞당기고, 새로 그려진 li에서 자기 자신을 다시
+    // 찾아 클릭을 재발사하도록 함(Alt+D/E 단축키가 이미 쓰던 방식과 동일).
+    li._activeEditCommit = commit;
 
     input.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') {
@@ -2572,6 +2630,16 @@
       commitDraft();
       input.focus();
     });
+
+    // task-item의 "⋯"와 같은 이유 — 호버를 못 쓰는 터치 기기에서 긴급/
+    // 하위 항목 초안 버튼(draft-controls)을 펼치고 접는 전용 버튼.
+    const draftMoreBtn = document.createElement('button');
+    draftMoreBtn.className = 'more-btn';
+    draftMoreBtn.type = 'button';
+    draftMoreBtn.setAttribute('aria-label', '메뉴 더보기');
+    draftMoreBtn.textContent = '⋯';
+    draftMoreBtn.addEventListener('click', () => addRowWrap.classList.toggle('controls-open'));
+    addRow.appendChild(draftMoreBtn);
 
     input.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') {
