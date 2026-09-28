@@ -969,14 +969,17 @@
     urgentBtn.className = 'urgent-btn';
     urgentBtn.type = 'button';
     urgentBtn.setAttribute('aria-label', task.urgent ? '긴급 해제' : '긴급 표시');
-    urgentBtn.textContent = '!';
+    // 옆에 나란히 있는 다른 버튼들(🍅📅⏳🌙🗑️)이 전부 이모지라 "!"만
+    // 맨 텍스트로 튀어 보였음 — 켜졌을 때만 빨간 느낌표(❗)로, 평소엔
+    // 흐린 느낌표(❕)로 이모지끼리 통일함.
+    urgentBtn.textContent = task.urgent ? '❗' : '❕';
     urgentBtn.addEventListener('click', () => toggleUrgent(boardId, task.id));
 
     const addToggle = document.createElement('button');
     addToggle.className = 'add-subtask-toggle';
     addToggle.type = 'button';
     addToggle.setAttribute('aria-label', '하위 항목 추가');
-    addToggle.textContent = '+';
+    addToggle.textContent = '➕';
 
     controls.appendChild(urgentBtn);
     controls.appendChild(addToggle);
@@ -1509,6 +1512,41 @@
     const text = document.createElement('span');
     text.className = 'archive-item-text upcoming-item-text';
     text.textContent = task.text;
+    text.tabIndex = 0;
+    text.setAttribute('role', 'button');
+    text.setAttribute('aria-label', '내용 수정');
+    // 이 칸의 li는 .task-item이 아니라 .archive-item이라 findTaskLi
+    // (.task-item[data-id]로 찾음) 기반의 공용 startEditTask를 못 씀 —
+    // 여기서만 쓰는 가벼운 인라인 편집을 따로 둠. task는 boards.scheduled
+    // 안 실제 객체라 여기서 바로 고쳐써도 됨.
+    text.addEventListener('click', () => {
+      const input = document.createElement('input');
+      input.className = 'task-edit-input';
+      input.type = 'text';
+      input.value = task.text;
+      input.maxLength = 100;
+      text.replaceWith(input);
+      input.focus();
+      input.select();
+
+      let committed = false;
+      const commit = () => {
+        if (committed) return;
+        committed = true;
+        const trimmed = input.value.trim();
+        if (trimmed) task.text = trimmed;
+        saveBoards();
+        renderUpcoming();
+      };
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') input.blur();
+        else if (e.key === 'Escape') {
+          input.value = task.text;
+          input.blur();
+        }
+      });
+      input.addEventListener('blur', () => setTimeout(commit, 0));
+    });
     li.appendChild(text);
 
     const badge = document.createElement('span');
@@ -1588,6 +1626,102 @@
     });
 
     li.appendChild(dateRow);
+
+    // 하위 항목이 있으면 평소엔 접어두고 이 줄에 호버(또는 안의 무언가에
+    // 포커스)했을 때만 펼쳐서 보여줌 — 목록이 다닥다닥 붙어있는 "not my
+    // problem... yet" 칸이 하위 항목까지 항상 펼쳐놓으면 너무 빽빽해짐.
+    // task는 boards.scheduled 안 실제 객체라 여기서 바로 고쳐써도 됨.
+    const subList = document.createElement('ul');
+    subList.className = 'subtask-list upcoming-subtask-list';
+
+    function renderUpcomingSubtasks() {
+      subList.innerHTML = '';
+      subList.hidden = task.subtasks.length === 0;
+      task.subtasks.forEach(sub => {
+        const subLi = document.createElement('li');
+        subLi.className = 'subtask-item' + (sub.done ? ' done' : '');
+        subLi.dataset.id = sub.id;
+
+        const chip = document.createElement('button');
+        chip.className = 'subtask-chip';
+        chip.type = 'button';
+        chip.setAttribute('aria-label', sub.done ? '완료 취소' : '완료 표시');
+        chip.textContent = '[' + sub.text + ']';
+        // renderSubtaskItem과 동일한 이유로 클릭을 살짝 늦춰서, 더블클릭이
+        // 오면 완료 토글 없이 편집 모드로만 들어가게 함.
+        let chipClickTimer = null;
+        chip.addEventListener('click', () => {
+          clearTimeout(chipClickTimer);
+          chipClickTimer = setTimeout(() => {
+            sub.done = !sub.done;
+            saveBoards();
+            subLi.classList.toggle('done', sub.done);
+          }, 400);
+        });
+        chip.addEventListener('dblclick', (e) => {
+          e.stopPropagation();
+          clearTimeout(chipClickTimer);
+          startEditUpcomingSubtask(sub, chip);
+        });
+
+        const edit = document.createElement('button');
+        edit.className = 'subtask-edit-btn';
+        edit.type = 'button';
+        edit.setAttribute('aria-label', '수정');
+        edit.textContent = '✎';
+        edit.addEventListener('click', () => startEditUpcomingSubtask(sub, chip));
+
+        const del = document.createElement('button');
+        del.className = 'subtask-delete-btn';
+        del.type = 'button';
+        del.setAttribute('aria-label', '삭제');
+        del.textContent = '×';
+        del.addEventListener('click', () => {
+          task.subtasks = task.subtasks.filter(s => s.id !== sub.id);
+          saveBoards();
+          renderUpcomingSubtasks();
+        });
+
+        subLi.appendChild(chip);
+        subLi.appendChild(edit);
+        subLi.appendChild(del);
+        subList.appendChild(subLi);
+      });
+    }
+
+    function startEditUpcomingSubtask(sub, chipEl) {
+      const input = document.createElement('input');
+      input.className = 'subtask-edit-input';
+      input.type = 'text';
+      input.value = sub.text;
+      input.maxLength = 100;
+      input.size = Math.max(2, sub.text.length);
+      chipEl.replaceWith(input);
+      input.focus();
+      input.select();
+
+      let committed = false;
+      const commit = () => {
+        if (committed) return;
+        committed = true;
+        const trimmed = input.value.trim();
+        if (trimmed) sub.text = trimmed;
+        saveBoards();
+        renderUpcomingSubtasks();
+      };
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') input.blur();
+        else if (e.key === 'Escape') {
+          input.value = sub.text;
+          input.blur();
+        }
+      });
+      input.addEventListener('blur', () => setTimeout(commit, 0));
+    }
+
+    renderUpcomingSubtasks();
+    li.appendChild(subList);
+
     return li;
   }
 
@@ -2174,10 +2308,11 @@
     urgentBtn.type = 'button';
     urgentBtn.className = 'urgent-btn';
     urgentBtn.setAttribute('aria-label', '긴급 표시');
-    urgentBtn.textContent = '!';
+    urgentBtn.textContent = '❕';
     urgentBtn.addEventListener('click', () => {
       draftUrgent = !draftUrgent;
       urgentBtn.classList.toggle('draft-active', draftUrgent);
+      urgentBtn.textContent = draftUrgent ? '❗' : '❕';
       // 버튼 자체는 호버 중에만 보이니, 긴급 여부는 행 배경색으로 항상
       // 표시해줌 — 실제 등록된 항목의 urgent 강조와 같은 방식.
       addRow.classList.toggle('draft-urgent', draftUrgent);
@@ -2188,7 +2323,7 @@
     subtaskToggle.type = 'button';
     subtaskToggle.className = 'add-subtask-toggle';
     subtaskToggle.setAttribute('aria-label', '하위 항목 추가');
-    subtaskToggle.textContent = '+';
+    subtaskToggle.textContent = '➕';
     draftControls.appendChild(subtaskToggle);
 
     // 날짜 기능 없는 보드(waiting)는 기존 task-item과 동일하게 아예 제외.
@@ -2369,6 +2504,7 @@
       draftDueDate = '';
       draftSubtasks = [];
       urgentBtn.classList.remove('draft-active');
+      urgentBtn.textContent = '❕';
       addRow.classList.remove('draft-urgent');
       if (dateBadge) dateBadge.hidden = true;
       if (dateInput) dateInput.value = '';
