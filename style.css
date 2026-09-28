@@ -529,6 +529,28 @@
     list-style: none;
   }
 
+  /* "not my problem... yet" 줄의 하위 항목 — 평소엔 접어두고, 이 줄에
+     호버하거나(마우스) 안의 무언가에 포커스가 있을 때(키보드/편집 중)만
+     펼쳐서 보여줌. focus-within을 같이 걸어둬야 마우스가 빠져나가도 편집
+     중이던 입력창이 갑자기 접혀서 사라지지 않음. */
+  .upcoming-subtask-list {
+    flex-basis: 100%;
+    max-height: 0;
+    overflow: hidden;
+    margin: 0;
+    padding-left: 0;
+    transition: max-height 0.15s ease;
+  }
+
+  .archive-item:hover .upcoming-subtask-list,
+  .archive-item:focus-within .upcoming-subtask-list {
+    max-height: 200px;
+  }
+
+  .upcoming-subtask-list[hidden] {
+    display: none;
+  }
+
   /* 되살리기 카드가 열리면 좁은 화면에서 제목/버튼과 한 줄에 끼어 들어가려다
      제목 칸이 거의 0폭까지 눌려서 글자가 한 자씩 세로로 쪼개져 보였음 —
      아예 다음 줄 전체를 차지하게 떨어뜨림. */
@@ -1170,7 +1192,7 @@
     background: none;
     border: none;
     color: var(--ink-soft);
-    font-size: 15px;
+    font-size: 14px;
     line-height: 1;
     cursor: pointer;
     padding: 2px 3px;
@@ -1552,7 +1574,7 @@
     background: none;
     border: none;
     color: var(--ink-soft);
-    font-size: 15px;
+    font-size: 14px;
     line-height: 1;
     cursor: pointer;
     padding: 2px 4px;
