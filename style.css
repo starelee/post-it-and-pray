@@ -1708,14 +1708,23 @@
     display: none;
   }
 
+  /* 다크 모드(테마 색 = 밝은 크림 글자, 어두운 배경)에서 iOS 등 네이티브
+     date input이 "값을 아직 안 고른" 기본 상태의 mm/dd/yyyy 자리표시
+     글자는 우리 color CSS가 안 먹히는 자기만의 내부 렌더링이라, 페이지
+     color-scheme만으로는 어떤 조합에서 배경/글자가 겹칠지 브라우저마다
+     달라서 계속 안 보이는 문제가 반복됐음 — 아예 이 입력창만 테마와
+     무관하게 항상 밝은 배경 + 어두운 글자로 고정하고 color-scheme도
+     light로 못박아서, 페이지가 다크든 라이트든 네이티브 렌더링이 똑같이
+     "밝은 배경" 전제로 그려지게 함. */
   .date-picker-input {
     font-family: 'Gaegu', cursive, sans-serif;
     font-size: 13px;
-    color: var(--ink);
-    background: transparent;
+    color: #4a4034;
+    background: #fffdf0;
     border: 1px solid var(--input-line);
     border-radius: 4px;
     padding: 1px 4px;
+    color-scheme: light;
   }
 
   .date-clear-btn {
