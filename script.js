@@ -46,6 +46,28 @@
     return y + '-' + m + '-' + day;
   }
 
+  // 값이 없을 때(아직 날짜를 안 고른 상태) 네이티브 date input이
+  // mm/dd/yyyy 같은 자리표시 글자를 자체적으로 그려주지 않는 플랫폼이
+  // 있어서(특히 iOS), 빈 칸이 그냥 텅 빈 상자로만 보여 날짜 필드인지도
+  // 알아보기 어려웠음 — 우리가 직접 힌트 글자를 그 위에 덧그려서, 값이
+  // 없을 땐 항상 "날짜 선택"이 보이고 값이 생기면 실제 값이 보이게 함.
+  // 힌트는 pointer-events:none이라 탭은 그대로 밑의 input으로 전달됨.
+  function wrapDateInputWithHint(dateInput) {
+    const wrap = document.createElement('span');
+    wrap.className = 'date-input-wrap';
+    const hint = document.createElement('span');
+    hint.className = 'date-input-hint';
+    hint.textContent = '날짜 선택';
+    hint.setAttribute('aria-hidden', 'true');
+    const syncHint = () => { hint.hidden = !!dateInput.value; };
+    dateInput.addEventListener('input', syncHint);
+    dateInput.addEventListener('change', syncHint);
+    syncHint();
+    wrap.appendChild(dateInput);
+    wrap.appendChild(hint);
+    return wrap;
+  }
+
   const WEEKDAY_KO = ['일', '월', '화', '수', '목', '금', '토'];
 
   // pray later 카드/리갈패드 "다가오는 일" 사이의 7일 경계를 실시간으로
@@ -1131,7 +1153,7 @@
         li.classList.remove('row-pinned');
       });
 
-      dateRow.appendChild(dateInput);
+      dateRow.appendChild(wrapDateInputWithHint(dateInput));
       dateRow.appendChild(todayBtn);
       dateRow.appendChild(tomorrowBtn);
       dateRow.appendChild(clearBtn);
@@ -1413,7 +1435,7 @@
         resetReviveDraft();
       }
     });
-    reviveDateRow.appendChild(reviveDateInput);
+    reviveDateRow.appendChild(wrapDateInputWithHint(reviveDateInput));
 
     const reviveTomorrowBtn = document.createElement('button');
     reviveTomorrowBtn.className = 'date-clear-btn';
@@ -1621,7 +1643,7 @@
         }
       }, 400);
     });
-    dateRow.appendChild(dateInput);
+    dateRow.appendChild(wrapDateInputWithHint(dateInput));
 
     const clearBtn = document.createElement('button');
     clearBtn.className = 'date-clear-btn';
@@ -2434,7 +2456,7 @@
         }
       });
 
-      dateRow.appendChild(dateInput);
+      dateRow.appendChild(wrapDateInputWithHint(dateInput));
       dateRow.appendChild(tomorrowBtn);
       dateRow.appendChild(dateClearBtn);
       dateBtn.addEventListener('click', () => {
