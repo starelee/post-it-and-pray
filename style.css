@@ -529,20 +529,26 @@
     list-style: none;
   }
 
-  /* 되살리기 날짜 피커가 열리면 좁은 화면에서 제목/버튼과 한 줄에 끼어
-     들어가려다 제목 칸이 거의 0폭까지 눌려서 글자가 한 자씩 세로로
-     쪼개져 보였음 — 아예 다음 줄 전체를 차지하게 떨어뜨림. */
-  .archive-item .date-picker-row,
-  .archive-item .revive-edit-row {
+  /* 되살리기 카드가 열리면 좁은 화면에서 제목/버튼과 한 줄에 끼어 들어가려다
+     제목 칸이 거의 0폭까지 눌려서 글자가 한 자씩 세로로 쪼개져 보였음 —
+     아예 다음 줄 전체를 차지하게 떨어뜨림. */
+  .archive-item .revive-card {
     flex-basis: 100%;
   }
 
-  .revive-edit-row[hidden] {
+  .revive-card[hidden] {
     display: none;
   }
 
-  .revive-edit-row {
-    padding: 2px 0 0;
+  .revive-card {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 4px 0 2px;
+  }
+
+  .revive-card .date-picker-row {
+    padding-left: 0;
   }
 
   .revive-text-input {
@@ -556,6 +562,37 @@
     border-bottom: 1px dashed var(--accent);
     outline: none;
     padding: 0;
+  }
+
+  .revive-card .subtask-list {
+    margin: 0;
+    padding-left: 0;
+  }
+
+  .revive-card .add-subtask-row {
+    padding-left: 0;
+  }
+
+  .revive-controls {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .revive-done-btn {
+    font-family: 'Gaegu', cursive, sans-serif;
+    font-size: 13px;
+    color: var(--paper);
+    background: var(--accent);
+    border: none;
+    border-radius: 4px;
+    padding: 2px 10px;
+    cursor: pointer;
+    transition: opacity 0.15s ease;
+  }
+
+  .revive-done-btn:hover {
+    opacity: 0.85;
   }
 
   .archive-item-text {
