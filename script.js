@@ -973,14 +973,17 @@
     // 맨 텍스트로 튀어 보였음 — ❗로 통일. 색 있는 이모지라 CSS color로
     // 꺼짐/켜짐을 못 바꾸니, 글자는 항상 같고 CSS가 opacity/grayscale로
     // 흐리게/선명하게만 바꿈(li의 urgent 클래스 기준).
-    urgentBtn.textContent = '❗';
+    // U+FE0F(변형 선택자)를 안 붙이면 ➕(U+2795)는 기본이 텍스트
+    // 표시라서 플랫폼에 따라 이모지가 아니라 얇은 흑백 "+"로 렌더링돼
+    // 옆 이모지들과 두께/여백이 달라 보였음 — 강제로 이모지 표시를 요청.
+    urgentBtn.textContent = '❗️';
     urgentBtn.addEventListener('click', () => toggleUrgent(boardId, task.id));
 
     const addToggle = document.createElement('button');
     addToggle.className = 'add-subtask-toggle';
     addToggle.type = 'button';
     addToggle.setAttribute('aria-label', '하위 항목 추가');
-    addToggle.textContent = '➕';
+    addToggle.textContent = '➕️';
 
     controls.appendChild(urgentBtn);
     controls.appendChild(addToggle);
@@ -1136,8 +1139,15 @@
         // 문제가 있었음(달력 안 뜨고 원래 상태로 돌아가는 것처럼 보임) —
         // 날짜 행이 열려있는 동안은 별도 클래스로 강제로 펼쳐둠.
         li.classList.toggle('row-pinned', !dateRow.hidden);
-        if (dateRow.hidden) clearTimeout(commitTimer);
-        else dateInput.focus();
+        if (dateRow.hidden) {
+          clearTimeout(commitTimer);
+        } else {
+          // hidden을 푼 직후 같은 틱에 focus()를 부르면(그래서 네이티브
+          // 피커가 뜨면) 아직 리플로우 전이라 iOS가 이 줄이 실제로 펼쳐진
+          // 상태를 못 보고 다시 접어버리는 것으로 보임 — 한 프레임 뒤로
+          // 미뤄서 레이아웃이 자리잡은 다음에 포커스를 줌.
+          requestAnimationFrame(() => dateInput.focus());
+        }
       };
       dateBtn.addEventListener('click', toggleDateRow);
       if (badge) badge.addEventListener('click', toggleDateRow);
@@ -2317,7 +2327,7 @@
     urgentBtn.type = 'button';
     urgentBtn.className = 'urgent-btn';
     urgentBtn.setAttribute('aria-label', '긴급 표시');
-    urgentBtn.textContent = '❗';
+    urgentBtn.textContent = '❗️';
     urgentBtn.addEventListener('click', () => {
       draftUrgent = !draftUrgent;
       urgentBtn.classList.toggle('draft-active', draftUrgent);
@@ -2331,7 +2341,7 @@
     subtaskToggle.type = 'button';
     subtaskToggle.className = 'add-subtask-toggle';
     subtaskToggle.setAttribute('aria-label', '하위 항목 추가');
-    subtaskToggle.textContent = '➕';
+    subtaskToggle.textContent = '➕️';
     draftControls.appendChild(subtaskToggle);
 
     // 날짜 기능 없는 보드(waiting)는 기존 task-item과 동일하게 아예 제외.
