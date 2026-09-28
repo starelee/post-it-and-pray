@@ -540,15 +540,29 @@
     display: none;
   }
 
+  /* focus 모드의 점선 박스(.focus-box)와 같은 테두리 — 되살리기 카드가
+     archive 목록 안 다른 줄들과 안 섞이고 하나의 편집 영역으로 도드라져
+     보이게 함. */
   .revive-card {
     display: flex;
     flex-direction: column;
     gap: 4px;
-    padding: 4px 0 2px;
+    margin-top: 4px;
+    padding: 10px 12px;
+    border: 1px dashed var(--focus-box-border);
+    border-radius: 16px;
+  }
+
+  .revive-hint {
+    margin: 0 0 2px;
+    font-family: 'Gaegu', cursive, sans-serif;
+    font-size: 13px;
+    color: var(--ink-soft);
   }
 
   .revive-card .date-picker-row {
     padding-left: 0;
+    flex-wrap: wrap;
   }
 
   .revive-text-input {
@@ -573,26 +587,12 @@
     padding-left: 0;
   }
 
-  .revive-controls {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-  }
-
+  /* "완료"도 "날짜 지우기"와 똑같은 date-clear-btn 스타일을 그대로 써서
+     한 행 안에 나란히 붙게 하되, 실제로 새 카드를 만드는 액션이라는 걸
+     알아볼 수 있게 색만 강조함. */
   .revive-done-btn {
-    font-family: 'Gaegu', cursive, sans-serif;
-    font-size: 13px;
-    color: var(--paper);
-    background: var(--accent);
-    border: none;
-    border-radius: 4px;
-    padding: 2px 10px;
-    cursor: pointer;
-    transition: opacity 0.15s ease;
-  }
-
-  .revive-done-btn:hover {
-    opacity: 0.85;
+    color: var(--accent);
+    font-weight: bold;
   }
 
   .archive-item-text {
