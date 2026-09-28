@@ -6,6 +6,12 @@
 }
 
   :root {
+    /* 네이티브 폼 컨트롤(특히 iOS의 date input)이 다크 모드에서도 항상
+       자기 자체는 밝은 배경으로 그려서, 우리 쪽 글자색(--ink, 다크에서는
+       밝은 크림색)이 흰 배경 위에 흰 글자처럼 거의 안 보이던 문제 —
+       테마에 맞춰 color-scheme을 같이 바꿔주면 브라우저가 네이티브
+       컨트롤 자체를 그 테마에 맞는 배경/글자색으로 그려줌. */
+    color-scheme: light;
     --bg-top: #e9ecdf;
     --bg-bot: #dfe3d3;
     --paper: #fff6c8;
@@ -42,6 +48,7 @@
 
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
+      color-scheme: dark;
       --bg-top: #23261f;
       --bg-bot: #1a1c17;
       --paper: #554a26;
@@ -73,6 +80,7 @@
   }
 
   :root[data-theme="dark"] {
+    color-scheme: dark;
     --bg-top: #23261f;
     --bg-bot: #1a1c17;
     --paper: #554a26;
@@ -520,11 +528,20 @@
     padding: 0;
   }
 
+  /* row-gap을 안 씀 — flex-wrap로 다음 줄에 떨어지는 .revive-card /
+     .date-picker-row는 이미 자기 자신의 margin-top/padding-top으로 위쪽
+     간격을 갖고 있어서(아래 참고) row-gap까지 더해지면 이중으로 벌어짐.
+     같은 이유로 하위 항목 미리보기(.upcoming-subtask-list)도 평소엔 접혀
+     있다가 펼쳐질 때만 자기 margin-top으로 간격을 만듦 — row-gap이 있으면
+     접혀 있어도(높이 0) 그 gap만큼 항상 빈 공간이 남아 항목마다 줄간격이
+     들쭉날쭉해졌음.
+     */
   .archive-item {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 10px;
+    column-gap: 10px;
+    row-gap: 0;
     padding: 3px 0;
     list-style: none;
   }
@@ -532,19 +549,25 @@
   /* "not my problem... yet" 줄의 하위 항목 — 평소엔 접어두고, 이 줄에
      호버하거나(마우스) 안의 무언가에 포커스가 있을 때(키보드/편집 중)만
      펼쳐서 보여줌. focus-within을 같이 걸어둬야 마우스가 빠져나가도 편집
-     중이던 입력창이 갑자기 접혀서 사라지지 않음. */
-  .upcoming-subtask-list {
+     중이던 입력창이 갑자기 접혀서 사라지지 않음. .archive-item이 이제
+     row-gap을 안 쓰므로(위 참고) 평소엔 margin-top도 0 — 펼쳐질 때만
+     간격이 생김.
+     .subtask-list 기본 규칙(margin/padding 포함)이 파일 뒤쪽에 있어서
+     같은 detail(클래스 한 개)로는 순서상 거기에 덮어씌워짐 — .archive-item
+     으로 시작하는 후손 선택자로 우선순위를 올려서 확실히 이김. */
+  .archive-item .upcoming-subtask-list {
     flex-basis: 100%;
     max-height: 0;
     overflow: hidden;
     margin: 0;
     padding-left: 0;
-    transition: max-height 0.15s ease;
+    transition: max-height 0.15s ease, margin-top 0.15s ease;
   }
 
   .archive-item:hover .upcoming-subtask-list,
   .archive-item:focus-within .upcoming-subtask-list {
     max-height: 200px;
+    margin-top: 6px;
   }
 
   .upcoming-subtask-list[hidden] {
@@ -1187,28 +1210,33 @@
     padding: 2px 6px;
   }
 
+  /* ❗는 색 있는 이모지라 CSS color가 안 먹혀서, 꺼짐/켜짐을 예전처럼
+     다른 색으로 구분할 수 없음 — 대신 항상 같은 ❗를 쓰고 꺼져 있을 땐
+     grayscale + 낮은 opacity로 흐리게, 켜지면 filter를 풀어 원래 빨간
+     색이 그대로 보이게 함. (예전엔 꺼짐 상태에 ❕(흰 느낌표)를 따로 썼는데
+     라이트 모드 배경에서 거의 안 보였음.) */
   .urgent-btn {
     flex: 0 0 auto;
     background: none;
     border: none;
-    color: var(--ink-soft);
     font-size: 14px;
     line-height: 1;
     cursor: pointer;
     padding: 2px 3px;
-    opacity: 0.6;
-    transition: opacity 0.15s ease, color 0.15s ease, transform 0.15s ease;
+    opacity: 0.4;
+    filter: grayscale(1);
+    transition: opacity 0.15s ease, filter 0.15s ease, transform 0.15s ease;
   }
 
   .urgent-btn:hover {
-    opacity: 1;
+    opacity: 0.7;
     transform: scale(1.1);
   }
 
   .task-item.urgent .urgent-btn,
   .urgent-btn.draft-active {
-    color: var(--urgent);
     opacity: 1;
+    filter: none;
   }
 
   @keyframes urgent-alert-in {
@@ -1437,7 +1465,8 @@
   }
 
   .task-item:hover .task-controls,
-  .task-item:focus-within .task-controls {
+  .task-item:focus-within .task-controls,
+  .task-item.row-pinned .task-controls {
     max-height: 26px;
     opacity: 1;
     margin-top: 4px;
@@ -1577,7 +1606,7 @@
     font-size: 14px;
     line-height: 1;
     cursor: pointer;
-    padding: 2px 4px;
+    padding: 2px 3px;
     opacity: 0.6;
     transition: opacity 0.15s ease, color 0.15s ease;
   }
