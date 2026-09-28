@@ -1405,7 +1405,7 @@
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 2px 1px;
+    gap: 2px 4px;
   }
 
   /* display:flex가 브라우저 기본 [hidden] 규칙(display:none)보다 우선
