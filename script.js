@@ -1063,6 +1063,13 @@
         dateRow.hidden = true;
       };
       dateInput.addEventListener('change', () => {
+        // 모바일(특히 iOS)에서 이미 날짜가 채워진 입력창에 focus()로
+        // 네이티브 피커를 띄우기만 해도, 사용자가 아무것도 안 골랐는데
+        // value가 빈 문자열인 change가 가짜로 한 번 발생하는 경우가
+        // 있었음 — 그대로 커밋하면 날짜 버튼만 눌러도 기존 날짜가 지워져
+        // 버림(진짜 지우기는 "날짜 지우기" 버튼이 따로 있음). 빈 값은
+        // change로 커밋하지 않고 무시.
+        if (!dateInput.value) return;
         clearTimeout(commitTimer);
         commitTimer = setTimeout(() => commitDate(dateInput.value), 400);
       });
