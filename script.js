@@ -57,7 +57,7 @@
     wrap.className = 'date-input-wrap';
     const hint = document.createElement('span');
     hint.className = 'date-input-hint';
-    hint.textContent = '날짜 선택';
+    hint.textContent = 'YYYY.MM.DD.';
     hint.setAttribute('aria-hidden', 'true');
     const syncHint = () => { hint.hidden = !!dateInput.value; };
     dateInput.addEventListener('input', syncHint);
@@ -1088,10 +1088,15 @@
         // 모바일(특히 iOS)에서 이미 날짜가 채워진 입력창에 focus()로
         // 네이티브 피커를 띄우기만 해도, 사용자가 아무것도 안 골랐는데
         // value가 빈 문자열인 change가 가짜로 한 번 발생하는 경우가
-        // 있었음 — 그대로 커밋하면 날짜 버튼만 눌러도 기존 날짜가 지워져
-        // 버림(진짜 지우기는 "날짜 지우기" 버튼이 따로 있음). 빈 값은
-        // change로 커밋하지 않고 무시.
-        if (!dateInput.value) return;
+        // 있었음 — 저장 데이터는 이미 무시하도록 막아뒀지만, 이 입력창
+        // 자체의 표시값(dateInput.value)도 그 순간 진짜로 빈 문자열이 되어
+        // 있어서, 화면에는 "날짜가 잠깐 보였다가 사라지는" 것처럼 보였음
+        // — 저장된 task.dueDate로 표시값도 같이 되돌려놓음(진짜 지우기는
+        // "날짜 지우기" 버튼이 따로 처리).
+        if (!dateInput.value) {
+          if (task.dueDate) dateInput.value = task.dueDate;
+          return;
+        }
         clearTimeout(commitTimer);
         commitTimer = setTimeout(() => commitDate(dateInput.value), 400);
       });
