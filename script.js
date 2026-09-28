@@ -1129,6 +1129,13 @@
     subInput.maxLength = 100;
     subInput.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') {
+        if (e.shiftKey) {
+          // addSubtask가 내부에서 이미 이 행을 다시 열고 새 입력창에
+          // 포커스를 주므로(연속 입력용 기존 동작) 그대로 둬서 다음 하위
+          // 항목을 곧장 이어서 입력할 수 있게 함.
+          addSubtask(boardId, task.id, subInput.value);
+          return;
+        }
         // addSubtask가 내부에서 render() 후 곧장 이 행을 다시 열고
         // 새 입력창에 포커스를 줘버려서(연속 입력용 기존 동작), 여기 있는
         // subInput은 그 시점엔 이미 떨어져나간(교체된) 옛 노드라 blur()가
