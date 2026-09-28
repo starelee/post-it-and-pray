@@ -970,9 +970,10 @@
     urgentBtn.type = 'button';
     urgentBtn.setAttribute('aria-label', task.urgent ? '긴급 해제' : '긴급 표시');
     // 옆에 나란히 있는 다른 버튼들(🍅📅⏳🌙🗑️)이 전부 이모지라 "!"만
-    // 맨 텍스트로 튀어 보였음 — 켜졌을 때만 빨간 느낌표(❗)로, 평소엔
-    // 흐린 느낌표(❕)로 이모지끼리 통일함.
-    urgentBtn.textContent = task.urgent ? '❗' : '❕';
+    // 맨 텍스트로 튀어 보였음 — ❗로 통일. 색 있는 이모지라 CSS color로
+    // 꺼짐/켜짐을 못 바꾸니, 글자는 항상 같고 CSS가 opacity/grayscale로
+    // 흐리게/선명하게만 바꿈(li의 urgent 클래스 기준).
+    urgentBtn.textContent = '❗';
     urgentBtn.addEventListener('click', () => toggleUrgent(boardId, task.id));
 
     const addToggle = document.createElement('button');
@@ -1117,6 +1118,7 @@
         clearTimeout(commitTimer);
         dateInput.value = '';
         dateRow.hidden = true;
+        li.classList.remove('row-pinned');
       });
 
       dateRow.appendChild(dateInput);
@@ -1128,6 +1130,12 @@
 
       const toggleDateRow = () => {
         dateRow.hidden = !dateRow.hidden;
+        // .task-controls는 평소 hover/focus-within으로만 펼쳐지는데,
+        // 모바일에서 dateInput.focus()가 네이티브 날짜 피커를 띄우면 iOS가
+        // 그 순간 focus-within을 잠깐 놓쳐서 이 줄 전체가 도로 접혀버리는
+        // 문제가 있었음(달력 안 뜨고 원래 상태로 돌아가는 것처럼 보임) —
+        // 날짜 행이 열려있는 동안은 별도 클래스로 강제로 펼쳐둠.
+        li.classList.toggle('row-pinned', !dateRow.hidden);
         if (dateRow.hidden) clearTimeout(commitTimer);
         else dateInput.focus();
       };
@@ -1625,8 +1633,6 @@
       else dateInput.focus();
     });
 
-    li.appendChild(dateRow);
-
     // 하위 항목이 있으면 평소엔 접어두고 이 줄에 호버(또는 안의 무언가에
     // 포커스)했을 때만 펼쳐서 보여줌 — 목록이 다닥다닥 붙어있는 "not my
     // problem... yet" 칸이 하위 항목까지 항상 펼쳐놓으면 너무 빽빽해짐.
@@ -1721,6 +1727,9 @@
 
     renderUpcomingSubtasks();
     li.appendChild(subList);
+    // 하위 항목 아래에 날짜 행이 오도록 이 순서로 붙임 — 위에 붙이면
+    // 날짜를 눌렀을 때 하위 항목 "위"에 끼어드는 것처럼 보였음.
+    li.appendChild(dateRow);
 
     return li;
   }
@@ -2308,11 +2317,10 @@
     urgentBtn.type = 'button';
     urgentBtn.className = 'urgent-btn';
     urgentBtn.setAttribute('aria-label', '긴급 표시');
-    urgentBtn.textContent = '❕';
+    urgentBtn.textContent = '❗';
     urgentBtn.addEventListener('click', () => {
       draftUrgent = !draftUrgent;
       urgentBtn.classList.toggle('draft-active', draftUrgent);
-      urgentBtn.textContent = draftUrgent ? '❗' : '❕';
       // 버튼 자체는 호버 중에만 보이니, 긴급 여부는 행 배경색으로 항상
       // 표시해줌 — 실제 등록된 항목의 urgent 강조와 같은 방식.
       addRow.classList.toggle('draft-urgent', draftUrgent);
@@ -2504,7 +2512,6 @@
       draftDueDate = '';
       draftSubtasks = [];
       urgentBtn.classList.remove('draft-active');
-      urgentBtn.textContent = '❕';
       addRow.classList.remove('draft-urgent');
       if (dateBadge) dateBadge.hidden = true;
       if (dateInput) dateInput.value = '';
