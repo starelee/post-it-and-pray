@@ -1289,100 +1289,191 @@
     reviveBtn.type = 'button';
     reviveBtn.textContent = '↻ 또 하기';
 
-    // "또 하기"를 누르면 내용을 살짝 고쳐서 새 카드로 올릴 수 있게 —
-    // 여기서 고쳐도 원래 지난 기록(archive의 task.text)은 그대로 두고,
-    // 새로 만들어지는 카드에만 반영됨.
-    const reviveEditRow = document.createElement('div');
-    reviveEditRow.className = 'revive-edit-row';
-    reviveEditRow.hidden = true;
+    // "또 하기"를 누르면 아래로 상위 항목 + 하위 항목을 통째로 고칠 수
+    // 있는 카드가 펼쳐짐 — 여기서 고쳐도 원래 지난 기록(archive의 task)은
+    // 그대로 두고, "완료"를 눌렀을 때만 지금 초안 그대로 새 카드가 만들어짐.
+    let draftSubtasks = (task.subtasks || []).map(s => s.text);
+    let draftDueDate = '';
+
+    const reviveCard = document.createElement('div');
+    reviveCard.className = 'revive-card';
+    reviveCard.hidden = true;
+
     const reviveTextInput = document.createElement('input');
     reviveTextInput.className = 'revive-text-input';
     reviveTextInput.type = 'text';
     reviveTextInput.maxLength = 100;
     reviveTextInput.value = task.text;
-    reviveEditRow.appendChild(reviveTextInput);
+    reviveCard.appendChild(reviveTextInput);
 
-    const dateRow = document.createElement('div');
-    dateRow.className = 'date-picker-row';
-    dateRow.hidden = true;
-    const dateInput = document.createElement('input');
-    dateInput.className = 'date-picker-input';
-    dateInput.type = 'date';
+    const reviveSubtaskChips = document.createElement('ul');
+    reviveSubtaskChips.className = 'subtask-list';
+    reviveCard.appendChild(reviveSubtaskChips);
 
-    // 한 번 되살린 뒤 같은 항목을 또 눌러 재사용하는 경우 dateInput에
-    // 이전 값이 남아있을 수 있음 — renderItem의 날짜 피커와 같은 이유로,
-    // 그 상태에서 키패드로 두 자리 숫자를 치는 도중 첫 자리만으로 change가
-    // 발생해 곧장 커밋되는 걸 막기 위해 살짝(400ms) 기다렸다가 커밋함.
-    let commitTimer = null;
-    const commitRevive = (value) => {
-      clearTimeout(commitTimer);
-      commitTimer = null;
-      reviveTask(task, value, reviveTextInput.value);
-      dateRow.hidden = true;
-      reviveEditRow.hidden = true;
-    };
-    dateInput.addEventListener('change', () => {
-      // 일반 날짜 피커(재클릭해야 닫힘)와 다르게, 되살리기는 날짜를
-      // 고르는 순간 그걸로 끝 — 곧장 새 카드를 만들고 피커도 닫아버림.
-      if (!dateInput.value) return;
-      clearTimeout(commitTimer);
-      commitTimer = setTimeout(() => commitRevive(dateInput.value), 400);
+    function renderReviveSubtasks() {
+      reviveSubtaskChips.innerHTML = '';
+      reviveSubtaskChips.hidden = draftSubtasks.length === 0;
+      draftSubtasks.forEach((subText, i) => {
+        const subLi = document.createElement('li');
+        subLi.className = 'subtask-item';
+        const chip = document.createElement('span');
+        chip.className = 'subtask-chip';
+        chip.textContent = '[' + subText + ']';
+        const del = document.createElement('button');
+        del.type = 'button';
+        del.className = 'subtask-delete-btn';
+        del.setAttribute('aria-label', '삭제');
+        del.textContent = '×';
+        del.addEventListener('click', () => {
+          draftSubtasks.splice(i, 1);
+          renderReviveSubtasks();
+        });
+        subLi.appendChild(chip);
+        subLi.appendChild(del);
+        reviveSubtaskChips.appendChild(subLi);
+      });
+    }
+    renderReviveSubtasks();
+
+    const reviveSubtaskRow = document.createElement('div');
+    reviveSubtaskRow.className = 'add-subtask-row';
+    const reviveSubtaskPlus = document.createElement('button');
+    reviveSubtaskPlus.type = 'button';
+    reviveSubtaskPlus.className = 'plus';
+    reviveSubtaskPlus.setAttribute('aria-label', '하위 항목 등록');
+    reviveSubtaskPlus.textContent = '+';
+    const reviveSubtaskInput = document.createElement('input');
+    reviveSubtaskInput.className = 'new-subtask-input';
+    reviveSubtaskInput.type = 'text';
+    reviveSubtaskInput.placeholder = '하위 항목 추가...';
+    reviveSubtaskInput.autocomplete = 'off';
+    reviveSubtaskInput.maxLength = 100;
+    function addReviveSubtask() {
+      const trimmed = reviveSubtaskInput.value.trim();
+      if (!trimmed) return;
+      draftSubtasks.push(trimmed);
+      reviveSubtaskInput.value = '';
+      renderReviveSubtasks();
+      reviveSubtaskInput.focus();
+    }
+    reviveSubtaskInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') addReviveSubtask();
     });
-    dateRow.appendChild(dateInput);
+    reviveSubtaskPlus.addEventListener('click', addReviveSubtask);
+    reviveSubtaskRow.appendChild(reviveSubtaskPlus);
+    reviveSubtaskRow.appendChild(reviveSubtaskInput);
+    reviveCard.appendChild(reviveSubtaskRow);
 
-    const tomorrowBtn = document.createElement('button');
-    tomorrowBtn.className = 'date-clear-btn';
-    tomorrowBtn.type = 'button';
-    tomorrowBtn.textContent = '내일';
-    tomorrowBtn.addEventListener('click', () => {
-      dateInput.value = tomorrowStr();
-      commitRevive(dateInput.value);
+    const reviveDateRow = document.createElement('div');
+    reviveDateRow.className = 'date-picker-row';
+    reviveDateRow.hidden = true;
+    const reviveDateInput = document.createElement('input');
+    reviveDateInput.className = 'date-picker-input';
+    reviveDateInput.type = 'date';
+
+    const reviveDateBadge = document.createElement('span');
+    reviveDateBadge.className = 'due-badge';
+    reviveDateBadge.hidden = true;
+
+    function applyReviveDate(value) {
+      draftDueDate = value;
+      reviveDateBadge.hidden = !value;
+      if (value) reviveDateBadge.textContent = formatDueDateRelative(value);
+    }
+    reviveDateInput.addEventListener('change', () => applyReviveDate(reviveDateInput.value));
+    reviveDateRow.appendChild(reviveDateInput);
+
+    const reviveTomorrowBtn = document.createElement('button');
+    reviveTomorrowBtn.className = 'date-clear-btn';
+    reviveTomorrowBtn.type = 'button';
+    reviveTomorrowBtn.textContent = '내일';
+    reviveTomorrowBtn.addEventListener('click', () => {
+      reviveDateInput.value = tomorrowStr();
+      applyReviveDate(reviveDateInput.value);
     });
-    dateRow.appendChild(tomorrowBtn);
+    reviveDateRow.appendChild(reviveTomorrowBtn);
 
-    const clearBtn = document.createElement('button');
-    clearBtn.className = 'date-clear-btn';
-    clearBtn.type = 'button';
-    clearBtn.textContent = '날짜 지우기';
-    clearBtn.addEventListener('click', () => {
-      clearTimeout(commitTimer);
-      dateInput.value = '';
-      dateRow.hidden = true;
+    const reviveDateClearBtn = document.createElement('button');
+    reviveDateClearBtn.className = 'date-clear-btn';
+    reviveDateClearBtn.type = 'button';
+    reviveDateClearBtn.textContent = '날짜 지우기';
+    reviveDateClearBtn.addEventListener('click', () => {
+      reviveDateInput.value = '';
+      applyReviveDate('');
+      reviveDateRow.hidden = true;
     });
-    dateRow.appendChild(clearBtn);
+    reviveDateRow.appendChild(reviveDateClearBtn);
 
-    // 아직 값을 고르기 전(빈 칸)이면 Esc로 닫을 수 있게.
-    // (예전엔 blur 시 자동으로도 닫았는데, 안드로이드 크롬은 네이티브
-    // 달력이 뜨는 동안 입력창이 blur돼서 첫 탭에 피커가 바로 닫혀버리는
-    // 문제가 있었음 — 제거함.)
-    dateInput.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape' && !dateInput.value) {
+    reviveDateInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
         e.preventDefault();
-        clearBtn.click();
+        reviveDateRow.hidden = true;
       }
+    });
+    reviveCard.appendChild(reviveDateRow);
+
+    const reviveControls = document.createElement('div');
+    reviveControls.className = 'revive-controls';
+
+    const reviveDateBtn = document.createElement('button');
+    reviveDateBtn.type = 'button';
+    reviveDateBtn.className = 'date-btn';
+    reviveDateBtn.setAttribute('aria-label', '날짜 지정');
+    reviveDateBtn.textContent = '📅';
+    function toggleReviveDateRow() {
+      reviveDateRow.hidden = !reviveDateRow.hidden;
+      if (!reviveDateRow.hidden) reviveDateInput.focus();
+    }
+    reviveDateBtn.addEventListener('click', toggleReviveDateRow);
+    reviveDateBadge.addEventListener('click', toggleReviveDateRow);
+
+    const reviveDoneBtn = document.createElement('button');
+    reviveDoneBtn.type = 'button';
+    reviveDoneBtn.className = 'revive-done-btn';
+    reviveDoneBtn.textContent = '완료';
+
+    function resetReviveDraft() {
+      reviveTextInput.value = task.text;
+      draftSubtasks = (task.subtasks || []).map(s => s.text);
+      renderReviveSubtasks();
+      reviveSubtaskInput.value = '';
+      applyReviveDate('');
+      reviveDateInput.value = '';
+      reviveDateRow.hidden = true;
+    }
+
+    reviveDoneBtn.addEventListener('click', () => {
+      const trimmedText = reviveTextInput.value.trim();
+      if (!trimmedText) {
+        reviveTextInput.focus();
+        return;
+      }
+      // 지정한 날짜가 있으면 그 날짜로 예정(scheduled), 없으면 today로
+      // 바로 되살림 — 날짜는 선택 사항.
+      reviveTask(task, { text: trimmedText, subtasks: draftSubtasks.slice(), dueDate: draftDueDate });
+      reviveCard.hidden = true;
+      resetReviveDraft();
     });
 
     reviveTextInput.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') {
+      if (e.key === 'Escape') {
         e.preventDefault();
-        dateInput.focus();
-      } else if (e.key === 'Escape') {
-        e.preventDefault();
-        reviveTextInput.value = task.text;
-        dateRow.hidden = true;
-        reviveEditRow.hidden = true;
+        reviveCard.hidden = true;
+        resetReviveDraft();
       }
     });
 
+    reviveControls.appendChild(reviveDateBtn);
+    reviveControls.appendChild(reviveDateBadge);
+    reviveControls.appendChild(reviveDoneBtn);
+    reviveCard.appendChild(reviveControls);
+
     reviveBtn.addEventListener('click', () => {
-      dateRow.hidden = !dateRow.hidden;
-      reviveEditRow.hidden = dateRow.hidden;
-      if (!dateRow.hidden) {
-        reviveTextInput.value = task.text;
+      reviveCard.hidden = !reviveCard.hidden;
+      if (!reviveCard.hidden) {
+        resetReviveDraft();
         reviveTextInput.focus();
         reviveTextInput.select();
-      } else {
-        clearTimeout(commitTimer);
       }
     });
 
@@ -1406,8 +1497,7 @@
     controls.appendChild(reviveBtn);
     controls.appendChild(del);
     li.appendChild(controls);
-    li.appendChild(reviveEditRow);
-    li.appendChild(dateRow);
+    li.appendChild(reviveCard);
     return li;
   }
 
@@ -1587,21 +1677,27 @@
     return li;
   }
 
-  function reviveTask(archivedTask, dateValue, overrideText) {
-    const text = (overrideText || '').trim() || archivedTask.text;
+  function reviveTask(archivedTask, opts) {
+    opts = opts || {};
+    const text = (opts.text || '').trim() || archivedTask.text;
+    const subtaskTexts = Array.isArray(opts.subtasks)
+      ? opts.subtasks
+      : (archivedTask.subtasks || []).map(s => s.text);
     const clone = {
       id: Date.now(),
       text,
       done: false,
       urgent: !!archivedTask.urgent,
-      subtasks: (archivedTask.subtasks || []).map((s, i) => ({
-        id: Date.now() + i,
-        text: s.text,
-        done: !!s.done
-      })),
-      dueDate: dateValue
+      subtasks: subtaskTexts.map((t, i) => ({ id: Date.now() + i, text: t, done: false }))
     };
-    boards.scheduled.push(clone);
+    // 날짜를 지정했으면 그 날짜로 예정(scheduled), 안 지정했으면 today로
+    // 바로 되살림 — 되살리기 카드의 날짜는 선택 사항.
+    if (opts.dueDate) {
+      clone.dueDate = opts.dueDate;
+      boards.scheduled.push(clone);
+    } else {
+      boards.today.push(clone);
+    }
     saveBoards();
     render('today');
     render('scheduled');
