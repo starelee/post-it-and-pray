@@ -1037,12 +1037,27 @@
       dateInput.className = 'date-picker-input';
       dateInput.type = 'date';
       if (task.dueDate) dateInput.value = task.dueDate;
-      dateInput.addEventListener('change', () => {
-        setDueDate(boardId, task.id, dateInput.value);
+
+      // 이미 날짜가 채워진 채로 열린 경우(날짜 수정), 년/월/일 중 한 칸만
+      // 고쳐도 나머지 칸은 이미 값이 있어서 첫 글자만으로 곧장 "완성된
+      // 날짜"가 되어버림 — 그 순간 change가 발생해서, 키패드로 "15"처럼
+      // 두 자리를 치는 도중 "1"만으로 바로 커밋+닫힘이 일어나 "5"를 칠
+      // 틈이 없어짐. change를 받자마자 반영하지 않고 잠깐(400ms) 기다렸다가
+      // 커밋하고, 그 사이 또 change가 오면(다음 자리 입력) 타이머를 리셋해서
+      // 최종 값만 커밋되게 함.
+      let commitTimer = null;
+      const commitDate = (value) => {
+        clearTimeout(commitTimer);
+        commitTimer = null;
+        setDueDate(boardId, task.id, value);
         // 모바일 네이티브 달력에서 날짜를 확정(체크)하면 그걸로 볼일은
         // 끝난 거라, 되살리기 피커처럼 곧장 닫아줌 — 다시 눌러야만
         // 닫히던 예전 동작보다 자연스러움.
         dateRow.hidden = true;
+      };
+      dateInput.addEventListener('change', () => {
+        clearTimeout(commitTimer);
+        commitTimer = setTimeout(() => commitDate(dateInput.value), 400);
       });
       // 아직 값을 고르기 전(빈 칸)이면 Esc로 그냥 닫을 수 있게 — 취소
       // 버튼(cancelBtn)과 동일한 동작이라, cancelBtn 클릭을 그대로 재사용.
@@ -1058,15 +1073,14 @@
 
       // someday/pray later(그리고 거기서 마감이 지나 today의 "oops, still
       // here"로 넘어온 항목)에 달력을 열지 않고 바로 오늘/내일로 찍을 수
-      // 있게 — dateInput의 change 리스너를 그대로 재사용하도록 값만
-      // 채워넣고 change 이벤트를 직접 쏨.
+      // 있게 — 명확한 단일 클릭이라 디바운스 없이 commitDate를 바로 호출.
       const todayBtn = document.createElement('button');
       todayBtn.className = 'date-clear-btn';
       todayBtn.type = 'button';
       todayBtn.textContent = '오늘';
       todayBtn.addEventListener('click', () => {
         dateInput.value = todayStr();
-        dateInput.dispatchEvent(new Event('change'));
+        commitDate(dateInput.value);
       });
 
       const tomorrowBtn = document.createElement('button');
@@ -1075,7 +1089,7 @@
       tomorrowBtn.textContent = '내일';
       tomorrowBtn.addEventListener('click', () => {
         dateInput.value = tomorrowStr();
-        dateInput.dispatchEvent(new Event('change'));
+        commitDate(dateInput.value);
       });
 
       const clearBtn = document.createElement('button');
@@ -1083,7 +1097,10 @@
       clearBtn.type = 'button';
       clearBtn.textContent = '날짜 지우기';
       clearBtn.hidden = !task.dueDate;
-      clearBtn.addEventListener('click', () => setDueDate(boardId, task.id, ''));
+      clearBtn.addEventListener('click', () => {
+        clearTimeout(commitTimer);
+        setDueDate(boardId, task.id, '');
+      });
 
       // Only shown while no date has been assigned yet — lets the user
       // close the picker without picking one. Once a date exists, clearBtn
@@ -1094,6 +1111,7 @@
       cancelBtn.textContent = '취소';
       cancelBtn.hidden = !!task.dueDate;
       cancelBtn.addEventListener('click', () => {
+        clearTimeout(commitTimer);
         dateInput.value = '';
         dateRow.hidden = true;
       });
@@ -1107,7 +1125,8 @@
 
       const toggleDateRow = () => {
         dateRow.hidden = !dateRow.hidden;
-        if (!dateRow.hidden) dateInput.focus();
+        if (dateRow.hidden) clearTimeout(commitTimer);
+        else dateInput.focus();
       };
       dateBtn.addEventListener('click', toggleDateRow);
       if (badge) badge.addEventListener('click', toggleDateRow);
@@ -1270,19 +1289,44 @@
     reviveBtn.type = 'button';
     reviveBtn.textContent = '↻ 또 하기';
 
+    // "또 하기"를 누르면 내용을 살짝 고쳐서 새 카드로 올릴 수 있게 —
+    // 여기서 고쳐도 원래 지난 기록(archive의 task.text)은 그대로 두고,
+    // 새로 만들어지는 카드에만 반영됨.
+    const reviveEditRow = document.createElement('div');
+    reviveEditRow.className = 'revive-edit-row';
+    reviveEditRow.hidden = true;
+    const reviveTextInput = document.createElement('input');
+    reviveTextInput.className = 'revive-text-input';
+    reviveTextInput.type = 'text';
+    reviveTextInput.maxLength = 100;
+    reviveTextInput.value = task.text;
+    reviveEditRow.appendChild(reviveTextInput);
+
     const dateRow = document.createElement('div');
     dateRow.className = 'date-picker-row';
     dateRow.hidden = true;
     const dateInput = document.createElement('input');
     dateInput.className = 'date-picker-input';
     dateInput.type = 'date';
+
+    // 한 번 되살린 뒤 같은 항목을 또 눌러 재사용하는 경우 dateInput에
+    // 이전 값이 남아있을 수 있음 — renderItem의 날짜 피커와 같은 이유로,
+    // 그 상태에서 키패드로 두 자리 숫자를 치는 도중 첫 자리만으로 change가
+    // 발생해 곧장 커밋되는 걸 막기 위해 살짝(400ms) 기다렸다가 커밋함.
+    let commitTimer = null;
+    const commitRevive = (value) => {
+      clearTimeout(commitTimer);
+      commitTimer = null;
+      reviveTask(task, value, reviveTextInput.value);
+      dateRow.hidden = true;
+      reviveEditRow.hidden = true;
+    };
     dateInput.addEventListener('change', () => {
       // 일반 날짜 피커(재클릭해야 닫힘)와 다르게, 되살리기는 날짜를
       // 고르는 순간 그걸로 끝 — 곧장 새 카드를 만들고 피커도 닫아버림.
-      if (dateInput.value) {
-        reviveTask(task, dateInput.value);
-        dateRow.hidden = true;
-      }
+      if (!dateInput.value) return;
+      clearTimeout(commitTimer);
+      commitTimer = setTimeout(() => commitRevive(dateInput.value), 400);
     });
     dateRow.appendChild(dateInput);
 
@@ -1292,7 +1336,7 @@
     tomorrowBtn.textContent = '내일';
     tomorrowBtn.addEventListener('click', () => {
       dateInput.value = tomorrowStr();
-      dateInput.dispatchEvent(new Event('change'));
+      commitRevive(dateInput.value);
     });
     dateRow.appendChild(tomorrowBtn);
 
@@ -1301,6 +1345,7 @@
     clearBtn.type = 'button';
     clearBtn.textContent = '날짜 지우기';
     clearBtn.addEventListener('click', () => {
+      clearTimeout(commitTimer);
       dateInput.value = '';
       dateRow.hidden = true;
     });
@@ -1317,9 +1362,28 @@
       }
     });
 
+    reviveTextInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        dateInput.focus();
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        reviveTextInput.value = task.text;
+        dateRow.hidden = true;
+        reviveEditRow.hidden = true;
+      }
+    });
+
     reviveBtn.addEventListener('click', () => {
       dateRow.hidden = !dateRow.hidden;
-      if (!dateRow.hidden) dateInput.focus();
+      reviveEditRow.hidden = dateRow.hidden;
+      if (!dateRow.hidden) {
+        reviveTextInput.value = task.text;
+        reviveTextInput.focus();
+        reviveTextInput.select();
+      } else {
+        clearTimeout(commitTimer);
+      }
     });
 
     const del = document.createElement('button');
@@ -1342,6 +1406,7 @@
     controls.appendChild(reviveBtn);
     controls.appendChild(del);
     li.appendChild(controls);
+    li.appendChild(reviveEditRow);
     li.appendChild(dateRow);
     return li;
   }
@@ -1412,11 +1477,19 @@
     dateInput.className = 'date-picker-input';
     dateInput.type = 'date';
     dateInput.value = task.dueDate;
+
+    // renderItem의 날짜 피커와 같은 이유로 디바운스 — 이미 날짜가 채워진
+    // 채로 열려서, 키패드로 두 자리 숫자를 치는 도중 첫 자리만으로 change가
+    // 발생해 곧장 커밋+닫힘이 일어나는 문제를 막음.
+    let commitTimer = null;
     dateInput.addEventListener('change', () => {
-      if (dateInput.value) {
-        setDueDate('scheduled', task.id, dateInput.value);
-        dateRow.hidden = true;
-      }
+      clearTimeout(commitTimer);
+      commitTimer = setTimeout(() => {
+        if (dateInput.value) {
+          setDueDate('scheduled', task.id, dateInput.value);
+          dateRow.hidden = true;
+        }
+      }, 400);
     });
     dateRow.appendChild(dateInput);
 
@@ -1425,6 +1498,7 @@
     clearBtn.type = 'button';
     clearBtn.textContent = '날짜 지우기';
     clearBtn.addEventListener('click', () => {
+      clearTimeout(commitTimer);
       dateRow.hidden = true;
     });
     dateRow.appendChild(clearBtn);
@@ -1435,13 +1509,15 @@
     dateInput.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') {
         e.preventDefault();
+        clearTimeout(commitTimer);
         dateRow.hidden = true;
       }
     });
 
     dateBtn.addEventListener('click', () => {
       dateRow.hidden = !dateRow.hidden;
-      if (!dateRow.hidden) dateInput.focus();
+      if (dateRow.hidden) clearTimeout(commitTimer);
+      else dateInput.focus();
     });
 
     li.appendChild(dateRow);
@@ -1511,10 +1587,11 @@
     return li;
   }
 
-  function reviveTask(archivedTask, dateValue) {
+  function reviveTask(archivedTask, dateValue, overrideText) {
+    const text = (overrideText || '').trim() || archivedTask.text;
     const clone = {
       id: Date.now(),
-      text: archivedTask.text,
+      text,
       done: false,
       urgent: !!archivedTask.urgent,
       subtasks: (archivedTask.subtasks || []).map((s, i) => ({
