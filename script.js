@@ -670,6 +670,64 @@
     return true;
   }
 
+  // 터치 기기에서 아이콘 줄을 펼치는 전용 "⋯" 버튼이 늘 떠 있어서 지저분해
+  // 보인다는 피드백 — 길게 눌러서 펼치는 걸로 바꿈. 스와이프도 고려했지만
+  // 이 화면은 세로 스크롤이 있어서 가로 스와이프와 겹쳐 오작동하기 쉽고,
+  // 지금까지 겪은 터치 타이밍 문제들을 생각하면 롱프레스가 훨씬 안정적임.
+  // excludeSelector에 걸리는 타겟(체크박스처럼 원래도 탭 한 번으로 확실한
+  // 동작이 있는 요소)에서 시작한 터치는 아예 무시함. 길게 누른 뒤엔 그
+  // 자리에서 이어지는 click(예: task-text의 편집 진입)을 눌러서 롱프레스와
+  // 탭이 동시에 발동하지 않게 함.
+  function attachLongPress(el, onLongPress, excludeSelector) {
+    const LONG_PRESS_MS = 480;
+    const MOVE_TOLERANCE = 10;
+    let timer = null;
+    let startX = 0;
+    let startY = 0;
+    let firedLongPress = false;
+
+    el.addEventListener('touchstart', (e) => {
+      if (e.touches.length !== 1) return;
+      if (excludeSelector && e.target.closest(excludeSelector)) return;
+      firedLongPress = false;
+      startX = e.touches[0].clientX;
+      startY = e.touches[0].clientY;
+      timer = setTimeout(() => {
+        timer = null;
+        firedLongPress = true;
+        if (navigator.vibrate) navigator.vibrate(8);
+        onLongPress();
+      }, LONG_PRESS_MS);
+    }, { passive: true });
+
+    el.addEventListener('touchmove', (e) => {
+      if (!timer) return;
+      const dx = Math.abs(e.touches[0].clientX - startX);
+      const dy = Math.abs(e.touches[0].clientY - startY);
+      if (dx > MOVE_TOLERANCE || dy > MOVE_TOLERANCE) {
+        clearTimeout(timer);
+        timer = null;
+      }
+    }, { passive: true });
+
+    el.addEventListener('touchend', () => {
+      if (timer) {
+        clearTimeout(timer);
+        timer = null;
+      }
+    });
+
+    // 캡처 단계에서 먼저 가로채서, 방금 롱프레스로 처리된 그 손가락이
+    // 뗄 때 뒤이어 오는 click이 task-text 편집 진입 같은 원래 동작을
+    // 같이 터뜨리지 않게 막음.
+    el.addEventListener('click', (e) => {
+      if (!firedLongPress) return;
+      firedLongPress = false;
+      e.preventDefault();
+      e.stopPropagation();
+    }, true);
+  }
+
   // Wires a collapse toggle button to a body element (used for the
   // scheduled/someday sections present in the static HTML, and reused for
   // the archive panel's dynamically-created month groups, which need to
@@ -997,19 +1055,20 @@
 
     // 데스크톱은 hover로 아이콘 줄이 펼쳐지지만, 터치 기기는 hover를
     // 안정적으로 감지 못해서(호버 흉내→지연된 클릭 등) 그 방식에 기대면
-    // 누르자마자 다시 접히는 문제가 있었음 — 호버가 없는 환경에서만
-    // 보이는 이 버튼으로 "이 항목만" 펼치고 접을 수 있게 함(전부 다
-    // 펼쳐두면 아이콘이 너무 많아진다는 피드백 반영).
-    const moreBtn = document.createElement('button');
-    moreBtn.className = 'more-btn';
-    moreBtn.type = 'button';
-    moreBtn.setAttribute('aria-label', '메뉴 더보기');
-    moreBtn.textContent = '⋯';
-    moreBtn.addEventListener('click', () => {
-      if (commitPendingEditThenRetry(li, task.id, '.more-btn')) return;
-      li.classList.toggle('controls-open');
-    });
-    row.appendChild(moreBtn);
+    // 누르자마자 다시 접히는 문제가 있었음 — 늘 떠 있는 버튼 대신, 이
+    // 줄을 길게 누르면 "이 항목만" 펼치고 접히게 함(전부 다 펼쳐두면
+    // 아이콘이 너무 많아진다는 피드백, 버튼이 항상 보여서 지저분하다는
+    // 피드백 둘 다 반영). 체크박스는 원래도 한 번 탭으로 확실한 동작이
+    // 있으니 롱프레스 대상에서 제외.
+    attachLongPress(row, () => {
+      // 롱프레스는 클릭 재발사로 처리할 방법이 없으니(클릭 한 번으로
+      // 되는 동작이 아님), 편집 중이면 직접 커밋부터 하고 새로 그려진
+      // li에 펼침 클래스를 붙임.
+      const commit = li._activeEditCommit;
+      if (commit) commit();
+      const targetLi = commit ? findTaskLi(task.id) : li;
+      if (targetLi) targetLi.classList.toggle('controls-open');
+    }, '.checkbox');
 
     li.appendChild(row);
 
@@ -2631,15 +2690,11 @@
       input.focus();
     });
 
-    // task-item의 "⋯"와 같은 이유 — 호버를 못 쓰는 터치 기기에서 긴급/
-    // 하위 항목 초안 버튼(draft-controls)을 펼치고 접는 전용 버튼.
-    const draftMoreBtn = document.createElement('button');
-    draftMoreBtn.className = 'more-btn';
-    draftMoreBtn.type = 'button';
-    draftMoreBtn.setAttribute('aria-label', '메뉴 더보기');
-    draftMoreBtn.textContent = '⋯';
-    draftMoreBtn.addEventListener('click', () => addRowWrap.classList.toggle('controls-open'));
-    addRow.appendChild(draftMoreBtn);
+    // task-item과 같은 이유 — 호버를 못 쓰는 터치 기기에서 긴급/하위 항목
+    // 초안 버튼(draft-controls)을 길게 눌러서 펼치고 접음. 입력창 자체는
+    // 제외해서(텍스트 선택/붙여넣기 같은 원래 동작을 안 건드림) "+" 버튼
+    // 이나 빈 자리를 길게 누르면 됨.
+    attachLongPress(addRow, () => addRowWrap.classList.toggle('controls-open'), 'input');
 
     input.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') {

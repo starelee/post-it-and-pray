@@ -1882,12 +1882,10 @@
      탭을 "호버 흉내"로 먼저 처리했다가 뒤늦게 진짜 클릭을 보내거나, 네이티브
      날짜 피커가 뜨는 순간 focus-within을 잠깐 놓치는 등 타이밍이 제각각이라,
      호버로만 펼쳐지던 날짜/긴급/+(하위 항목 추가) 버튼이 누르자마자 다시
-     접혀버리는 문제가 반복됐음. 마우스가 아예 없는(hover:none) 환경에서는
-     이 요소들을 애초에 hover/focus-within에 기대지 않고 항상 펼쳐둠 —
-     row-pinned 같은 개별 땜질보다 근본적으로 안전함. */
-  /* 다 펼쳐두면 아이콘이 한꺼번에 너무 많아 보인다는 피드백 반영 — 터치
-     기기에서는 hover 대신, 탭한 그 항목만 별도 클래스(controls-open)로
-     펼침. 이 클래스는 아래 .more-btn 탭으로 켜고 끔. */
+     접혀버리는 문제가 반복됐음. 처음엔 늘 떠 있는 "⋯" 버튼으로 펼쳤는데,
+     항상 보여서 지저분하다는 피드백에 스와이프도 고려했지만 이 화면은 세로
+     스크롤이 있어서 가로 스와이프와 겹쳐 오작동하기 쉬움 — 대신 그 줄을
+     길게 누르면(attachLongPress) 이 클래스가 붙어서 "탭한 항목만" 펼쳐짐. */
   .task-item.controls-open .task-controls {
     max-height: 26px;
     opacity: 1;
@@ -1898,29 +1896,6 @@
     max-height: 26px;
     opacity: 1;
     margin-top: 6px;
-  }
-
-  /* "⋯" 더보기 버튼 — 데스크톱은 그대로 hover로 펼치니 평소엔 숨겨두고,
-     호버를 못 쓰는(hover:none) 터치 기기에서만 보여서 그걸로 펼치고
-     접게 함. */
-  .more-btn {
-    display: none;
-    flex: 0 0 auto;
-    margin-left: auto;
-    background: none;
-    border: none;
-    color: var(--ink-soft);
-    font-size: 15px;
-    line-height: 1;
-    cursor: pointer;
-    padding: 2px 6px;
-    opacity: 0.55;
-  }
-
-  @media (hover: none) {
-    .more-btn {
-      display: inline-flex;
-    }
   }
 
   .plus {
