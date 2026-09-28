@@ -1741,19 +1741,18 @@
     vertical-align: middle;
   }
 
-  /* 카드마다 종이색이 다 달라서(--paper, --paper-waiting, --paper-someday,
-     되살리기 카드/"done" 패널의 --legal-paper 등) 힌트 배경에 특정 종이색
-     변수를 골라 쓰면 그 카드에서만 안 맞아 튀어 보임(예: done 패널에서
-     --paper를 썼더니 legal-paper와 달라서 뜬금없는 색 블록으로 보였음) —
-     대신 검은색을 살짝만 얹는 식으로 "그 자리의 배경을 그대로 살짝
-     어둡게"만 만들어서, 어떤 종이 위에서도 자연스럽게 얹힘. */
+  /* 배경색 블록이 카드마다 다 튀어 보여서(--paper/--paper-waiting/
+     --legal-paper 등 종이색이 제각각이라 뭘 골라도 어딘가에선 안 맞음)
+     아예 배경 없이 글자만 얹음 — 그 대신 데스크톱처럼 네이티브가 자체
+     자리표시(mm/dd/yyyy)를 그리는 곳에선 우리 글자와 살짝 겹쳐 보일 수
+     있지만, 배경 블록이 튀어 보이는 것보단 낫다는 판단. */
   .date-input-hint {
     position: absolute;
     inset: 0;
     display: flex;
     align-items: center;
     padding: 1px 4px;
-    background: rgba(0, 0, 0, 0.12);
+    background: transparent;
     color: var(--ink-soft);
     font-family: 'Gaegu', cursive, sans-serif;
     font-size: 12px;

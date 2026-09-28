@@ -1547,7 +1547,7 @@
         resetReviveDraft();
       }
     });
-    reviveDateRow.appendChild(reviveDateInput);
+    reviveDateRow.appendChild(wrapDateInputWithHint(reviveDateInput));
 
     const reviveTomorrowBtn = document.createElement('button');
     reviveTomorrowBtn.className = 'date-clear-btn';
