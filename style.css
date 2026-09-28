@@ -1727,6 +1727,40 @@
     color-scheme: light;
   }
 
+  /* 값이 없을 때 mm/dd/yyyy 자리표시를 안 그려주는 플랫폼(iOS 등)에서
+     빈 날짜 칸이 그냥 텅 빈 상자로만 보이던 문제 — 입력창 위에 우리
+     힌트를 덮어 씌워서 항상 "날짜 선택"이 보이게 함. 오른쪽은 네이티브
+     달력 아이콘 자리(~20px)를 비워둠. pointer-events:none이라 탭은
+     그대로 밑의 실제 input으로 전달됨. */
+  .date-input-wrap {
+    position: relative;
+    display: inline-block;
+    vertical-align: middle;
+  }
+
+  .date-input-hint {
+    position: absolute;
+    left: 1px;
+    top: 1px;
+    right: 20px;
+    bottom: 1px;
+    display: flex;
+    align-items: center;
+    padding-left: 4px;
+    background: #fffdf0;
+    color: #8a8068;
+    font-family: 'Gaegu', cursive, sans-serif;
+    font-size: 12px;
+    border-radius: 3px;
+    pointer-events: none;
+    overflow: hidden;
+    white-space: nowrap;
+  }
+
+  .date-input-hint[hidden] {
+    display: none;
+  }
+
   .date-clear-btn {
     background: none;
     border: none;
