@@ -1299,6 +1299,11 @@
     reviveCard.className = 'revive-card';
     reviveCard.hidden = true;
 
+    const reviveHint = document.createElement('p');
+    reviveHint.className = 'revive-hint';
+    reviveHint.textContent = '어떻게 기억해둘까요?';
+    reviveCard.appendChild(reviveHint);
+
     const reviveTextInput = document.createElement('input');
     reviveTextInput.className = 'revive-text-input';
     reviveTextInput.type = 'text';
@@ -1364,23 +1369,22 @@
     reviveSubtaskRow.appendChild(reviveSubtaskInput);
     reviveCard.appendChild(reviveSubtaskRow);
 
+    // 날짜 행은 이 카드 안에서는 처음부터 바로 보이게 함 — "또 하기"로
+    // 이미 펼친 편집 모드인데, 날짜를 보려고 또 한 번 눌러야 하면 중복.
+    // "완료"도 이 행 맨 끝에 "날짜 지우기"와 같은 스타일로 나란히 둠.
     const reviveDateRow = document.createElement('div');
     reviveDateRow.className = 'date-picker-row';
-    reviveDateRow.hidden = true;
     const reviveDateInput = document.createElement('input');
     reviveDateInput.className = 'date-picker-input';
     reviveDateInput.type = 'date';
-
-    const reviveDateBadge = document.createElement('span');
-    reviveDateBadge.className = 'due-badge';
-    reviveDateBadge.hidden = true;
-
-    function applyReviveDate(value) {
-      draftDueDate = value;
-      reviveDateBadge.hidden = !value;
-      if (value) reviveDateBadge.textContent = formatDueDateRelative(value);
-    }
-    reviveDateInput.addEventListener('change', () => applyReviveDate(reviveDateInput.value));
+    reviveDateInput.addEventListener('change', () => { draftDueDate = reviveDateInput.value; });
+    reviveDateInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        reviveCard.hidden = true;
+        resetReviveDraft();
+      }
+    });
     reviveDateRow.appendChild(reviveDateInput);
 
     const reviveTomorrowBtn = document.createElement('button');
@@ -1389,7 +1393,7 @@
     reviveTomorrowBtn.textContent = '내일';
     reviveTomorrowBtn.addEventListener('click', () => {
       reviveDateInput.value = tomorrowStr();
-      applyReviveDate(reviveDateInput.value);
+      draftDueDate = reviveDateInput.value;
     });
     reviveDateRow.appendChild(reviveTomorrowBtn);
 
@@ -1399,47 +1403,25 @@
     reviveDateClearBtn.textContent = '날짜 지우기';
     reviveDateClearBtn.addEventListener('click', () => {
       reviveDateInput.value = '';
-      applyReviveDate('');
-      reviveDateRow.hidden = true;
+      draftDueDate = '';
     });
     reviveDateRow.appendChild(reviveDateClearBtn);
 
-    reviveDateInput.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        reviveDateRow.hidden = true;
-      }
-    });
-    reviveCard.appendChild(reviveDateRow);
-
-    const reviveControls = document.createElement('div');
-    reviveControls.className = 'revive-controls';
-
-    const reviveDateBtn = document.createElement('button');
-    reviveDateBtn.type = 'button';
-    reviveDateBtn.className = 'date-btn';
-    reviveDateBtn.setAttribute('aria-label', '날짜 지정');
-    reviveDateBtn.textContent = '📅';
-    function toggleReviveDateRow() {
-      reviveDateRow.hidden = !reviveDateRow.hidden;
-      if (!reviveDateRow.hidden) reviveDateInput.focus();
-    }
-    reviveDateBtn.addEventListener('click', toggleReviveDateRow);
-    reviveDateBadge.addEventListener('click', toggleReviveDateRow);
-
     const reviveDoneBtn = document.createElement('button');
     reviveDoneBtn.type = 'button';
-    reviveDoneBtn.className = 'revive-done-btn';
+    reviveDoneBtn.className = 'date-clear-btn revive-done-btn';
     reviveDoneBtn.textContent = '완료';
+    reviveDateRow.appendChild(reviveDoneBtn);
+
+    reviveCard.appendChild(reviveDateRow);
 
     function resetReviveDraft() {
       reviveTextInput.value = task.text;
       draftSubtasks = (task.subtasks || []).map(s => s.text);
       renderReviveSubtasks();
       reviveSubtaskInput.value = '';
-      applyReviveDate('');
+      draftDueDate = '';
       reviveDateInput.value = '';
-      reviveDateRow.hidden = true;
     }
 
     reviveDoneBtn.addEventListener('click', () => {
@@ -1462,11 +1444,6 @@
         resetReviveDraft();
       }
     });
-
-    reviveControls.appendChild(reviveDateBtn);
-    reviveControls.appendChild(reviveDateBadge);
-    reviveControls.appendChild(reviveDoneBtn);
-    reviveCard.appendChild(reviveControls);
 
     reviveBtn.addEventListener('click', () => {
       reviveCard.hidden = !reviveCard.hidden;
