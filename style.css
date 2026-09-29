@@ -1743,13 +1743,15 @@
 
   /* 배경색 블록이 카드마다 다 튀어 보여서(--paper/--paper-waiting/
      --legal-paper 등 종이색이 제각각이라 뭘 골라도 어딘가에선 안 맞음)
-     아예 배경 없이 글자만 얹음 — 그 대신 데스크톱처럼 네이티브가 자체
-     자리표시(mm/dd/yyyy)를 그리는 곳에선 우리 글자와 살짝 겹쳐 보일 수
-     있지만, 배경 블록이 튀어 보이는 것보단 낫다는 판단. */
+     배경 없이 글자만 얹음. 이 힌트는 애초에 네이티브가 자체 자리표시
+     (mm/dd/yyyy)를 안 그려주는 iOS 같은 터치 기기를 위한 거라, 호버가
+     되는(=네이티브가 자기 자리표시를 이미 잘 그려주는) 데스크톱에서는
+     아예 이 힌트를 켜지 않음 — 그래야 데스크톱에서 우리 글자와 네이티브
+     자리표시가 겹쳐 보이는 문제 자체가 안 생김. */
   .date-input-hint {
+    display: none;
     position: absolute;
     inset: 0;
-    display: flex;
     align-items: center;
     padding: 1px 4px;
     background: transparent;
@@ -1762,8 +1764,10 @@
     white-space: nowrap;
   }
 
-  .date-input-hint[hidden] {
-    display: none;
+  @media (hover: none) {
+    .date-input-hint:not([hidden]) {
+      display: flex;
+    }
   }
 
   .date-clear-btn {
