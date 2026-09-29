@@ -1135,6 +1135,12 @@
     (boardId === 'lupin' ? [] : MOVE_TARGET_IDS)
       .filter(id => id !== boardId)
       .filter(id => !(boardId === 'waiting' && id === 'today')) // redundant with the always-visible ←
+      // 오늘 마감/지난 마감인 scheduled 항목은 today 목록 안에 이미 그려져
+      // 있어서(renderToday의 dueToday/oops), "오늘로 이동" 버튼이 자기가
+      // 이미 있는 곳으로 또 옮기라는 것처럼 보임 — 날짜 지우기와 결과가
+      // 같으니 중복. 아직 안 온(미래 날짜) scheduled 항목은 pray later
+      // 카드에만 있으니 그대로 둠.
+      .filter(id => !(boardId === 'scheduled' && id === 'today' && task.dueDate <= todayStr()))
       .forEach(otherId => {
       const moveBtn = document.createElement('button');
       moveBtn.className = 'move-btn';
