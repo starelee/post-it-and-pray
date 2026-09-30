@@ -998,6 +998,26 @@
     updateCounter();
   }
 
+  // 하위 항목 진행도 "(완료/전체)" — 없으면 null.
+  function subtaskProgressText(task) {
+    const total = task.subtasks.length;
+    const done = task.subtasks.filter(s => s.done).length;
+    return '(' + done + '/' + total + ')';
+  }
+
+  function makeSubtaskProgress(task) {
+    if (!task.subtasks || task.subtasks.length === 0) return null;
+    const el = document.createElement('span');
+    el.className = 'subtask-progress';
+    el.textContent = subtaskProgressText(task);
+    return el;
+  }
+
+  function refreshSubtaskProgress(li, task) {
+    const el = li && li.querySelector(':scope > .task-row > .subtask-progress');
+    if (el) el.textContent = subtaskProgressText(task);
+  }
+
   function renderItem(boardId, task, opts) {
     opts = opts || {};
     const li = document.createElement('li');
@@ -1044,6 +1064,12 @@
     text.addEventListener('click', () => startEditTask(boardId, task.id));
 
     row.appendChild(text);
+
+    // 하위 항목이 있으면 항상 만들어두고 CSS가 보일 곳(waiting/someday/
+    // 완료된 gotta do 항목)에서만 드러냄 — 체크 직후 재렌더 전에도 어긋나지
+    // 않게 하려고 JS에서 조건 분기 안 함.
+    const progress = makeSubtaskProgress(task);
+    if (progress) row.appendChild(progress);
 
     let badge = null;
     if (task.dueDate) {
@@ -1714,6 +1740,14 @@
     });
     li.appendChild(text);
 
+    // 하위 항목이 평소엔 접혀 있으니 옆에 (완료/전체)만 남겨둠. 항상 보임
+    // (.subtask-progress의 기본 표시 규칙은 waiting/someday/완료 항목 한정).
+    const progress = makeSubtaskProgress(task);
+    if (progress) {
+      progress.classList.add('subtask-progress-always');
+      li.appendChild(progress);
+    }
+
     const badge = document.createElement('span');
     badge.className = 'due-badge';
     badge.textContent = formatDueDateRelative(task.dueDate);
@@ -1797,9 +1831,16 @@
     const subList = document.createElement('ul');
     subList.className = 'subtask-list upcoming-subtask-list';
 
+    function syncUpcomingProgress() {
+      if (!progress) return;
+      progress.textContent = subtaskProgressText(task);
+      progress.hidden = task.subtasks.length === 0;
+    }
+
     function renderUpcomingSubtasks() {
       subList.innerHTML = '';
       subList.hidden = task.subtasks.length === 0;
+      syncUpcomingProgress();
       task.subtasks.forEach(sub => {
         const subLi = document.createElement('li');
         subLi.className = 'subtask-item' + (sub.done ? ' done' : '');
@@ -1819,6 +1860,7 @@
             sub.done = !sub.done;
             saveBoards();
             subLi.classList.toggle('done', sub.done);
+            syncUpcomingProgress();
           }, 400);
         });
         chip.addEventListener('dblclick', (e) => {
@@ -2421,6 +2463,7 @@
     const taskLi = findTaskLi(taskId);
     const subLi = taskLi && taskLi.querySelector('.subtask-list [data-id="' + subId + '"]');
     if (subLi) subLi.classList.toggle('done', sub.done);
+    refreshSubtaskProgress(taskLi, task);
 
     saveBoards();
     updateCounter();
