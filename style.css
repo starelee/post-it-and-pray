@@ -2106,6 +2106,7 @@
 
   .confirm-overlay.anchored .confirm-card {
     position: fixed;
+    width: min(340px, calc(100vw - 24px));
     transform-origin: 0 0;
   }
 
