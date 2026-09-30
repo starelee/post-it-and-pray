@@ -864,13 +864,35 @@
   // the archive panel's dynamically-created month groups, which need to
   // call this themselves at creation time since the querySelectorAll below
   // only ever sees elements that exist at module-load time).
-  function wireCollapseToggle(toggle, body, defaultOpen) {
+  // pray later / someday 펼침 섹션은 이만큼 펼쳐진 채로 있으면 자동으로 접음 —
+  // 한 번 펼쳐놓고 잊어버려서 카드가 계속 길게 늘어져 있는 걸 막으려는 것
+  // (휴지통 3분, lupin 자리 비움 3분 자동 복귀와 같은 취지).
+  const COLLAPSE_AUTO_CLOSE_MS = 15 * 60 * 1000;
+  // 마침 그 섹션 안에서 항목을 고치는 중이면 닫지 않고 잠시 뒤에 다시 확인.
+  const COLLAPSE_AUTO_CLOSE_RETRY_MS = 60 * 1000;
+
+  function wireCollapseToggle(toggle, body, defaultOpen, autoCloseMs) {
     // 열림/닫힘을 다른 글자(▾/▴)로 바꾸는 대신 같은 글자를 180도 돌리기만
     // 함 — 두 글자가 폰트별로 미묘하게 다른 크기/기준선을 가져서(특히
     // 모바일 사파리) 위아래 화살표 크기가 달라 보이는 문제가 있었음.
     const arrow = toggle.querySelector('[data-toggle-arrow]');
     body.hidden = !defaultOpen;
     if (arrow) arrow.classList.toggle('toggle-arrow-open', defaultOpen);
+    let autoCloseTimer = null;
+    function scheduleAutoClose(ms) {
+      clearTimeout(autoCloseTimer);
+      autoCloseTimer = null;
+      if (!autoCloseMs || body.hidden) return;
+      autoCloseTimer = setTimeout(() => {
+        autoCloseTimer = null;
+        if (body.hidden) return;
+        if (body.contains(document.activeElement)) {
+          scheduleAutoClose(COLLAPSE_AUTO_CLOSE_RETRY_MS);
+          return;
+        }
+        setOpen(false);
+      }, ms);
+    }
     function setOpen(open) {
       body.hidden = !open;
       if (arrow) arrow.classList.toggle('toggle-arrow-open', open);
@@ -879,8 +901,10 @@
       // 붙여둠 — setOpen을 그대로 들고 있는 쪽(collapseSections)이 굳이
       // 별도 상태 객체 없이 이 값을 바로 읽을 수 있음.
       if (open) setOpen.openedAt = Date.now();
+      scheduleAutoClose(autoCloseMs);
     }
     setOpen.openedAt = defaultOpen ? Date.now() : 0;
+    scheduleAutoClose(autoCloseMs);
     toggle.addEventListener('click', () => setOpen(body.hidden));
     return setOpen;
   }
@@ -892,7 +916,7 @@
   document.querySelectorAll('[data-collapse-toggle]').forEach(toggle => {
     const body = toggle.nextElementSibling;
     if (!body || !body.hasAttribute('data-collapse-body')) return;
-    const setOpen = wireCollapseToggle(toggle, body, false);
+    const setOpen = wireCollapseToggle(toggle, body, false, COLLAPSE_AUTO_CLOSE_MS);
     const listEl = body.querySelector('[data-tasklist]');
     if (listEl) collapseSections[listEl.dataset.tasklist] = { body, setOpen };
   });
