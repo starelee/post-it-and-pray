@@ -188,7 +188,7 @@
     });
   }
 
-  // "not my problem... yet" 자리가 Ctrl+Z(휴지통)로 통째로 바뀌는 lupin
+  // "not my problem... yet" 자리가 휴지통 버튼으로 통째로 바뀌는 lupin
   // 모드 방식 — 목록 아래에 덧붙이지 않고 같은 자리를 갈아끼움. lupin처럼
   // 계속 열어둔 채 잊어버리지 않도록 3분 뒤 자동으로 되돌리고, done
   // 리갈패드를 닫았다 다시 열면 항상 "not my problem"부터 다시 보여줌.
@@ -339,6 +339,7 @@
 
   function saveBoards() {
     localVersion++;
+    recordHistory();
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(boards));
     } catch (e) {
@@ -442,6 +443,7 @@
       }
       boards = mergeBoards(normalizeBoards(current.data), boards);
       migrateArchive(boards);
+      resetHistory();
       try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(boards));
       } catch (e) {
@@ -546,6 +548,7 @@
           markUserSynced(rowId);
         }
         boards = cloudBoards;
+        resetHistory();
         try {
           localStorage.setItem(STORAGE_KEY, JSON.stringify(boards));
         } catch (e) {
@@ -638,6 +641,88 @@
   }
 
   let boards = normalizeBoards(loadBoards());
+
+  // Ctrl+Z / Ctrl+Shift+Z — 저장(saveBoards)될 때마다 "저장 직전 상태"를
+  // 스냅샷으로 쌓아두고, 되돌리기는 그걸 꺼내 boards를 통째로 교체함.
+  // 메모리에만 두고(새로고침하면 사라짐) 최근 UNDO_LIMIT번까지만 기억.
+  const UNDO_LIMIT = 10;
+  const undoStack = [];
+  const redoStack = [];
+  let lastSnapshot = JSON.stringify(boards);
+  let applyingHistory = false;
+
+  function recordHistory() {
+    if (applyingHistory) return;
+    const cur = JSON.stringify(boards);
+    if (cur === lastSnapshot) return;
+    undoStack.push(lastSnapshot);
+    if (undoStack.length > UNDO_LIMIT) undoStack.shift();
+    redoStack.length = 0;
+    lastSnapshot = cur;
+  }
+
+  // 시작 시 정리 작업이나 클라우드에서 데이터를 통째로 받아온 직후처럼
+  // 사용자가 한 동작이 아닌 변경은 되돌리기 대상이 아니므로 기록을 비움.
+  function resetHistory() {
+    undoStack.length = 0;
+    redoStack.length = 0;
+    lastSnapshot = JSON.stringify(boards);
+  }
+
+  let toastEl = null;
+  let toastTimer = null;
+  function showToast(text) {
+    if (!toastEl) {
+      toastEl = document.createElement('div');
+      toastEl.className = 'toast';
+      toastEl.setAttribute('role', 'status');
+      document.body.appendChild(toastEl);
+    }
+    toastEl.textContent = text;
+    // 같은 자리에서 연속으로 뜰 때 애니메이션이 다시 시작되도록 리플로우
+    toastEl.classList.remove('show');
+    void toastEl.offsetWidth;
+    toastEl.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => toastEl.classList.remove('show'), 1600);
+  }
+
+  function stepHistory(from, to, doneMsg, emptyMsg) {
+    if (!from.length) {
+      showToast(emptyMsg);
+      return;
+    }
+    const target = from.pop();
+    to.push(JSON.stringify(boards));
+    if (to.length > UNDO_LIMIT) to.shift();
+    applyingHistory = true;
+    try {
+      boards = normalizeBoards(JSON.parse(target));
+      lastSnapshot = JSON.stringify(boards);
+      saveBoards(); // localStorage + 클라우드에 평소 저장과 똑같이 반영
+    } finally {
+      applyingHistory = false;
+    }
+    renderAll();
+    showToast(doneMsg);
+  }
+
+  document.addEventListener('keydown', (e) => {
+    if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
+    // e.key는 한글 자판 상태에서 'ㅋ'이 되므로 물리 키(code)로 판별
+    const isUndo = e.code === 'KeyZ' && !e.shiftKey;
+    const isRedo = (e.code === 'KeyZ' && e.shiftKey) || e.code === 'KeyY';
+    if (!isUndo && !isRedo) return;
+    // 글자를 치는 중이면 브라우저 기본 글자 되돌리기를 그대로 둠
+    const t = e.target;
+    if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return;
+    if (isFocusLocked()) return;
+    const modal = document.getElementById('confirmModal');
+    if (modal && !modal.hidden) return;
+    e.preventDefault();
+    if (isUndo) stepHistory(undoStack, redoStack, '되돌렸어요', '더 되돌릴 게 없어요');
+    else stepHistory(redoStack, undoStack, '다시 실행했어요', '다시 실행할 게 없어요');
+  });
 
   function getListEl(boardId) {
     return document.querySelector('[data-tasklist="' + boardId + '"]');
@@ -1925,7 +2010,7 @@
     return li;
   }
 
-  // Ctrl+Z 패널 — 최근 3일 안에 지운 항목만 보여줌(오래된 건 migrateArchive가
+  // 휴지통 패널 — 최근 3일 안에 지운 항목만 보여줌(오래된 건 migrateArchive가
   // 이미 걸러냄). doneAt이 아니라 deletedAt 기준으로 정렬해 방금 지운
   // 게 맨 위로 오게 함.
   function renderTrash() {
@@ -2350,7 +2435,10 @@
     const gracedToday = boardId === 'today' || (boardId === 'scheduled' && task.dueDate === today);
 
     setTimeout(() => {
-      if (task.done && !gracedToday) {
+      // Ctrl+Z로 boards가 통째로 교체됐을 수 있어 옛 task 객체 대신 지금
+      // 상태를 다시 찾아 확인 — 되돌린 항목이 그대로 아카이브로 가지 않게.
+      const cur = boards[boardId] && boards[boardId].find(t => t.id === id);
+      if (cur && cur.done && !gracedToday) {
         archiveNow(boardId, id);
       } else {
         // gotta do 카드 안에서 체크/체크해제 후 구분선 위아래로 다시
@@ -4089,4 +4177,5 @@
 
   restoreFocusSession();
   renderAll();
+  resetHistory();
 })();
