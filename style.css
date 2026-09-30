@@ -1539,6 +1539,11 @@
     color: var(--ink-soft);
     white-space: nowrap;
     text-decoration: none;
+    /* .task-row는 align-items: flex-start라 그냥 두면 작은 글씨가 텍스트보다
+       위로 떠 보임. 같은 줄에 baseline 정렬 대상이 이것뿐이라 align-self:
+       baseline은 효과가 없어서, .task-text 첫 줄과 같은 줄 높이(19px * 1.3)
+       를 줘서 세로 위치를 맞춤. */
+    line-height: 24.7px;
   }
 
   .subtask-progress[hidden] {
