@@ -1619,7 +1619,7 @@
         content: reviveCard,
         confirmLabel: '완료',
         cancelLabel: '취소',
-        anchorEl: reviveBtn,
+        anchorEl: li,
         focusEl: reviveTextInput,
         beforeConfirm: () => {
           if (!reviveTextInput.value.trim()) {
@@ -2180,8 +2180,8 @@
   // 취소/Esc/바깥 클릭 시 false로 resolve. 이미 떠 있으면 앞 모달이 닫힌
   // 뒤에 차례로 띄움(클라우드 불러오기 선택이 다른 모달 때문에 자동
   // '취소'로 처리되어 데이터를 덮어쓰는 일이 없도록).
-  // anchorEl(누른 체크박스 등) 근처에 카드를 띄움: 기본은 그 아래, 화면
-  // 밖으로 나가면 위쪽으로, 좌우는 화면 안으로 보정. anchorEl이 없거나
+  // anchorEl(부모 항목 줄)의 왼쪽 시작점에 맞춰 카드를 띄움: 기본은 그
+  // 항목 아래, 화면 밖으로 나가면 위쪽으로, 좌우는 화면 안으로 보정. anchorEl이 없거나
   // 화면이 너무 좁으면(모바일) 기존처럼 가운데.
   function positionConfirmCard(overlay, anchorEl) {
     const card = overlay.querySelector('.confirm-card');
@@ -2194,10 +2194,10 @@
     const m = 12;
     const cw = card.offsetWidth;
     const ch = card.offsetHeight;
-    let left = r.left + r.width / 2 - 28; // 테이프 아래로 체크박스가 보이는 정도
+    let left = r.left; // 항목(부모)의 왼쪽 시작점에 카드 왼쪽 끝을 맞춤
     left = Math.max(m, Math.min(left, window.innerWidth - cw - m));
-    let top = r.bottom + 14;
-    if (top + ch > window.innerHeight - m) top = r.top - ch - 14;
+    let top = r.bottom + 10;
+    if (top + ch > window.innerHeight - m) top = r.top - ch - 10;
     top = Math.max(m, Math.min(top, window.innerHeight - ch - m));
     card.style.left = left + 'px';
     card.style.top = top + 'px';
@@ -2297,7 +2297,7 @@
             message: '미완료 하위 항목 ' + pending.length + '개가 남아 있어요.\n함께 완료 처리할까요?',
             confirmLabel: '모두 완료',
             cancelLabel: '취소',
-            anchorEl: opts.anchorEl || (findTaskLi(id) && findTaskLi(id).querySelector('.checkbox'))
+            anchorEl: opts.anchorEl || findTaskLi(id)
           });
           if (!ok) return;
           // 모달이 떠 있던 사이 상태가 바뀌었을 수 있어 다시 찾음
