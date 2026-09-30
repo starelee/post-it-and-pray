@@ -125,11 +125,17 @@
     color: var(--paper);
   }
 
-  html {
-    /* 세로 스크롤바가 생겼다 없어졌다 할 때마다 뷰포트 폭이 바뀌면서
-       가운데 정렬된 포스트잇들이 미묘하게 좌우로 움직이는 게 거슬려서,
-       스크롤바 자리를 항상 미리 확보해둠. */
-    scrollbar-gutter: stable;
+  /* 스크롤바는 화면에서 아예 숨김(휠/터치/키보드/드래그 스크롤은 그대로
+     동작). Windows Chrome의 굵은 기본 스크롤바가 포스트잇 화면과 안 어울려서,
+     특히 리갈패드 안쪽 스크롤바가 눈에 거슬렸음. 스크롤바가 자리를 차지하지
+     않으므로, 예전에 폭이 들썩이는 걸 막으려고 쓰던 scrollbar-gutter는 필요 없음. */
+  html,
+  * {
+    scrollbar-width: none;
+  }
+
+  *::-webkit-scrollbar {
+    display: none;
   }
 
   html, body {
