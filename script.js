@@ -3151,6 +3151,10 @@
     waitingStickyEl.addEventListener('animationend', function handler() {
       waitingStickyEl.classList.remove('sticky-flipping');
       waitingStickyEl.removeEventListener('animationend', handler);
+      // 위 중간 지점 재측정은 카드가 아직 회전(3D transform) 중일 때라
+      // getClientRects() 폭이 원근/회전에 눌려 실제보다 짧게 잡힘 — 애니메이션이
+      // 끝나 transform이 풀린 지금 한 번 더 정확한 폭으로 다시 잰다.
+      if (lupinOpen) layoutStrikeLines(getListEl('lupin'));
     });
   }
 
