@@ -1526,6 +1526,42 @@
     display: none;
   }
 
+  /* 하위 항목 간소화 — 지금 신경 쓸 것만 상시 보이고 나머지는 (완료/전체)로
+     압축, 행에 호버/포커스(편집 중 포함)/롱프레스(.controls-open)하면 펼침.
+     - waiting: 미완료 하위 항목은 그대로, 완료된 것만 숨김
+     - someday, 완료된 gotta do 항목: 하위 항목 전체를 숨김
+     .subtask-list 기본 규칙(display:flex)보다 뒤에, 더 구체적인 선택자로 씀. */
+  .subtask-progress {
+    display: none;
+    flex: 0 0 auto;
+    font-family: 'Gaegu', cursive, sans-serif;
+    font-size: 13px;
+    color: var(--ink-soft);
+    white-space: nowrap;
+    text-decoration: none;
+  }
+
+  .subtask-progress[hidden] {
+    display: none;
+  }
+
+  .task-list[data-tasklist="waiting"] .subtask-progress,
+  .task-list[data-tasklist="someday"] .subtask-progress,
+  .task-list[data-tasklist="today"] .task-item.done .subtask-progress,
+  .subtask-progress.subtask-progress-always:not([hidden]) {
+    display: inline;
+  }
+
+  .task-list[data-tasklist="waiting"] .task-item:not(:hover):not(:focus-within):not(.controls-open) .subtask-item.done {
+    display: none;
+  }
+
+  .task-list[data-tasklist="waiting"] .task-item:not(:hover):not(:focus-within):not(.controls-open) > .subtask-list:not(:has(.subtask-item:not(.done))),
+  .task-list[data-tasklist="someday"] .task-item:not(:hover):not(:focus-within):not(.controls-open) > .subtask-list,
+  .task-list[data-tasklist="today"] .task-item.done:not(:hover):not(:focus-within):not(.controls-open) > .subtask-list {
+    display: none;
+  }
+
   .subtask-item {
     display: inline-flex;
     align-items: center;
