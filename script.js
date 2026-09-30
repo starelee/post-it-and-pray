@@ -1102,7 +1102,13 @@
       const subList = document.createElement('ul');
       subList.className = 'subtask-list';
       task.subtasks.forEach(sub => subList.appendChild(renderSubtaskItem(boardId, task.id, sub)));
-      li.appendChild(subList);
+      // 목록을 grid 래퍼로 감싸서 CSS가 실제 높이만큼 0fr <-> 1fr로 접고
+      // 펼 수 있게 함(.subtask-collapse 참고) — max-height 방식은 목표 값이
+      // 실제 높이와 안 맞아 애니메이션 타이밍이 어긋났음.
+      const subWrap = document.createElement('div');
+      subWrap.className = 'subtask-collapse';
+      subWrap.appendChild(subList);
+      li.appendChild(subWrap);
     }
 
     const controls = document.createElement('div');
