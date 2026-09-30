@@ -6,6 +6,10 @@
 }
 
   :root {
+    /* 호버로 펼쳐졌던 것들이 접힐 때의 공통 타이밍 — 마우스를 떼자마자 뚝
+       사라지지 않게 살짝 머물렀다가(delay) 부드럽게 접힘. 펼쳐질 땐 지연 없음. */
+    --collapse-delay: 0.25s;
+    --collapse-dur: 0.18s;
     /* 네이티브 폼 컨트롤(특히 iOS의 date input)이 다크 모드에서도 항상
        자기 자체는 밝은 배경으로 그려서, 우리 쪽 글자색(--ink, 다크에서는
        밝은 크림색)이 흰 배경 위에 흰 글자처럼 거의 안 보이던 문제 —
@@ -419,7 +423,7 @@
      구분 — 정렬 기준이 서로 달라서(doneAt 최신순 vs dueDate 임박순)
      한 리스트에 섞지는 않되, 글자 없이 선만 그어둠. */
   .archive-section-divider {
-    border-bottom: 1px dashed var(--input-line);
+    border-bottom: 1px dashed var(--focus-box-border);
     margin: 0 0 10px;
   }
 
@@ -561,13 +565,14 @@
     overflow: hidden;
     margin: 0;
     padding-left: 0;
-    transition: max-height 0.15s ease, margin-top 0.15s ease;
+    transition: max-height var(--collapse-dur) ease var(--collapse-delay), margin-top var(--collapse-dur) ease var(--collapse-delay);
   }
 
   .archive-item:hover .upcoming-subtask-list,
   .archive-item:focus-within .upcoming-subtask-list {
     max-height: 200px;
     margin-top: 6px;
+    transition-delay: 0s;
   }
 
   .upcoming-subtask-list[hidden] {
@@ -618,7 +623,7 @@
     color: var(--ink);
     background: transparent;
     border: none;
-    border-bottom: 1px dashed var(--accent);
+    border-bottom: 1px dashed var(--focus-box-border);
     outline: none;
     padding: 0;
   }
@@ -1461,7 +1466,7 @@
     margin-top: 0;
     padding-left: 28px;
     padding-right: 2px;
-    transition: max-height 0.15s ease, opacity 0.15s ease, margin-top 0.15s ease;
+    transition: max-height var(--collapse-dur) ease var(--collapse-delay), opacity var(--collapse-dur) ease var(--collapse-delay), margin-top var(--collapse-dur) ease var(--collapse-delay);
   }
 
   .task-item:hover .task-controls,
@@ -1470,6 +1475,7 @@
     max-height: 26px;
     opacity: 1;
     margin-top: 4px;
+    transition-delay: 0s;
   }
 
   .delete-btn {
@@ -1557,14 +1563,33 @@
     display: inline;
   }
 
-  .task-list[data-tasklist="waiting"] .task-item:not(:hover):not(:focus-within):not(.controls-open) .subtask-item.done {
-    display: none;
+  /* display:none은 전환이 안 돼서 마우스를 떼면 바로 사라졌음 —
+     transition-behavior(allow-discrete)로 display도 같은 지연/시간에 맞춰
+     opacity와 함께 전환시킴. 펼쳐질 땐 @starting-style로 페이드인. */
+  .task-list[data-tasklist="waiting"] .subtask-item.done,
+  .task-list[data-tasklist="waiting"] > .task-item > .subtask-list,
+  .task-list[data-tasklist="someday"] > .task-item > .subtask-list,
+  .task-list[data-tasklist="today"] > .task-item.done > .subtask-list {
+    transition: opacity var(--collapse-dur) ease, display var(--collapse-dur) ease allow-discrete;
+    opacity: 1;
   }
 
+  @starting-style {
+    .task-list[data-tasklist="waiting"] .subtask-item.done,
+    .task-list[data-tasklist="waiting"] > .task-item > .subtask-list,
+    .task-list[data-tasklist="someday"] > .task-item > .subtask-list,
+    .task-list[data-tasklist="today"] > .task-item.done > .subtask-list {
+      opacity: 0;
+    }
+  }
+
+  .task-list[data-tasklist="waiting"] .task-item:not(:hover):not(:focus-within):not(.controls-open) .subtask-item.done,
   .task-list[data-tasklist="waiting"] .task-item:not(:hover):not(:focus-within):not(.controls-open) > .subtask-list:not(:has(.subtask-item:not(.done))),
   .task-list[data-tasklist="someday"] .task-item:not(:hover):not(:focus-within):not(.controls-open) > .subtask-list,
   .task-list[data-tasklist="today"] .task-item.done:not(:hover):not(:focus-within):not(.controls-open) > .subtask-list {
     display: none;
+    opacity: 0;
+    transition-delay: var(--collapse-delay);
   }
 
   .subtask-item {
@@ -1912,7 +1937,7 @@
     /* .task-controls와 같은 이유로 왼쪽을 띄움 — "+" 밑이 아니라
        그 옆 텍스트("끄적이기..." 등) 시작 지점에 맞춰서 시작하게. */
     padding-left: 28px;
-    transition: max-height 0.15s ease, opacity 0.15s ease, margin-top 0.15s ease;
+    transition: max-height var(--collapse-dur) ease var(--collapse-delay), opacity var(--collapse-dur) ease var(--collapse-delay), margin-top var(--collapse-dur) ease var(--collapse-delay);
   }
 
   .add-row-wrap:hover .draft-controls,
@@ -1920,6 +1945,7 @@
     max-height: 26px;
     opacity: 1;
     margin-top: 6px;
+    transition-delay: 0s;
   }
 
   /* 터치 기기는 :hover를 안정적으로 감지하지 못함 — iOS/Android 브라우저마다
