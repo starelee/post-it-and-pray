@@ -188,7 +188,7 @@
     });
   }
 
-  // "not my problem... yet" 자리가 휴지통 버튼으로 통째로 바뀌는 lupin
+  // "not my problem... yet" 자리가 Ctrl+Z(휴지통)로 통째로 바뀌는 lupin
   // 모드 방식 — 목록 아래에 덧붙이지 않고 같은 자리를 갈아끼움. lupin처럼
   // 계속 열어둔 채 잊어버리지 않도록 3분 뒤 자동으로 되돌리고, done
   // 리갈패드를 닫았다 다시 열면 항상 "not my problem"부터 다시 보여줌.
@@ -2010,7 +2010,7 @@
     return li;
   }
 
-  // 휴지통 패널 — 최근 3일 안에 지운 항목만 보여줌(오래된 건 migrateArchive가
+  // Ctrl+Z 패널 — 최근 3일 안에 지운 항목만 보여줌(오래된 건 migrateArchive가
   // 이미 걸러냄). doneAt이 아니라 deletedAt 기준으로 정렬해 방금 지운
   // 게 맨 위로 오게 함.
   function renderTrash() {
