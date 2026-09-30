@@ -2200,13 +2200,36 @@
   // 취소/Esc/바깥 클릭 시 false로 resolve. 이미 떠 있으면 앞 모달이 닫힌
   // 뒤에 차례로 띄움(클라우드 불러오기 선택이 다른 모달 때문에 자동
   // '취소'로 처리되어 데이터를 덮어쓰는 일이 없도록).
+  // anchorEl(누른 체크박스 등) 근처에 카드를 띄움: 기본은 그 아래, 화면
+  // 밖으로 나가면 위쪽으로, 좌우는 화면 안으로 보정. anchorEl이 없거나
+  // 화면이 너무 좁으면(모바일) 기존처럼 가운데.
+  function positionConfirmCard(overlay, anchorEl) {
+    const card = overlay.querySelector('.confirm-card');
+    card.style.left = card.style.top = '';
+    overlay.classList.remove('anchored');
+    if (!anchorEl || !anchorEl.isConnected || window.innerWidth < 520) return;
+    const r = anchorEl.getBoundingClientRect();
+    if (!r.width && !r.height) return;
+    overlay.classList.add('anchored');
+    const m = 12;
+    const cw = card.offsetWidth;
+    const ch = card.offsetHeight;
+    let left = r.left + r.width / 2 - 28; // 테이프 아래로 체크박스가 보이는 정도
+    left = Math.max(m, Math.min(left, window.innerWidth - cw - m));
+    let top = r.bottom + 14;
+    if (top + ch > window.innerHeight - m) top = r.top - ch - 14;
+    top = Math.max(m, Math.min(top, window.innerHeight - ch - m));
+    card.style.left = left + 'px';
+    card.style.top = top + 'px';
+  }
+
   let confirmQueue = Promise.resolve();
   function showConfirm(opts) {
     const run = confirmQueue.then(() => showConfirmNow(opts));
     confirmQueue = run.catch(() => {});
     return run;
   }
-  function showConfirmNow({ title, message, confirmLabel = '확인', cancelLabel = '취소' }) {
+  function showConfirmNow({ title, message, confirmLabel = '확인', cancelLabel = '취소', anchorEl = null }) {
     const overlay = document.getElementById('confirmModal');
     if (!overlay) return Promise.resolve(false);
     const okBtn = document.getElementById('confirmOk');
@@ -2249,6 +2272,7 @@
       okBtn.addEventListener('click', onOk);
       cancelBtn.addEventListener('click', onCancel);
       overlay.hidden = false;
+      positionConfirmCard(overlay, anchorEl);
       requestAnimationFrame(() => overlay.classList.add('open'));
       okBtn.focus();
     });
@@ -2256,7 +2280,8 @@
 
   // skipConfirm: 포커스 타이머에서 "완료"를 누른 경우처럼 사용자가 이미
   // 항목 전체를 끝냈다고 밝힌 상황 — 확인 없이 하위항목까지 모두 완료.
-  async function toggleTask(boardId, id, { skipConfirm = false } = {}) {
+  async function toggleTask(boardId, id, opts = {}) {
+    const skipConfirm = !!opts.skipConfirm;
     let task = boards[boardId].find(t => t.id === id);
     if (!task) return;
 
@@ -2272,7 +2297,8 @@
             title: '아직 못 끝낸 하위 항목이 있어요',
             message: '미완료 하위 항목 ' + pending.length + '개가 남아 있어요.\n함께 완료 처리할까요?',
             confirmLabel: '모두 완료',
-            cancelLabel: '취소'
+            cancelLabel: '취소',
+            anchorEl: opts.anchorEl || (findTaskLi(id) && findTaskLi(id).querySelector('.checkbox'))
           });
           if (!ok) return;
           // 모달이 떠 있던 사이 상태가 바뀌었을 수 있어 다시 찾음

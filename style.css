@@ -2096,6 +2096,17 @@
     opacity: 1;
   }
 
+  /* 누른 위치 근처에 띄우는 모드: 카드를 화면 기준 좌표로 배치 */
+  .confirm-overlay.anchored:not([hidden]) {
+    display: block;
+    background: rgba(40, 34, 20, 0.25);
+  }
+
+  .confirm-overlay.anchored .confirm-card {
+    position: fixed;
+    transform-origin: 28px 0;
+  }
+
   .confirm-card {
     position: relative;
     width: min(340px, 100%);
