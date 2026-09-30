@@ -2254,7 +2254,9 @@
     });
   }
 
-  async function toggleTask(boardId, id) {
+  // skipConfirm: 포커스 타이머에서 "완료"를 누른 경우처럼 사용자가 이미
+  // 항목 전체를 끝냈다고 밝힌 상황 — 확인 없이 하위항목까지 모두 완료.
+  async function toggleTask(boardId, id, { skipConfirm = false } = {}) {
     let task = boards[boardId].find(t => t.id === id);
     if (!task) return;
 
@@ -2265,16 +2267,18 @@
     if (!task.done) {
       const pending = (task.subtasks || []).filter(s => !s.done);
       if (pending.length > 0) {
-        const ok = await showConfirm({
-          title: '아직 못 끝낸 하위 항목이 있어요',
-          message: '미완료 하위 항목 ' + pending.length + '개가 남아 있어요.\n함께 완료 처리할까요?',
-          confirmLabel: '모두 완료',
-          cancelLabel: '취소'
-        });
-        if (!ok) return;
-        // 모달이 떠 있던 사이 상태가 바뀌었을 수 있어 다시 찾음
-        task = boards[boardId].find(t => t.id === id);
-        if (!task || task.done) return;
+        if (!skipConfirm) {
+          const ok = await showConfirm({
+            title: '아직 못 끝낸 하위 항목이 있어요',
+            message: '미완료 하위 항목 ' + pending.length + '개가 남아 있어요.\n함께 완료 처리할까요?',
+            confirmLabel: '모두 완료',
+            cancelLabel: '취소'
+          });
+          if (!ok) return;
+          // 모달이 떠 있던 사이 상태가 바뀌었을 수 있어 다시 찾음
+          task = boards[boardId].find(t => t.id === id);
+          if (!task || task.done) return;
+        }
         const taskLi = findTaskLi(id);
         task.subtasks.forEach(s => {
           if (s.done) return;
@@ -3641,13 +3645,13 @@
     setTimeout(() => {
       const li = findTaskLi(taskId);
       if (!li) {
-        toggleTask(boardId, taskId);
+        toggleTask(boardId, taskId, { skipConfirm: true });
         return;
       }
       li.classList.add('celebrate-flash');
       setTimeout(() => {
         li.classList.remove('celebrate-flash');
-        toggleTask(boardId, taskId);
+        toggleTask(boardId, taskId, { skipConfirm: true });
       }, FOCUS_CELEBRATE_MS);
     }, 300);
   }
