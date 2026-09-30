@@ -2307,8 +2307,8 @@
     li._activeEditCommit = commit;
 
     input.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' && e.shiftKey) {
-        // Shift+Enter — 새 항목 입력창과 같은 규칙: 지금 수정한 상위 항목을
+      if (e.key === 'Enter' && (e.shiftKey || e.altKey)) {
+        // Shift+Enter(=Alt+Enter) — 새 항목 입력창과 같은 규칙: 지금 수정한 상위 항목을
         // 먼저 확정하고, 그 항목의 하위 항목 입력을 바로 열어서 포커스.
         // commit()이 li를 통째로 다시 그리므로 새로 그려진 li에서 다시 찾아 엶.
         e.preventDefault();
@@ -3035,7 +3035,7 @@
 
     input.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') {
-        if (e.shiftKey) {
+        if (e.shiftKey || e.altKey) {
           if (commitDraft()) openAddSubtaskRow(boardId, lastAddedTaskId[boardId], true); // 등록된 그 항목의 하위 항목 입력을 바로 열고 포커스
         } else {
           commitDraft();
@@ -4228,14 +4228,14 @@
     }
   });
 
-  // Shift+Enter — 이미 등록된 항목(체크박스, 텍스트 등 그 task-item 안의
+  // Shift+Enter / Alt+Enter — 이미 등록된 항목(체크박스, 텍스트 등 그 task-item 안의
   // 아무 요소) 위에 포커스가 있을 때 새 항목 만들 때처럼 곧장 하위 항목
   // 추가 입력창을 열어줌. task-edit-input/new-subtask-input 등 자기
   // 나름의 키다운 처리를 이미 갖고 있는 입력창들은 그쪽에서 먼저 처리되고
   // (Enter에 blur가 걸려 activeElement가 바뀌므로) 여기까지 안 넘어옴.
   document.addEventListener('keydown', (e) => {
     if (isFocusLocked()) return;
-    if (!e.shiftKey || e.metaKey || e.ctrlKey || e.altKey) return;
+    if (!(e.shiftKey || e.altKey) || e.metaKey || e.ctrlKey) return;
     if (e.key !== 'Enter') return;
     const li = document.activeElement && document.activeElement.closest('.task-item');
     if (!li) return;
