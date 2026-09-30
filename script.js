@@ -2154,7 +2154,14 @@
     li._activeEditCommit = commit;
 
     input.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') {
+      if (e.key === 'Enter' && e.shiftKey) {
+        // Shift+Enter — 새 항목 입력창과 같은 규칙: 지금 수정한 상위 항목을
+        // 먼저 확정하고, 그 항목의 하위 항목 입력을 바로 열어서 포커스.
+        // commit()이 li를 통째로 다시 그리므로 새로 그려진 li에서 다시 찾아 엶.
+        e.preventDefault();
+        commit();
+        openAddSubtaskRow(boardId, id, true);
+      } else if (e.key === 'Enter') {
         input.blur();
       } else if (e.key === 'Escape') {
         input.value = task.text;
@@ -2184,25 +2191,22 @@
   // 취소/Esc/바깥 클릭 시 false로 resolve. 이미 떠 있으면 앞 모달이 닫힌
   // 뒤에 차례로 띄움(클라우드 불러오기 선택이 다른 모달 때문에 자동
   // '취소'로 처리되어 데이터를 덮어쓰는 일이 없도록).
-  // anchorEl(부모 항목 줄)의 왼쪽 시작점에 맞춰 카드를 띄움: 기본은 그
-  // 항목 아래, 화면 밖으로 나가면 위쪽으로, 좌우는 화면 안으로 보정. anchorEl이 없거나
-  // 화면이 너무 좁으면(모바일) 기존처럼 가운데.
+  // anchorEl(부모 항목)의 왼쪽 위 모서리에 카드의 왼쪽 위 모서리를 맞춰
+  // 띄움. 화면 밖으로 나가면 안쪽으로 밀어 넣음. anchorEl이 없으면
+  // (클라우드 불러오기 등) 가운데.
   function positionConfirmCard(overlay, anchorEl) {
     const card = overlay.querySelector('.confirm-card');
     card.style.left = card.style.top = '';
     overlay.classList.remove('anchored');
-    if (!anchorEl || !anchorEl.isConnected || window.innerWidth < 520) return;
+    if (!anchorEl || !anchorEl.isConnected) return;
     const r = anchorEl.getBoundingClientRect();
     if (!r.width && !r.height) return;
     overlay.classList.add('anchored');
     const m = 12;
     const cw = card.offsetWidth;
     const ch = card.offsetHeight;
-    let left = r.left; // 항목(부모)의 왼쪽 시작점에 카드 왼쪽 끝을 맞춤
-    left = Math.max(m, Math.min(left, window.innerWidth - cw - m));
-    let top = r.bottom + 10;
-    if (top + ch > window.innerHeight - m) top = r.top - ch - 10;
-    top = Math.max(m, Math.min(top, window.innerHeight - ch - m));
+    const left = Math.max(m, Math.min(r.left, window.innerWidth - cw - m));
+    const top = Math.max(m, Math.min(r.top, window.innerHeight - ch - m));
     card.style.left = left + 'px';
     card.style.top = top + 'px';
   }
