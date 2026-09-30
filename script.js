@@ -529,11 +529,13 @@
         const cloudBoards = normalizeBoards(data.data);
         const hasLocalData = Object.keys(boards).some(id => Array.isArray(boards[id]) && boards[id].length > 0);
         if (hasLocalData && getSyncedUserId() !== rowId) {
-          const useCloud = window.confirm(
-            '이 계정에 이미 저장된 데이터가 있어요.\n\n' +
-            '확인 → 클라우드 데이터를 불러옵니다 (지금 이 기기에만 있던 데이터는 사라져요)\n' +
-            '취소 → 지금 이 기기의 데이터를 유지하고, 그걸로 클라우드를 덮어씁니다'
-          );
+          const useCloud = await showConfirm({
+            title: '이 계정에 저장된 데이터가 있어요',
+            message: '클라우드 데이터를 불러오면 지금 이 기기에만 있던 데이터는 사라져요.\n' +
+              '이 기기 데이터를 유지하면 클라우드가 지금 데이터로 덮어써져요.',
+            confirmLabel: '클라우드 불러오기',
+            cancelLabel: '이 기기 유지'
+          });
           markUserSynced(rowId);
           if (!useCloud) {
             lastKnownServerUpdatedAt = data.updated_at; // 로컬을 유지하고 클라우드 쪽을 로컬로 덮어씀
@@ -2194,9 +2196,96 @@
     input.addEventListener('blur', () => setTimeout(commit, 0));
   }
 
-  function toggleTask(boardId, id) {
-    const task = boards[boardId].find(t => t.id === id);
+  // 브라우저 기본 confirm 대신 쓰는 앱 스타일 확인 모달. 확인 시 true,
+  // 취소/Esc/바깥 클릭 시 false로 resolve. 이미 떠 있으면 앞 모달이 닫힌
+  // 뒤에 차례로 띄움(클라우드 불러오기 선택이 다른 모달 때문에 자동
+  // '취소'로 처리되어 데이터를 덮어쓰는 일이 없도록).
+  let confirmQueue = Promise.resolve();
+  function showConfirm(opts) {
+    const run = confirmQueue.then(() => showConfirmNow(opts));
+    confirmQueue = run.catch(() => {});
+    return run;
+  }
+  function showConfirmNow({ title, message, confirmLabel = '확인', cancelLabel = '취소' }) {
+    const overlay = document.getElementById('confirmModal');
+    if (!overlay) return Promise.resolve(false);
+    const okBtn = document.getElementById('confirmOk');
+    const cancelBtn = document.getElementById('confirmCancel');
+    document.getElementById('confirmTitle').textContent = title;
+    document.getElementById('confirmMessage').textContent = message;
+    okBtn.textContent = confirmLabel;
+    cancelBtn.textContent = cancelLabel;
+    const prevFocus = document.activeElement;
+
+    return new Promise(resolve => {
+      function close(result) {
+        document.removeEventListener('keydown', onKey, true);
+        overlay.removeEventListener('click', onOverlay);
+        okBtn.removeEventListener('click', onOk);
+        cancelBtn.removeEventListener('click', onCancel);
+        overlay.classList.remove('open');
+        overlay.hidden = true;
+        if (prevFocus && typeof prevFocus.focus === 'function') prevFocus.focus();
+        resolve(result);
+      }
+      const onOk = () => close(true);
+      const onCancel = () => close(false);
+      const onOverlay = e => { if (e.target === overlay) close(false); };
+      function onKey(e) {
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          e.stopPropagation();
+          close(false);
+        } else if (e.key === 'Tab') {
+          // 포커스가 모달 밖으로 나가지 않게 두 버튼 사이에서만 순환
+          e.preventDefault();
+          (document.activeElement === okBtn ? cancelBtn : okBtn).focus();
+        } else if (e.key === 'Enter') {
+          e.stopPropagation();
+        }
+      }
+      document.addEventListener('keydown', onKey, true);
+      overlay.addEventListener('click', onOverlay);
+      okBtn.addEventListener('click', onOk);
+      cancelBtn.addEventListener('click', onCancel);
+      overlay.hidden = false;
+      requestAnimationFrame(() => overlay.classList.add('open'));
+      okBtn.focus();
+    });
+  }
+
+  async function toggleTask(boardId, id) {
+    let task = boards[boardId].find(t => t.id === id);
     if (!task) return;
+
+    // 미완료 하위항목이 남은 채로 부모를 완료하려 하면 먼저 확인 —
+    // 확인하면 하위항목도 함께 완료, 취소하면 아무것도 바꾸지 않음.
+    // (하위항목을 다 끝내도 부모 자동 완료는 없고, 부모를 되돌려도
+    // 하위항목 상태는 그대로 둠.)
+    if (!task.done) {
+      const pending = (task.subtasks || []).filter(s => !s.done);
+      if (pending.length > 0) {
+        const ok = await showConfirm({
+          title: '아직 못 끝낸 하위 항목이 있어요',
+          message: '미완료 하위 항목 ' + pending.length + '개가 남아 있어요.\n함께 완료 처리할까요?',
+          confirmLabel: '모두 완료',
+          cancelLabel: '취소'
+        });
+        if (!ok) return;
+        // 모달이 떠 있던 사이 상태가 바뀌었을 수 있어 다시 찾음
+        task = boards[boardId].find(t => t.id === id);
+        if (!task || task.done) return;
+        const taskLi = findTaskLi(id);
+        task.subtasks.forEach(s => {
+          if (s.done) return;
+          s.done = true;
+          const subLi = taskLi && taskLi.querySelector('.subtask-list [data-id="' + s.id + '"]');
+          if (subLi) subLi.classList.add('done');
+        });
+        refreshSubtaskProgress(taskLi, task);
+      }
+    }
+
     task.done = !task.done;
     if (task.done) task.doneAt = todayStr();
     else delete task.doneAt;
