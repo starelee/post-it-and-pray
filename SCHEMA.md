@@ -34,6 +34,7 @@ type Task = {
   dueDate?: string;      // "YYYY-MM-DD" — scheduled 항목에만 존재
   from?: string;         // 보드 id 문자열 — 아래 "from 필드의 두 가지 의미" 참고
   doneAt?: string;       // "YYYY-MM-DD" — done === true인 항목에만 존재
+  updatedAt?: number;    // 마지막으로 바뀐 시각(ms, Date.now()) — saveBoards가 바뀐 항목에만 찍음. 클라우드 병합에서 "더 나중에 바꾼 쪽이 이김"의 근거
 };
 ```
 

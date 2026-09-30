@@ -274,6 +274,7 @@
       if (typeof t.dueDate === 'string' && t.dueDate) out.dueDate = t.dueDate;
       if (typeof t.from === 'string' && t.from) out.from = t.from;
       if (typeof t.deletedAt === 'string' && t.deletedAt) out.deletedAt = t.deletedAt;
+      if (typeof t.updatedAt === 'number' && isFinite(t.updatedAt)) out.updatedAt = t.updatedAt;
       if (out.done) {
         // Legacy done tasks from before doneAt existed get today's grace
         // period instead of being permanently excluded from the sweep.
@@ -339,6 +340,7 @@
 
   function saveBoards() {
     localVersion++;
+    stampChangedTasks();
     recordHistory();
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(boards));
@@ -373,9 +375,10 @@
 
   // Merges a server snapshot with the local one after a lost write. This is
   // NOT a full CRDT merge, just enough to stop the specific failure above:
-  // each task id resolves to whichever side shows more progress —
-  // archived > done-in-place > still-active — so a stale "not done yet"
-  // copy can never erase a real completion, and brand-new tasks added
+  // each task id resolves to whichever side was changed more recently
+  // (updatedAt); when that's missing or equal, to whichever side shows more
+  // progress — archived > done-in-place > still-active — so a stale "not
+  // done yet" copy can never erase a real completion, and brand-new tasks added
   // independently on either side survive (union by id). A task deleted on
   // one side while left untouched on the other will resurrect, since
   // neither side carries a tombstone — a real gap, just a much smaller one
@@ -393,6 +396,15 @@
     function consider(boardId, task) {
       const cur = winners.get(task.id);
       if (!cur) { winners.set(task.id, { task, boardId }); return; }
+      // 양쪽 다 마지막으로 바꾼 시각이 다르면 더 나중에 바꾼 쪽이 이김(되돌린
+      // 완료가 다시 완료로 뒤집히지 않도록). 시각이 없거나 같을 때만 아래의
+      // 진행도 규칙으로 판단.
+      const curT = cur.task.updatedAt || 0;
+      const newT = task.updatedAt || 0;
+      if (newT !== curT) {
+        if (newT > curT) winners.set(task.id, { task, boardId });
+        return;
+      }
       const curP = progress(cur.boardId, cur.task);
       const newP = progress(boardId, task);
       if (newP > curP || (newP === curP && (task.doneAt || '') > (cur.task.doneAt || ''))) {
@@ -645,6 +657,37 @@
   // Ctrl+Z / Ctrl+Shift+Z — 저장(saveBoards)될 때마다 "저장 직전 상태"를
   // 스냅샷으로 쌓아두고, 되돌리기는 그걸 꺼내 boards를 통째로 교체함.
   // 메모리에만 두고(새로고침하면 사라짐) 최근 UNDO_LIMIT번까지만 기억.
+  // 항목마다 "마지막으로 바꾼 시각"(updatedAt)을 찍어둠 — 클라우드 병합이
+  // 진행도 대신 "더 나중에 바꾼 쪽이 이김"으로 판단할 수 있게 하려는 것.
+  // 저장(saveBoards) 때마다 직전 저장과 비교해서 달라진 항목(내용이 바뀌었거나
+  // 다른 보드로 옮겨졌거나 새로 생김)에만 지금 시각을 찍음. 되돌리기/다시
+  // 실행도 같은 저장 경로를 타므로, 되돌린 항목에도 그 순간의 시각이 찍힘.
+  function taskSignatures() {
+    const sigs = new Map();
+    BOARD_IDS.concat(['archive', 'lupin', 'trash']).forEach(boardId => {
+      (boards[boardId] || []).forEach(t => {
+        const { updatedAt, ...rest } = t;
+        sigs.set(t.id, boardId + '|' + JSON.stringify(rest));
+      });
+    });
+    return sigs;
+  }
+  let lastSigs = taskSignatures();
+
+  function stampChangedTasks() {
+    const now = Date.now();
+    const sigs = new Map();
+    BOARD_IDS.concat(['archive', 'lupin', 'trash']).forEach(boardId => {
+      (boards[boardId] || []).forEach(t => {
+        const { updatedAt, ...rest } = t;
+        const sig = boardId + '|' + JSON.stringify(rest);
+        sigs.set(t.id, sig);
+        if (lastSigs.get(t.id) !== sig) t.updatedAt = now;
+      });
+    });
+    lastSigs = sigs;
+  }
+
   const UNDO_LIMIT = 10;
   const undoStack = [];
   const redoStack = [];
@@ -667,6 +710,7 @@
     undoStack.length = 0;
     redoStack.length = 0;
     lastSnapshot = JSON.stringify(boards);
+    lastSigs = taskSignatures(); // 클라우드에서 받은 항목을 "방금 바뀐 것"으로 오인하지 않게
   }
 
   let toastEl = null;
@@ -698,8 +742,8 @@
     applyingHistory = true;
     try {
       boards = normalizeBoards(JSON.parse(target));
-      lastSnapshot = JSON.stringify(boards);
-      saveBoards(); // localStorage + 클라우드에 평소 저장과 똑같이 반영
+      saveBoards(); // 되돌린 항목에 새 시각을 찍고 localStorage + 클라우드에 평소처럼 반영
+      lastSnapshot = JSON.stringify(boards); // 시각이 찍힌 뒤의 상태를 기준으로 삼음
     } finally {
       applyingHistory = false;
     }
