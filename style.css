@@ -2083,9 +2083,12 @@
     align-items: center;
     justify-content: center;
     padding: 16px;
-    background: rgba(40, 34, 20, 0.45);
+    /* 포커스 타이머(.focus-blurred)와 같은 블러+흐림으로 통일 */
+    background: rgba(40, 34, 20, 0.2);
+    -webkit-backdrop-filter: blur(4px);
+    backdrop-filter: blur(4px);
     opacity: 0;
-    transition: opacity 0.18s ease;
+    transition: opacity 0.25s ease;
   }
 
   .confirm-overlay[hidden] {
@@ -2094,6 +2097,16 @@
 
   .confirm-overlay.open {
     opacity: 1;
+  }
+
+  /* 누른 위치 근처에 띄우는 모드: 카드를 화면 기준 좌표로 배치 */
+  .confirm-overlay.anchored:not([hidden]) {
+    display: block;
+  }
+
+  .confirm-overlay.anchored .confirm-card {
+    position: fixed;
+    transform-origin: 28px 0;
   }
 
   .confirm-card {
