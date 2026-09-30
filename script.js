@@ -1491,8 +1491,8 @@
     reviveBtn.type = 'button';
     reviveBtn.textContent = '↻ 또 하기';
 
-    // "또 하기"를 누르면 아래로 상위 항목 + 하위 항목을 통째로 고칠 수
-    // 있는 카드가 펼쳐짐 — 여기서 고쳐도 원래 지난 기록(archive의 task)은
+    // "또 하기"를 누르면 상위 항목 + 하위 항목을 통째로 고칠 수
+    // 있는 모달이 뜸 — 여기서 고쳐도 원래 지난 기록(archive의 task)은
     // 그대로 두고, "완료"를 눌렀을 때만 지금 초안 그대로 새 카드가 만들어짐.
     let draftSubtasks = (task.subtasks || []).map(s => s.text);
     let draftDueDate = '';
@@ -1500,11 +1500,6 @@
     const reviveCard = document.createElement('div');
     reviveCard.className = 'revive-card';
     reviveCard.hidden = true;
-
-    const reviveHint = document.createElement('p');
-    reviveHint.className = 'revive-hint';
-    reviveHint.textContent = '어떻게 기억해둘까요?';
-    reviveCard.appendChild(reviveHint);
 
     const reviveTextInput = document.createElement('input');
     reviveTextInput.className = 'revive-text-input';
@@ -1580,13 +1575,6 @@
     reviveDateInput.className = 'date-picker-input';
     reviveDateInput.type = 'date';
     reviveDateInput.addEventListener('change', () => { draftDueDate = reviveDateInput.value; });
-    reviveDateInput.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        reviveCard.hidden = true;
-        resetReviveDraft();
-      }
-    });
     reviveDateRow.appendChild(wrapDateInputWithHint(reviveDateInput));
 
     const reviveTomorrowBtn = document.createElement('button');
@@ -1609,12 +1597,6 @@
     });
     reviveDateRow.appendChild(reviveDateClearBtn);
 
-    const reviveDoneBtn = document.createElement('button');
-    reviveDoneBtn.type = 'button';
-    reviveDoneBtn.className = 'date-clear-btn revive-done-btn';
-    reviveDoneBtn.textContent = '완료';
-    reviveDateRow.appendChild(reviveDoneBtn);
-
     reviveCard.appendChild(reviveDateRow);
 
     function resetReviveDraft() {
@@ -1626,34 +1608,33 @@
       reviveDateInput.value = '';
     }
 
-    reviveDoneBtn.addEventListener('click', () => {
-      const trimmedText = reviveTextInput.value.trim();
-      if (!trimmedText) {
-        reviveTextInput.focus();
-        return;
+    // "또 하기"는 리갈 패드 안에 카드를 펼치는 대신 모달로 물어봄 —
+    // 완료를 누르면 지금 초안 그대로 새 카드를 만들고, 취소/Esc/바깥 클릭이면
+    // 아무것도 안 함(지난 기록은 어느 쪽이든 그대로).
+    reviveBtn.addEventListener('click', async () => {
+      resetReviveDraft();
+      reviveCard.hidden = false;
+      const ok = await showConfirm({
+        title: '어떻게 기억해둘까요?',
+        content: reviveCard,
+        confirmLabel: '완료',
+        cancelLabel: '취소',
+        anchorEl: li,
+        focusEl: reviveTextInput,
+        beforeConfirm: () => {
+          if (!reviveTextInput.value.trim()) {
+            reviveTextInput.focus();
+            return false;
+          }
+        }
+      });
+      if (ok) {
+        // 지정한 날짜가 있으면 그 날짜로 예정(scheduled), 없으면 today로
+        // 바로 되살림 — 날짜는 선택 사항.
+        reviveTask(task, { text: reviveTextInput.value.trim(), subtasks: draftSubtasks.slice(), dueDate: draftDueDate });
       }
-      // 지정한 날짜가 있으면 그 날짜로 예정(scheduled), 없으면 today로
-      // 바로 되살림 — 날짜는 선택 사항.
-      reviveTask(task, { text: trimmedText, subtasks: draftSubtasks.slice(), dueDate: draftDueDate });
       reviveCard.hidden = true;
       resetReviveDraft();
-    });
-
-    reviveTextInput.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        reviveCard.hidden = true;
-        resetReviveDraft();
-      }
-    });
-
-    reviveBtn.addEventListener('click', () => {
-      reviveCard.hidden = !reviveCard.hidden;
-      if (!reviveCard.hidden) {
-        resetReviveDraft();
-        reviveTextInput.focus();
-        reviveTextInput.select();
-      }
     });
 
     const del = document.createElement('button');
@@ -1676,7 +1657,6 @@
     controls.appendChild(reviveBtn);
     controls.appendChild(del);
     li.appendChild(controls);
-    li.appendChild(reviveCard);
     return li;
   }
 
@@ -1759,17 +1739,14 @@
     const badge = document.createElement('span');
     badge.className = 'due-badge';
     badge.textContent = formatDueDateRelative(task.dueDate);
+    // 📅 버튼 대신 날짜 배지를 눌러서 수정
+    badge.tabIndex = 0;
+    badge.setAttribute('role', 'button');
+    badge.setAttribute('aria-label', '날짜 수정');
     li.appendChild(badge);
 
     const controls = document.createElement('div');
     controls.className = 'archive-item-controls';
-
-    const dateBtn = document.createElement('button');
-    dateBtn.className = 'date-btn';
-    dateBtn.type = 'button';
-    dateBtn.setAttribute('aria-label', '날짜 수정');
-    dateBtn.textContent = '📅';
-    controls.appendChild(dateBtn);
 
     const del = document.createElement('button');
     del.className = 'delete-btn';
@@ -1808,7 +1785,7 @@
     const clearBtn = document.createElement('button');
     clearBtn.className = 'date-clear-btn';
     clearBtn.type = 'button';
-    clearBtn.textContent = '날짜 지우기';
+    clearBtn.textContent = '닫기';
     clearBtn.addEventListener('click', () => {
       clearTimeout(commitTimer);
       dateRow.hidden = true;
@@ -1826,10 +1803,17 @@
       }
     });
 
-    dateBtn.addEventListener('click', () => {
+    const toggleUpcomingDateRow = () => {
       dateRow.hidden = !dateRow.hidden;
       if (dateRow.hidden) clearTimeout(commitTimer);
       else dateInput.focus();
+    };
+    badge.addEventListener('click', toggleUpcomingDateRow);
+    badge.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        toggleUpcomingDateRow();
+      }
     });
 
     // 하위 항목이 있으면 평소엔 접어두고 이 줄에 호버(또는 안의 무언가에
@@ -2200,8 +2184,8 @@
   // 취소/Esc/바깥 클릭 시 false로 resolve. 이미 떠 있으면 앞 모달이 닫힌
   // 뒤에 차례로 띄움(클라우드 불러오기 선택이 다른 모달 때문에 자동
   // '취소'로 처리되어 데이터를 덮어쓰는 일이 없도록).
-  // anchorEl(누른 체크박스 등) 근처에 카드를 띄움: 기본은 그 아래, 화면
-  // 밖으로 나가면 위쪽으로, 좌우는 화면 안으로 보정. anchorEl이 없거나
+  // anchorEl(부모 항목 줄)의 왼쪽 시작점에 맞춰 카드를 띄움: 기본은 그
+  // 항목 아래, 화면 밖으로 나가면 위쪽으로, 좌우는 화면 안으로 보정. anchorEl이 없거나
   // 화면이 너무 좁으면(모바일) 기존처럼 가운데.
   function positionConfirmCard(overlay, anchorEl) {
     const card = overlay.querySelector('.confirm-card');
@@ -2214,10 +2198,10 @@
     const m = 12;
     const cw = card.offsetWidth;
     const ch = card.offsetHeight;
-    let left = r.left + r.width / 2 - 28; // 테이프 아래로 체크박스가 보이는 정도
+    let left = r.left; // 항목(부모)의 왼쪽 시작점에 카드 왼쪽 끝을 맞춤
     left = Math.max(m, Math.min(left, window.innerWidth - cw - m));
-    let top = r.bottom + 14;
-    if (top + ch > window.innerHeight - m) top = r.top - ch - 14;
+    let top = r.bottom + 10;
+    if (top + ch > window.innerHeight - m) top = r.top - ch - 10;
     top = Math.max(m, Math.min(top, window.innerHeight - ch - m));
     card.style.left = left + 'px';
     card.style.top = top + 'px';
@@ -2229,13 +2213,20 @@
     confirmQueue = run.catch(() => {});
     return run;
   }
-  function showConfirmNow({ title, message, confirmLabel = '확인', cancelLabel = '취소', anchorEl = null }) {
+  function showConfirmNow({ title, message = '', confirmLabel = '확인', cancelLabel = '취소', anchorEl = null, content = null, beforeConfirm = null, focusEl = null }) {
     const overlay = document.getElementById('confirmModal');
     if (!overlay) return Promise.resolve(false);
+    const card = overlay.querySelector('.confirm-card');
     const okBtn = document.getElementById('confirmOk');
     const cancelBtn = document.getElementById('confirmCancel');
+    const messageEl = document.getElementById('confirmMessage');
+    const contentEl = document.getElementById('confirmContent');
     document.getElementById('confirmTitle').textContent = title;
-    document.getElementById('confirmMessage').textContent = message;
+    messageEl.textContent = message;
+    messageEl.hidden = !message;
+    contentEl.innerHTML = '';
+    contentEl.hidden = !content;
+    if (content) contentEl.appendChild(content);
     okBtn.textContent = confirmLabel;
     cancelBtn.textContent = cancelLabel;
     const prevFocus = document.activeElement;
@@ -2248,10 +2239,15 @@
         cancelBtn.removeEventListener('click', onCancel);
         overlay.classList.remove('open');
         overlay.hidden = true;
-        if (prevFocus && typeof prevFocus.focus === 'function') prevFocus.focus();
+        if (content) content.remove();
+        contentEl.hidden = true;
+        if (prevFocus && typeof prevFocus.focus === 'function' && prevFocus.isConnected) prevFocus.focus();
         resolve(result);
       }
-      const onOk = () => close(true);
+      const onOk = () => {
+        if (beforeConfirm && beforeConfirm() === false) return;
+        close(true);
+      };
       const onCancel = () => close(false);
       const onOverlay = e => { if (e.target === overlay) close(false); };
       function onKey(e) {
@@ -2260,10 +2256,18 @@
           e.stopPropagation();
           close(false);
         } else if (e.key === 'Tab') {
-          // 포커스가 모달 밖으로 나가지 않게 두 버튼 사이에서만 순환
+          // 포커스가 모달 밖으로 나가지 않게 카드 안 요소들 사이에서만 순환
+          const items = Array.from(card.querySelectorAll('button, input, select, textarea'))
+            .filter(el => !el.disabled && el.offsetParent !== null);
+          if (!items.length) return;
+          const i = items.indexOf(document.activeElement);
+          const next = e.shiftKey
+            ? items[i <= 0 ? items.length - 1 : i - 1]
+            : items[i === -1 || i === items.length - 1 ? 0 : i + 1];
           e.preventDefault();
-          (document.activeElement === okBtn ? cancelBtn : okBtn).focus();
-        } else if (e.key === 'Enter') {
+          next.focus();
+        } else if (e.key === 'Enter' && !(e.target instanceof HTMLInputElement)) {
+          // 뒤쪽 화면의 단축키가 Enter를 가로채지 않게 (입력칸의 Enter는 그대로 통과)
           e.stopPropagation();
         }
       }
@@ -2274,12 +2278,11 @@
       overlay.hidden = false;
       positionConfirmCard(overlay, anchorEl);
       requestAnimationFrame(() => overlay.classList.add('open'));
-      okBtn.focus();
+      (focusEl || okBtn).focus();
+      if (focusEl && typeof focusEl.select === 'function') focusEl.select();
     });
   }
 
-  // skipConfirm: 포커스 타이머에서 "완료"를 누른 경우처럼 사용자가 이미
-  // 항목 전체를 끝냈다고 밝힌 상황 — 확인 없이 하위항목까지 모두 완료.
   async function toggleTask(boardId, id, opts = {}) {
     const skipConfirm = !!opts.skipConfirm;
     let task = boards[boardId].find(t => t.id === id);
@@ -2298,7 +2301,7 @@
             message: '미완료 하위 항목 ' + pending.length + '개가 남아 있어요.\n함께 완료 처리할까요?',
             confirmLabel: '모두 완료',
             cancelLabel: '취소',
-            anchorEl: opts.anchorEl || (findTaskLi(id) && findTaskLi(id).querySelector('.checkbox'))
+            anchorEl: opts.anchorEl || findTaskLi(id)
           });
           if (!ok) return;
           // 모달이 떠 있던 사이 상태가 바뀌었을 수 있어 다시 찾음
