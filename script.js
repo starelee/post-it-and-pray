@@ -1785,7 +1785,7 @@
     const clearBtn = document.createElement('button');
     clearBtn.className = 'date-clear-btn';
     clearBtn.type = 'button';
-    clearBtn.textContent = '날짜 지우기';
+    clearBtn.textContent = '닫기';
     clearBtn.addEventListener('click', () => {
       clearTimeout(commitTimer);
       dateRow.hidden = true;
