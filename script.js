@@ -1739,17 +1739,14 @@
     const badge = document.createElement('span');
     badge.className = 'due-badge';
     badge.textContent = formatDueDateRelative(task.dueDate);
+    // 📅 버튼 대신 날짜 배지를 눌러서 수정
+    badge.tabIndex = 0;
+    badge.setAttribute('role', 'button');
+    badge.setAttribute('aria-label', '날짜 수정');
     li.appendChild(badge);
 
     const controls = document.createElement('div');
     controls.className = 'archive-item-controls';
-
-    const dateBtn = document.createElement('button');
-    dateBtn.className = 'date-btn';
-    dateBtn.type = 'button';
-    dateBtn.setAttribute('aria-label', '날짜 수정');
-    dateBtn.textContent = '📅';
-    controls.appendChild(dateBtn);
 
     const del = document.createElement('button');
     del.className = 'delete-btn';
@@ -1806,10 +1803,17 @@
       }
     });
 
-    dateBtn.addEventListener('click', () => {
+    const toggleUpcomingDateRow = () => {
       dateRow.hidden = !dateRow.hidden;
       if (dateRow.hidden) clearTimeout(commitTimer);
       else dateInput.focus();
+    };
+    badge.addEventListener('click', toggleUpcomingDateRow);
+    badge.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        toggleUpcomingDateRow();
+      }
     });
 
     // 하위 항목이 있으면 평소엔 접어두고 이 줄에 호버(또는 안의 무언가에
