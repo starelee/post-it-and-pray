@@ -339,6 +339,7 @@
 
   function saveBoards() {
     localVersion++;
+    recordHistory();
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(boards));
     } catch (e) {
@@ -442,6 +443,7 @@
       }
       boards = mergeBoards(normalizeBoards(current.data), boards);
       migrateArchive(boards);
+      resetHistory();
       try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(boards));
       } catch (e) {
@@ -546,6 +548,7 @@
           markUserSynced(rowId);
         }
         boards = cloudBoards;
+        resetHistory();
         try {
           localStorage.setItem(STORAGE_KEY, JSON.stringify(boards));
         } catch (e) {
@@ -638,6 +641,88 @@
   }
 
   let boards = normalizeBoards(loadBoards());
+
+  // Ctrl+Z / Ctrl+Shift+Z — 저장(saveBoards)될 때마다 "저장 직전 상태"를
+  // 스냅샷으로 쌓아두고, 되돌리기는 그걸 꺼내 boards를 통째로 교체함.
+  // 메모리에만 두고(새로고침하면 사라짐) 최근 UNDO_LIMIT번까지만 기억.
+  const UNDO_LIMIT = 10;
+  const undoStack = [];
+  const redoStack = [];
+  let lastSnapshot = JSON.stringify(boards);
+  let applyingHistory = false;
+
+  function recordHistory() {
+    if (applyingHistory) return;
+    const cur = JSON.stringify(boards);
+    if (cur === lastSnapshot) return;
+    undoStack.push(lastSnapshot);
+    if (undoStack.length > UNDO_LIMIT) undoStack.shift();
+    redoStack.length = 0;
+    lastSnapshot = cur;
+  }
+
+  // 시작 시 정리 작업이나 클라우드에서 데이터를 통째로 받아온 직후처럼
+  // 사용자가 한 동작이 아닌 변경은 되돌리기 대상이 아니므로 기록을 비움.
+  function resetHistory() {
+    undoStack.length = 0;
+    redoStack.length = 0;
+    lastSnapshot = JSON.stringify(boards);
+  }
+
+  let toastEl = null;
+  let toastTimer = null;
+  function showToast(text) {
+    if (!toastEl) {
+      toastEl = document.createElement('div');
+      toastEl.className = 'toast';
+      toastEl.setAttribute('role', 'status');
+      document.body.appendChild(toastEl);
+    }
+    toastEl.textContent = text;
+    // 같은 자리에서 연속으로 뜰 때 애니메이션이 다시 시작되도록 리플로우
+    toastEl.classList.remove('show');
+    void toastEl.offsetWidth;
+    toastEl.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => toastEl.classList.remove('show'), 1600);
+  }
+
+  function stepHistory(from, to, doneMsg, emptyMsg) {
+    if (!from.length) {
+      showToast(emptyMsg);
+      return;
+    }
+    const target = from.pop();
+    to.push(JSON.stringify(boards));
+    if (to.length > UNDO_LIMIT) to.shift();
+    applyingHistory = true;
+    try {
+      boards = normalizeBoards(JSON.parse(target));
+      lastSnapshot = JSON.stringify(boards);
+      saveBoards(); // localStorage + 클라우드에 평소 저장과 똑같이 반영
+    } finally {
+      applyingHistory = false;
+    }
+    renderAll();
+    showToast(doneMsg);
+  }
+
+  document.addEventListener('keydown', (e) => {
+    if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
+    // e.key는 한글 자판 상태에서 'ㅋ'이 되므로 물리 키(code)로 판별
+    const isUndo = e.code === 'KeyZ' && !e.shiftKey;
+    const isRedo = (e.code === 'KeyZ' && e.shiftKey) || e.code === 'KeyY';
+    if (!isUndo && !isRedo) return;
+    // 글자를 치는 중이면 브라우저 기본 글자 되돌리기를 그대로 둠
+    const t = e.target;
+    if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return;
+    if (isFocusLocked()) return;
+    const modal = document.getElementById('confirmModal');
+    if (modal && !modal.hidden) return;
+    e.preventDefault();
+    if (isUndo) stepHistory(undoStack, redoStack, '되돌렸어요', '더 되돌릴 게 없어요');
+    else stepHistory(redoStack, undoStack, '다시 실행했어요', '다시 실행할 게 없어요');
+  });
 
   function getListEl(boardId) {
     return document.querySelector('[data-tasklist="' + boardId + '"]');
@@ -2154,7 +2239,14 @@
     li._activeEditCommit = commit;
 
     input.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') {
+      if (e.key === 'Enter' && e.shiftKey) {
+        // Shift+Enter — 새 항목 입력창과 같은 규칙: 지금 수정한 상위 항목을
+        // 먼저 확정하고, 그 항목의 하위 항목 입력을 바로 열어서 포커스.
+        // commit()이 li를 통째로 다시 그리므로 새로 그려진 li에서 다시 찾아 엶.
+        e.preventDefault();
+        commit();
+        openAddSubtaskRow(boardId, id, true);
+      } else if (e.key === 'Enter') {
         input.blur();
       } else if (e.key === 'Escape') {
         input.value = task.text;
@@ -2184,25 +2276,22 @@
   // 취소/Esc/바깥 클릭 시 false로 resolve. 이미 떠 있으면 앞 모달이 닫힌
   // 뒤에 차례로 띄움(클라우드 불러오기 선택이 다른 모달 때문에 자동
   // '취소'로 처리되어 데이터를 덮어쓰는 일이 없도록).
-  // anchorEl(부모 항목 줄)의 왼쪽 시작점에 맞춰 카드를 띄움: 기본은 그
-  // 항목 아래, 화면 밖으로 나가면 위쪽으로, 좌우는 화면 안으로 보정. anchorEl이 없거나
-  // 화면이 너무 좁으면(모바일) 기존처럼 가운데.
+  // anchorEl(부모 항목)의 왼쪽 위 모서리에 카드의 왼쪽 위 모서리를 맞춰
+  // 띄움. 화면 밖으로 나가면 안쪽으로 밀어 넣음. anchorEl이 없으면
+  // (클라우드 불러오기 등) 가운데.
   function positionConfirmCard(overlay, anchorEl) {
     const card = overlay.querySelector('.confirm-card');
     card.style.left = card.style.top = '';
     overlay.classList.remove('anchored');
-    if (!anchorEl || !anchorEl.isConnected || window.innerWidth < 520) return;
+    if (!anchorEl || !anchorEl.isConnected) return;
     const r = anchorEl.getBoundingClientRect();
     if (!r.width && !r.height) return;
     overlay.classList.add('anchored');
     const m = 12;
     const cw = card.offsetWidth;
     const ch = card.offsetHeight;
-    let left = r.left; // 항목(부모)의 왼쪽 시작점에 카드 왼쪽 끝을 맞춤
-    left = Math.max(m, Math.min(left, window.innerWidth - cw - m));
-    let top = r.bottom + 10;
-    if (top + ch > window.innerHeight - m) top = r.top - ch - 10;
-    top = Math.max(m, Math.min(top, window.innerHeight - ch - m));
+    const left = Math.max(m, Math.min(r.left, window.innerWidth - cw - m));
+    const top = Math.max(m, Math.min(r.top, window.innerHeight - ch - m));
     card.style.left = left + 'px';
     card.style.top = top + 'px';
   }
@@ -2346,7 +2435,10 @@
     const gracedToday = boardId === 'today' || (boardId === 'scheduled' && task.dueDate === today);
 
     setTimeout(() => {
-      if (task.done && !gracedToday) {
+      // Ctrl+Z로 boards가 통째로 교체됐을 수 있어 옛 task 객체 대신 지금
+      // 상태를 다시 찾아 확인 — 되돌린 항목이 그대로 아카이브로 가지 않게.
+      const cur = boards[boardId] && boards[boardId].find(t => t.id === id);
+      if (cur && cur.done && !gracedToday) {
         archiveNow(boardId, id);
       } else {
         // gotta do 카드 안에서 체크/체크해제 후 구분선 위아래로 다시
@@ -4085,4 +4177,5 @@
 
   restoreFocusSession();
   renderAll();
+  resetHistory();
 })();

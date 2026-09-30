@@ -2106,6 +2106,7 @@
 
   .confirm-overlay.anchored .confirm-card {
     position: fixed;
+    width: min(340px, calc(100vw - 24px));
     transform-origin: 0 0;
   }
 
@@ -2200,6 +2201,29 @@
   .confirm-btn-ok:hover {
     color: #fff;
     opacity: 0.85;
+  }
+
+  .toast {
+    position: fixed;
+    left: 50%;
+    bottom: 32px;
+    z-index: 1100;
+    transform: translate(-50%, 8px);
+    padding: 7px 16px;
+    border-radius: 16px;
+    font-family: 'Gaegu', cursive, sans-serif;
+    font-size: 16px;
+    color: var(--paper);
+    background: var(--ink);
+    box-shadow: 0 6px 16px var(--paper-shadow);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease, transform 0.25s var(--collapse-ease);
+  }
+
+  .toast.show {
+    opacity: 0.95;
+    transform: translate(-50%, 0);
   }
 
   @media (prefers-reduced-motion: reduce) {
