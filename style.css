@@ -1555,6 +1555,20 @@
     line-height: 24.7px;
   }
 
+  /* 마감일 배지(.due-badge)와 같은 알약 모양 */
+  .subtask-progress.subtask-progress-toggle {
+    font-size: 12px;
+    background: var(--tape-edge);
+    border-radius: 10px;
+    padding: 1px 7px;
+    cursor: pointer;
+    transition: opacity 0.15s ease;
+  }
+
+  .subtask-progress.subtask-progress-toggle:hover {
+    opacity: 0.75;
+  }
+
   .subtask-progress[hidden] {
     display: none;
   }
@@ -1623,14 +1637,14 @@
     transition-delay: var(--expand-delay);
   }
 
-  .task-list[data-tasklist="waiting"] .task-item:not(:hover):not(:focus-within):not(.controls-open) .subtask-item.done {
+  .task-list[data-tasklist="waiting"] .task-item:not(.done-open) .subtask-item.done {
     max-height: 0;
     opacity: 0;
     margin-top: 0;
     transition-delay: var(--collapse-delay);
   }
 
-  .task-list[data-tasklist="waiting"] .task-item:not(:hover):not(:focus-within):not(.controls-open) > .subtask-collapse:not(:has(.subtask-item:not(.done))),
+  .task-list[data-tasklist="waiting"] .task-item:not(.done-open) > .subtask-collapse:not(:has(.subtask-item:not(.done))),
   .task-list[data-tasklist="someday"] .task-item:not(:hover):not(:focus-within):not(.controls-open) > .subtask-collapse,
   .task-list[data-tasklist="today"] .task-item.done:not(:hover):not(:focus-within):not(.controls-open) > .subtask-collapse {
     grid-template-rows: 0fr;
