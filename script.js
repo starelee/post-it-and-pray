@@ -74,6 +74,17 @@
     return wrap;
   }
 
+  // 날짜 아이콘/배지를 눌러 날짜 행이 열릴 때 네이티브 달력까지 바로 띄움.
+  // showPicker가 없거나(구형 브라우저) 사용자 동작 밖이라 거부되면 포커스만.
+  function focusAndShowPicker(dateInput) {
+    dateInput.focus();
+    try {
+      if (typeof dateInput.showPicker === 'function') dateInput.showPicker();
+    } catch (e) {
+      /* 포커스만으로 충분 */
+    }
+  }
+
   const WEEKDAY_KO = ['일', '월', '화', '수', '목', '금', '토'];
 
   // pray later 카드/리갈패드 "다가오는 일" 사이의 7일 경계를 실시간으로
@@ -1570,7 +1581,7 @@
           // 피커가 뜨면) 아직 리플로우 전이라 iOS가 이 줄이 실제로 펼쳐진
           // 상태를 못 보고 다시 접어버리는 것으로 보임 — 한 프레임 뒤로
           // 미뤄서 레이아웃이 자리잡은 다음에 포커스를 줌.
-          requestAnimationFrame(() => dateInput.focus());
+          requestAnimationFrame(() => focusAndShowPicker(dateInput));
         }
       };
       dateBtn.addEventListener('click', () => {
@@ -2979,7 +2990,7 @@
       dateBadge.hidden = true;
       dateBadge.addEventListener('click', () => {
         dateRow.hidden = !dateRow.hidden;
-        if (!dateRow.hidden) dateInput.focus();
+        if (!dateRow.hidden) focusAndShowPicker(dateInput);
       });
       // draftControls(호버해야 보임)가 아니라 add-row 안에 둬서 날짜를
       // 지정해두면 호버 여부와 상관없이 항상 보이게 함.
@@ -3046,7 +3057,7 @@
       dateRow.appendChild(dateClearBtn);
       dateBtn.addEventListener('click', () => {
         dateRow.hidden = !dateRow.hidden;
-        if (!dateRow.hidden) dateInput.focus();
+        if (!dateRow.hidden) focusAndShowPicker(dateInput);
       });
       insertAfterAddRow(dateRow);
 
