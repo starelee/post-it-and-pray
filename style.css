@@ -1604,6 +1604,11 @@
     margin-top: 1px;
   }
 
+  /* (완료/전체) 알약 바로 옆에 날짜 칩이 오면 둘 사이를 더 좁힘 (3px -> 2px) */
+  .subtask-progress + .due-badge {
+    margin-left: -6px;
+  }
+
   .subtask-progress.subtask-progress-toggle:focus {
     outline: none;
   }
