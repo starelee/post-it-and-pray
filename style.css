@@ -1650,7 +1650,7 @@
 
   .task-list[data-tasklist="waiting"] .task-item:not(.done-open) > .subtask-collapse:not(:has(.subtask-item:not(.done))),
   .task-list[data-tasklist="someday"] .task-item:not(:hover):not(:focus-within):not(.controls-open) > .subtask-collapse,
-  .task-list[data-tasklist="today"] .task-item.done:not(:hover):not(:focus-within):not(.controls-open) > .subtask-collapse {
+  .task-list[data-tasklist="today"] .task-item.done:not(.done-open) > .subtask-collapse {
     grid-template-rows: 0fr;
     opacity: 0;
     transition-delay: var(--collapse-delay);

@@ -1245,9 +1245,10 @@
     // 않게 하려고 JS에서 조건 분기 안 함.
     const progress = makeSubtaskProgress(task);
     if (progress) {
-      // waiting은 완료된 하위 항목을 숨겨두고, (완료/전체)를 눌러야 아래로
-      // 펼쳐짐. 다시 누르거나 30초가 지나면 접힘.
-      if (boardId === 'waiting' && task.subtasks.some(s => s.done)) {
+      // waiting(완료된 하위 항목)과 완료된 gotta do 항목(하위 항목 전체)은
+      // 접어두고, (완료/전체)를 눌러야 아래로 펼쳐짐. 다시 누르거나 30초가
+      // 지나면 접힘.
+      if (boardId === 'waiting' ? task.subtasks.some(s => s.done) : task.done) {
         progress.classList.add('subtask-progress-toggle');
         progress.setAttribute('role', 'button');
         progress.tabIndex = 0;
