@@ -1255,6 +1255,9 @@
         progress.setAttribute('aria-label', '완료된 하위 항목 보기/숨기기');
         if (doneOpenUntil.get(task.id) > Date.now()) li.classList.add('done-open');
         const toggle = () => toggleDoneOpen(task.id, li);
+        // 눌러서 포커스가 가면 :focus-within 때문에 아이콘 줄(.task-controls)까지
+        // 같이 펼쳐지고 포커스 링도 생김 — 마우스/터치로 누를 땐 포커스를 막음.
+        progress.addEventListener('mousedown', (e) => e.preventDefault());
         progress.addEventListener('click', toggle);
         progress.addEventListener('keydown', (e) => {
           if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); }

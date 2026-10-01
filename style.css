@@ -1568,7 +1568,12 @@
     transition: color 0.15s ease;
   }
 
+  .subtask-progress.subtask-progress-toggle:focus {
+    outline: none;
+  }
+
   .subtask-progress.subtask-progress-toggle:hover,
+  .subtask-progress.subtask-progress-toggle:focus-visible,
   .task-item.done-open .subtask-progress-toggle {
     color: var(--accent);
   }
