@@ -1562,11 +1562,12 @@
     border-radius: 10px;
     padding: 1px 7px;
     cursor: pointer;
-    transition: opacity 0.15s ease;
+    transition: color 0.15s ease;
   }
 
-  .subtask-progress.subtask-progress-toggle:hover {
-    opacity: 0.75;
+  .subtask-progress.subtask-progress-toggle:hover,
+  .task-item.done-open .subtask-progress-toggle {
+    color: var(--accent);
   }
 
   .subtask-progress[hidden] {
@@ -1804,11 +1805,11 @@
     padding: 1px 7px;
     white-space: nowrap;
     cursor: pointer;
-    transition: opacity 0.15s ease;
+    transition: color 0.15s ease;
   }
 
   .due-badge:hover {
-    opacity: 0.75;
+    color: var(--accent);
   }
 
   .date-picker-row {
