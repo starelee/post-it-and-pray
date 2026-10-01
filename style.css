@@ -773,6 +773,20 @@
     transition: opacity 0.15s ease, transform 0.15s ease;
   }
 
+  .back-arrow {
+    width: 18px;
+    height: 18px;
+    overflow: visible;
+  }
+
+  .back-arrow path {
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2.4;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
   .back-btn:hover {
     opacity: 1;
     transform: translateX(-2px);

@@ -1281,7 +1281,16 @@
       backBtn.className = 'back-btn';
       backBtn.type = 'button';
       backBtn.setAttribute('aria-label', 'today로 되돌리기');
-      backBtn.textContent = '←';
+      // 폰트 글리프 ←는 가늘고 작아서 체크 표시와 결이 안 맞음 — 체크와 같은
+      // 둥근 끝 선으로 직접 그린 화살표.
+      const ns = 'http://www.w3.org/2000/svg';
+      const arrow = document.createElementNS(ns, 'svg');
+      arrow.setAttribute('class', 'back-arrow');
+      arrow.setAttribute('viewBox', '0 0 24 24');
+      const path = document.createElementNS(ns, 'path');
+      path.setAttribute('d', 'M20 12H5M11 5.5L4.5 12l6.5 6.5');
+      arrow.appendChild(path);
+      backBtn.appendChild(arrow);
       backBtn.addEventListener('click', () => moveTask('waiting', 'today', task.id));
       row.appendChild(backBtn);
     } else {
