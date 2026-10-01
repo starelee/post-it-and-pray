@@ -50,7 +50,8 @@ type Subtask = {
 
 ## 필드별 의미
 
-- **`dueDate`**: `scheduled` 배열에 들어있는 항목만 가짐. `today`/`someday`/`waiting`/`archive`에 있는 동안엔 존재하지 않음(날짜를 지정하는 순간 그 항목 자체가 `scheduled` 배열로 옮겨감).
+- **`dueDate`**: `scheduled` 배열에 들어있는 항목만 가짐. `today`/`someday`/`waiting`/`archive`에 있는 동안엔 존재하지 않음(today/someday에서 날짜를 지정하는 순간 그 항목 자체가 `scheduled` 배열로 옮겨감).
+- **`replyDate`** (`YYYY-MM-DD`, 선택): `waiting` 전용 "회신 예정일". `dueDate`와 완전히 별개 필드라 날짜를 붙여도 항목이 `waiting`에 그대로 남고, today로 옮기는 스윕(`migrateArchive`)도 건드리지 않음. 오늘보다 뒤(내일 이후)면 waiting 카드의 접힘 구역에 표시되고, 오늘이거나 지났으면 일반 항목처럼 표시됨(렌더 시점에 매번 다시 계산, 저장된 플래그 없음). waiting에서 다른 보드로 이동하면(`moveTask`) 제거됨. 필드가 없으면 기존과 완전히 동일하게 동작.
 - **`doneAt`**: 체크(`done = true`)한 날짜. 체크 해제하면 삭제됨. 완료 아카이브 스윕(다음날 정리) 및 아카이브 패널의 월/날짜 그룹핑 기준으로 쓰임. 이 필드가 생기기 전의 예전 데이터는 로드 시 오늘 날짜로 자동 백필됨(영구히 스윕 대상에서 빠지지 않도록).
 - **`from`(두 가지 의미, 시점에 따라 다름)**:
   1. **`scheduled`에 살아있는 항목일 때**: "날짜 지정 전에 어느 보드에 있었는지" (`'today'` 또는 `'someday'`). 날짜를 지우면 이 값을 보고 원래 보드로 돌아감.

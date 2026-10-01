@@ -102,6 +102,15 @@
 
             <ul class="task-list" data-tasklist="waiting"></ul>
 
+            <div class="reply-later" data-reply-later hidden>
+              <button class="reply-later-toggle" type="button" data-collapse-toggle aria-label="회신 예정일이 아직 안 된 항목 보기/숨기기">
+                <span class="toggle-arrow" data-toggle-arrow>▾</span><span aria-hidden="true">⋯</span>
+              </button>
+              <div class="collapsible-body" data-collapse-body hidden>
+                <ul class="task-list" data-tasklist="waitingLater"></ul>
+              </div>
+            </div>
+
             <div class="add-row">
               <button type="button" class="plus" aria-label="새 항목 등록">+</button>
               <input
