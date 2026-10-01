@@ -12,9 +12,15 @@
   const BOARD_IDS = ['today', 'waiting', 'someday', 'scheduled'];
   // Boards a task can be manually moved between with the move buttons.
   const MOVE_TARGET_IDS = ['today', 'waiting', 'someday'];
-  // Boards that support a due date (calendar icon). Assigning a date moves
-  // the task into `scheduled`; `waiting` never gets a date.
-  const DATE_ENABLED_IDS = ['today', 'someday'];
+  // Boards that support a date (calendar icon). On today/someday, assigning
+  // a date moves the task into `scheduled`; on `waiting` it only sets the
+  // separate `replyDate` field and the task stays in waiting.
+  const DATE_ENABLED_IDS = ['today', 'someday', 'waiting'];
+  // waiting의 "회신 예정일"은 scheduled 전용 dueDate와 분리된 별도 필드 —
+  // dueDate를 재사용하면 migrateArchive/today 렌더가 waiting 항목을 건드림.
+  function dateFieldOf(boardId) {
+    return boardId === 'waiting' ? 'replyDate' : 'dueDate';
+  }
   const EMPTY_HINTS = {
     today: '오늘은 뭘 해볼까?',
     waiting: '기다리는 거 없음',
@@ -272,6 +278,7 @@
           : []
       };
       if (typeof t.dueDate === 'string' && t.dueDate) out.dueDate = t.dueDate;
+      if (typeof t.replyDate === 'string' && t.replyDate) out.replyDate = t.replyDate;
       if (typeof t.from === 'string' && t.from) out.from = t.from;
       if (typeof t.deletedAt === 'string' && t.deletedAt) out.deletedAt = t.deletedAt;
       if (typeof t.updatedAt === 'number' && isFinite(t.updatedAt)) out.updatedAt = t.updatedAt;
@@ -322,6 +329,12 @@
     b.waiting.forEach(t => {
       t.done = false;
       delete t.doneAt;
+    });
+    // replyDate는 waiting 전용 — 다른 기기에서 병합돼 들어온 잔여값 정리.
+    // (waiting 배열 자체는 날짜가 지나도 옮기지 않음: 아래 sweep은 today/
+    // scheduled/someday의 done 항목만 다룸.)
+    ['today', 'scheduled', 'someday'].forEach(id => {
+      b[id].forEach(t => { delete t.replyDate; });
     });
     // 휴지통은 3일이 지나면 완전히 사라짐 — 매 normalizeBoards마다
     // (초기 로드/클라우드 동기화 모두) 다시 걸러내므로 하루 지나 기한을
@@ -933,6 +946,7 @@
       if (isLupinOpen()) setLupinOpen(false);
       if (collapseSections.someday) collapseSections.someday.setOpen(false);
       if (collapseSections.scheduled) collapseSections.scheduled.setOpen(false);
+      if (collapseSections.waitingLater) collapseSections.waitingLater.setOpen(false);
       window.scrollTo({ top: 0, behavior: 'smooth' });
     });
   }
@@ -1040,6 +1054,7 @@
   function render(boardId) {
     if (boardId === 'today') return renderToday();
     if (boardId === 'scheduled') return renderScheduled();
+    if (boardId === 'waiting') return renderWaiting();
 
     const listEl = getListEl(boardId);
     if (!listEl) return;
@@ -1067,6 +1082,44 @@
     }
 
     layoutStrikeLines(listEl);
+    updateCounter();
+  }
+
+  // waiting: 회신 예정일이 내일 이후인 항목은 목록 아래 접힘 구역으로,
+  // 예정일이 오늘이거나 지났거나 없으면 일반 항목으로(별도 정렬/강조 없음).
+  const REPLY_LATER_HINT_TITLE = '회신 예정일이 아직 안 된 항목이에요';
+  function renderWaiting() {
+    const listEl = getListEl('waiting');
+    if (!listEl) return;
+    listEl.innerHTML = '';
+
+    const today = todayStr();
+    const isLater = t => !!t.replyDate && t.replyDate > today;
+    const tasks = boards.waiting;
+    const normal = tasks.filter(t => !isLater(t));
+    const later = tasks.filter(isLater).sort((a, b) => a.replyDate.localeCompare(b.replyDate));
+
+    if (normal.length === 0) {
+      const hint = document.createElement('li');
+      hint.className = 'empty-hint';
+      hint.textContent = EMPTY_HINTS.waiting;
+      listEl.appendChild(hint);
+    }
+    normal.forEach(t => listEl.appendChild(renderItem('waiting', t)));
+
+    const laterListEl = getListEl('waitingLater');
+    const section = document.querySelector('[data-reply-later]');
+    if (laterListEl && section) {
+      laterListEl.innerHTML = '';
+      later.forEach(t => laterListEl.appendChild(renderItem('waiting', t)));
+      section.hidden = later.length === 0;
+      const toggle = section.querySelector('[data-collapse-toggle]');
+      if (toggle) {
+        toggle.title = '아직 안 와도 되는 것 ' + later.length + '개\n' + REPLY_LATER_HINT_TITLE;
+        toggle.setAttribute('aria-label', '회신 예정일이 아직 안 된 항목 ' + later.length + '개 보기/숨기기');
+      }
+    }
+
     updateCounter();
   }
 
@@ -1269,11 +1322,12 @@
       row.appendChild(progress);
     }
 
+    const dateKey = dateFieldOf(boardId);
     let badge = null;
-    if (task.dueDate) {
+    if (task[dateKey]) {
       badge = document.createElement('span');
       badge.className = 'due-badge';
-      badge.textContent = formatDueDateRelative(task.dueDate);
+      badge.textContent = formatDueDateRelative(task[dateKey]);
       row.appendChild(badge);
     }
 
@@ -1354,7 +1408,8 @@
       dateBtn = document.createElement('button');
       dateBtn.className = 'date-btn';
       dateBtn.type = 'button';
-      dateBtn.setAttribute('aria-label', task.dueDate ? '날짜 수정' : '날짜 지정');
+      const dateLabel = boardId === 'waiting' ? '회신 예정일' : '날짜';
+      dateBtn.setAttribute('aria-label', task[dateKey] ? dateLabel + ' 수정' : dateLabel + ' 지정');
       dateBtn.textContent = '📅';
       controls.appendChild(dateBtn);
     }
@@ -1399,7 +1454,8 @@
       const dateInput = document.createElement('input');
       dateInput.className = 'date-picker-input';
       dateInput.type = 'date';
-      if (task.dueDate) dateInput.value = task.dueDate;
+      if (task[dateKey]) dateInput.value = task[dateKey];
+      if (boardId === 'waiting') dateInput.min = todayStr();
 
       // 이미 날짜가 채워진 채로 열린 경우(날짜 수정), 년/월/일 중 한 칸만
       // 고쳐도 나머지 칸은 이미 값이 있어서 첫 글자만으로 곧장 "완성된
@@ -1428,7 +1484,7 @@
         // — 저장된 task.dueDate로 표시값도 같이 되돌려놓음(진짜 지우기는
         // "날짜 지우기" 버튼이 따로 처리).
         if (!dateInput.value) {
-          if (task.dueDate) dateInput.value = task.dueDate;
+          if (task[dateKey]) dateInput.value = task[dateKey];
           return;
         }
         clearTimeout(commitTimer);
@@ -1471,7 +1527,7 @@
       clearBtn.className = 'date-clear-btn';
       clearBtn.type = 'button';
       clearBtn.textContent = '날짜 지우기';
-      clearBtn.hidden = !task.dueDate;
+      clearBtn.hidden = !task[dateKey];
       clearBtn.addEventListener('click', () => {
         clearTimeout(commitTimer);
         setDueDate(boardId, task.id, '');
@@ -1484,7 +1540,7 @@
       cancelBtn.className = 'date-clear-btn';
       cancelBtn.type = 'button';
       cancelBtn.textContent = '취소';
-      cancelBtn.hidden = !!task.dueDate;
+      cancelBtn.hidden = !!task[dateKey];
       cancelBtn.addEventListener('click', () => {
         clearTimeout(commitTimer);
         dateInput.value = '';
@@ -2598,6 +2654,7 @@
     if (idx === -1) return;
     const [task] = boards[fromBoardId].splice(idx, 1);
     delete task.dueDate;
+    delete task.replyDate; // 회신 예정일은 waiting에 있을 때만 의미 있음
     delete task.from;
     if (toBoardId === 'waiting') {
       // waiting has no done concept — defend against a done task landing
@@ -2630,6 +2687,22 @@
     const idx = boards[boardId].findIndex(t => t.id === id);
     if (idx === -1) return;
     const task = boards[boardId][idx];
+
+    if (boardId === 'waiting') {
+      // 회신 예정일: 보드를 옮기지 않고 필드만 바꿈. 내일 이후면 접힘 구역,
+      // 오늘/지난 날짜/없음이면 일반 목록(renderWaiting이 매번 다시 가름).
+      // 오늘 이전 날짜는 적용하지 않음(입력창 min으로 1차 차단, 직접 타이핑한
+      // 값은 여기서 막고 다시 그려 입력창 표시값도 원래대로 되돌림).
+      if (dateValue && dateValue < todayStr()) {
+        render('waiting');
+        return;
+      }
+      if (dateValue) task.replyDate = dateValue;
+      else delete task.replyDate;
+      saveBoards();
+      render('waiting');
+      return;
+    }
 
     if (boardId === 'scheduled') {
       if (dateValue) {
@@ -2705,7 +2778,12 @@
       subtasks: (draft && draft.subtasks || []).map((t, i) => ({ id: Date.now() + i, text: t, done: false }))
     };
     lastAddedTaskId[boardId] = task.id;
-    if (draft && draft.dueDate) {
+    if (boardId === 'waiting' && draft && draft.dueDate) {
+      task.replyDate = draft.dueDate;
+      boards.waiting.push(task);
+      saveBoards();
+      render('waiting');
+    } else if (draft && draft.dueDate) {
       // setDueDate가 today/someday 항목을 scheduled로 옮길 때와 동일한
       // 모양 — 처음부터 날짜가 있는 채로 바로 scheduled에 생성함.
       task.dueDate = draft.dueDate;
@@ -2875,13 +2953,13 @@
     subtaskToggle.textContent = '➕️';
     draftControls.appendChild(subtaskToggle);
 
-    // 날짜 기능 없는 보드(waiting)는 기존 task-item과 동일하게 아예 제외.
+    // waiting은 "회신 예정일"(replyDate) — 등록해도 waiting에 남음.
     let dateBtn = null;
     if (DATE_ENABLED_IDS.includes(boardId)) {
       dateBtn = document.createElement('button');
       dateBtn.type = 'button';
       dateBtn.className = 'date-btn';
-      dateBtn.setAttribute('aria-label', '날짜 지정');
+      dateBtn.setAttribute('aria-label', boardId === 'waiting' ? '회신 예정일 지정' : '날짜 지정');
       dateBtn.textContent = '📅';
       draftControls.appendChild(dateBtn);
     }
@@ -2914,8 +2992,13 @@
       dateInput = document.createElement('input');
       dateInput.className = 'date-picker-input';
       dateInput.type = 'date';
+      if (boardId === 'waiting') dateInput.min = todayStr();
 
       const applyDraftDate = (value) => {
+        if (boardId === 'waiting' && value && value < todayStr()) {
+          dateInput.value = draftDueDate;
+          return;
+        }
         draftDueDate = value;
         dateBadge.hidden = !value;
         if (value) {
@@ -3107,8 +3190,12 @@
         if (!target) return;
         e.preventDefault();
         const li = findTaskLi(target.id);
+        // 회신 예정일이 내일 이후라 접힘 구역에 들어간 waiting 항목이면
+        // 날짜 행이 숨은 채로 열리지 않도록 구역부터 펼침.
+        const laterSection = li && li.closest('[data-collapse-body]');
+        if (laterSection && laterSection.hidden && collapseSections.waitingLater) collapseSections.waitingLater.setOpen(true);
         const dateBtn = li && li.querySelector('.date-btn');
-        if (dateBtn) dateBtn.click(); // 날짜 지정 안 되는 보드(waiting)면 dateBtn 자체가 없어서 자연히 무시됨
+        if (dateBtn) dateBtn.click();
         return;
       }
       if (e.altKey && e.code === 'KeyE') {

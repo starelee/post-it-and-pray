@@ -35,6 +35,7 @@
     .date-btn,
     .date-clear-btn,
     .sticky-title-toggle,
+    .reply-later-toggle,
     .plus
   ) {
     background: none;
@@ -1637,6 +1638,7 @@
   }
 
   .task-list[data-tasklist="waiting"] .subtask-progress,
+  .task-list[data-tasklist="waitingLater"] .subtask-progress,
   .task-list[data-tasklist="someday"] .subtask-progress,
   .task-list[data-tasklist="today"] .task-item.done .subtask-progress,
   .subtask-progress.subtask-progress-always:not([hidden]) {
@@ -1678,18 +1680,21 @@
   /* flex column-gap 대신 각 칩의 오른쪽 여백으로 간격을 만듦 — 접힌 칩의
      간격을 음수 여백으로 상쇄하면 flex 줄바꿈 계산이 어긋나 혼자 한 줄을
      차지했음. */
-  .task-list[data-tasklist="waiting"] .subtask-collapse > .subtask-list {
+  .task-list[data-tasklist="waiting"] .subtask-collapse > .subtask-list,
+  .task-list[data-tasklist="waitingLater"] .subtask-collapse > .subtask-list {
     column-gap: 0;
   }
 
-  .task-list[data-tasklist="waiting"] .subtask-item {
+  .task-list[data-tasklist="waiting"] .subtask-item,
+  .task-list[data-tasklist="waitingLater"] .subtask-item {
     margin-right: 4px;
   }
 
   /* 완료 칩은 한 줄을 통째로 차지하게 하고 높이로 접고 펼침. 폭으로 접으면
      펼치는 동안 미완료 칩이 오른쪽으로 밀렸다가 줄바꿈으로 아래로 툭 떨어지는
      어색한 움직임이 생김 — 높이로 접으면 미완료 칩이 그냥 부드럽게 내려감. */
-  .task-list[data-tasklist="waiting"] .subtask-item.done {
+  .task-list[data-tasklist="waiting"] .subtask-item.done,
+  .task-list[data-tasklist="waitingLater"] .subtask-item.done {
     flex: 0 0 100%;
     max-height: 3em;
     opacity: 1;
@@ -1700,7 +1705,8 @@
     transition-delay: var(--expand-delay);
   }
 
-  .task-list[data-tasklist="waiting"] .task-item:not(.done-open) .subtask-item.done {
+  .task-list[data-tasklist="waiting"] .task-item:not(.done-open) .subtask-item.done,
+  .task-list[data-tasklist="waitingLater"] .task-item:not(.done-open) .subtask-item.done {
     max-height: 0;
     opacity: 0;
     margin-top: 0;
@@ -1708,6 +1714,7 @@
   }
 
   .task-list[data-tasklist="waiting"] .task-item:not(.done-open) > .subtask-collapse:not(:has(.subtask-item:not(.done))),
+  .task-list[data-tasklist="waitingLater"] .task-item:not(.done-open) > .subtask-collapse:not(:has(.subtask-item:not(.done))),
   .task-list[data-tasklist="someday"] .task-item:not(:hover):not(:focus-within):not(.controls-open) > .subtask-collapse,
   .task-list[data-tasklist="today"] .task-item.done:not(.done-open) > .subtask-collapse {
     grid-template-rows: 0fr;
@@ -2004,6 +2011,38 @@
 
   .collapsible-body[hidden] {
     display: none;
+  }
+
+  /* waiting 앞면의 "회신 예정일 아직 안 된 항목" 접힘 구역. 토글 줄의 왼쪽
+     20px 칸은 .back-btn(20px 박스)과 같은 열이라 ▾가 ←와 세로로 맞음. */
+  .reply-later[hidden] {
+    display: none;
+  }
+
+  .reply-later-toggle {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    margin-top: 6px;
+    padding: 0;
+    text-align: left;
+    color: var(--ink-soft);
+    font-size: 18px;
+    line-height: 1;
+  }
+
+  .reply-later-toggle:hover,
+  .reply-later-toggle:focus-visible {
+    color: var(--accent);
+  }
+
+  .reply-later-toggle .toggle-arrow {
+    margin-left: 0;
+    flex: 0 0 20px;
+    width: 20px;
+    text-align: center;
+    font-size: 14px;
   }
 
   .sticky-title-toggle-spaced {
