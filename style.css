@@ -1620,7 +1620,9 @@
     transition: max-height var(--collapse-dur) var(--collapse-ease),
                 opacity var(--collapse-dur) var(--collapse-ease),
                 margin-top var(--collapse-dur) var(--collapse-ease);
-    transition-delay: var(--expand-delay);
+    /* 호버하고 바로 펼쳐지면 지나가다 스친 것만으로도 튀어나와 정신없음 —
+       잠깐 머무를 때만 펼치도록 펼침 지연을 다른 요소보다 길게 */
+    transition-delay: 0.45s;
   }
 
   .task-list[data-tasklist="waiting"] .task-item:not(:hover):not(:focus-within):not(.controls-open) .subtask-item.done {
