@@ -1149,8 +1149,8 @@
   /* 알약/배지 버튼이 아니라 하위 항목·시간 선택과 같은 대괄호 평문
      스타일로 통일 — primary/danger는 배경색 대신 글자색으로만 구분. */
   .focus-footer-btn {
-    font-family: var(--font-ui);
-    font-size: 15px;
+    font-family: 'Gowun Dodum', 'Noto Sans KR', sans-serif;
+    font-size: 16px;
     color: var(--focus-ink-soft);
     padding: 4px 6px;
     transition: color 0.15s ease, transform 0.15s ease;
