@@ -1455,6 +1455,7 @@
       dateInput.className = 'date-picker-input';
       dateInput.type = 'date';
       if (task[dateKey]) dateInput.value = task[dateKey];
+      if (boardId === 'waiting') dateInput.min = todayStr();
 
       // 이미 날짜가 채워진 채로 열린 경우(날짜 수정), 년/월/일 중 한 칸만
       // 고쳐도 나머지 칸은 이미 값이 있어서 첫 글자만으로 곧장 "완성된
@@ -2690,6 +2691,12 @@
     if (boardId === 'waiting') {
       // 회신 예정일: 보드를 옮기지 않고 필드만 바꿈. 내일 이후면 접힘 구역,
       // 오늘/지난 날짜/없음이면 일반 목록(renderWaiting이 매번 다시 가름).
+      // 오늘 이전 날짜는 적용하지 않음(입력창 min으로 1차 차단, 직접 타이핑한
+      // 값은 여기서 막고 다시 그려 입력창 표시값도 원래대로 되돌림).
+      if (dateValue && dateValue < todayStr()) {
+        render('waiting');
+        return;
+      }
       if (dateValue) task.replyDate = dateValue;
       else delete task.replyDate;
       saveBoards();
@@ -2985,8 +2992,13 @@
       dateInput = document.createElement('input');
       dateInput.className = 'date-picker-input';
       dateInput.type = 'date';
+      if (boardId === 'waiting') dateInput.min = todayStr();
 
       const applyDraftDate = (value) => {
+        if (boardId === 'waiting' && value && value < todayStr()) {
+          dateInput.value = draftDueDate;
+          return;
+        }
         draftDueDate = value;
         dateBadge.hidden = !value;
         if (value) {
