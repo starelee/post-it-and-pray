@@ -1598,14 +1598,6 @@
     margin-top: 5px;
   }
 
-  /* waiting에서 완료된 칩 하나만 접기 — 목록 안에서 폭과 투명도를 같이
-     줄임. */
-  .task-list[data-tasklist="waiting"] .subtask-item.done,
-  .task-list[data-tasklist="waiting"] .subtask-item.done .subtask-chip {
-    /* 폭이 0까지 줄어들 때 글자가 한 글자씩 줄바꿈되며 높이가 커지는 걸 막음 */
-    white-space: nowrap;
-  }
-
   /* flex column-gap 대신 각 칩의 오른쪽 여백으로 간격을 만듦 — 접힌 칩의
      간격을 음수 여백으로 상쇄하면 flex 줄바꿈 계산이 어긋나 혼자 한 줄을
      차지했음. */
@@ -1617,20 +1609,24 @@
     margin-right: 4px;
   }
 
+  /* 완료 칩은 한 줄을 통째로 차지하게 하고 높이로 접고 펼침. 폭으로 접으면
+     펼치는 동안 미완료 칩이 오른쪽으로 밀렸다가 줄바꿈으로 아래로 툭 떨어지는
+     어색한 움직임이 생김 — 높이로 접으면 미완료 칩이 그냥 부드럽게 내려감. */
   .task-list[data-tasklist="waiting"] .subtask-item.done {
-    max-width: 400px;
+    flex: 0 0 100%;
+    max-height: 3em;
     opacity: 1;
-    transition: max-width var(--collapse-dur) var(--collapse-ease),
+    overflow: hidden;
+    transition: max-height var(--collapse-dur) var(--collapse-ease),
                 opacity var(--collapse-dur) var(--collapse-ease),
-                margin var(--collapse-dur) var(--collapse-ease);
+                margin-top var(--collapse-dur) var(--collapse-ease);
     transition-delay: var(--expand-delay);
   }
 
   .task-list[data-tasklist="waiting"] .task-item:not(:hover):not(:focus-within):not(.controls-open) .subtask-item.done {
-    max-width: 0;
+    max-height: 0;
     opacity: 0;
-    overflow: hidden;
-    margin-right: 0;
+    margin-top: 0;
     transition-delay: var(--collapse-delay);
   }
 
