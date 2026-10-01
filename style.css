@@ -1583,6 +1583,8 @@
   .subtask-progress.subtask-progress-toggle,
   .due-badge {
     margin-left: -5px;
+    /* 위 여백 1px + 위치도 1px 아래로 */
+    margin-top: 1px;
   }
 
   .subtask-progress.subtask-progress-toggle:focus {
@@ -1827,7 +1829,7 @@
     color: var(--ink-soft);
     background: var(--tape-edge);
     border-radius: 10px;
-    padding: 1px 7px;
+    padding: 2px 7px 1px;
     white-space: nowrap;
     cursor: pointer;
     transition: color 0.15s ease;
