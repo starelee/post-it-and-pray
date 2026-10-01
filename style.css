@@ -1590,22 +1590,27 @@
     line-height: 24.7px;
   }
 
-  /* 마감일 배지(.due-badge)와 같은 알약 모양 */
-  .subtask-progress.subtask-progress-toggle {
+  /* 마감일 배지(.due-badge)와 같은 알약 모양 — 보이는 곳 어디서나(완료된
+     하위 항목이 없어 눌러도 할 게 없는 (0/3)도) 같은 모양으로 통일. */
+  .subtask-progress {
     font-size: 12px;
-    /* 기본 .subtask-progress의 줄 높이(24.7px)를 물려받으면 알약이 세로로
-       커지므로 .due-badge와 같게 되돌림 */
+    /* 기본 줄 높이(24.7px)를 물려받으면 알약이 세로로 커지므로 .due-badge와
+       같게 되돌림 */
     line-height: normal;
     background: var(--tape-edge);
     border-radius: 10px;
     padding: 2px 7px 1px;
+  }
+
+  /* 눌러서 완료 항목을 펼치고 접을 수 있는 알약만 클릭 가능 표시 */
+  .subtask-progress.subtask-progress-toggle {
     cursor: pointer;
     transition: color 0.15s ease;
   }
 
   /* 제목과 알약 사이: .task-row의 gap(8px)을 3px로 줄여 제목이 쓸 수 있는
      폭을 늘림 (날짜 칩과 같게) */
-  .subtask-progress.subtask-progress-toggle,
+  .subtask-progress,
   .due-badge {
     margin-left: -5px;
     /* 위 여백 1px + 위치도 1px 아래로 */
