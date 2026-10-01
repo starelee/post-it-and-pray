@@ -1573,7 +1573,7 @@
     line-height: normal;
     background: var(--tape-edge);
     border-radius: 10px;
-    padding: 1px 7px;
+    padding: 2px 7px 1px;
     cursor: pointer;
     transition: color 0.15s ease;
   }
