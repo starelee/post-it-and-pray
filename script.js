@@ -3810,6 +3810,20 @@
       const doneBtn = makeFocusFooterBtn('완료로 표시', 'focus-footer-btn-primary');
       doneBtn.addEventListener('click', finishFocusAsDone);
 
+      // 같은 할 일로 시간 선택 단계로 돌아가 타이머를 다시 맞춤.
+      const restartBtn = makeFocusFooterBtn('타이머 다시 설정하기');
+      restartBtn.addEventListener('click', () => {
+        focusState.step = 'pick-duration';
+        focusState.endAt = null;
+        focusState.paused = false;
+        focusState.exitConfirmOpen = false;
+        if (sideColEl) sideColEl.classList.remove('focus-blurred');
+        if (headerEl) headerEl.classList.remove('focus-blurred');
+        saveFocusState();
+        updateFocusDocumentTitle();
+        renderFocusPanel();
+      });
+
       const waitBtn = makeFocusFooterBtn('대기중으로 변경');
       waitBtn.addEventListener('click', () => {
         moveTask(focusState.taskBoardId, 'waiting', focusState.taskId);
@@ -3820,6 +3834,7 @@
       failBtn.addEventListener('click', () => exitFocusMode(false));
 
       choices.appendChild(doneBtn);
+      choices.appendChild(restartBtn);
       choices.appendChild(waitBtn);
       choices.appendChild(failBtn);
       focusBodyEl.appendChild(choices);
