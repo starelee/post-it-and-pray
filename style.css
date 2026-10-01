@@ -46,6 +46,8 @@
     /* 폰트 역할별 스택 — UI: 버튼·라벨 등 화면 크롬 / hand: 포스트잇 제목·태그라인 같은 손글씨 강조 / task: 할 일 본문 텍스트 */
     --font-ui: 'OngleipKonkon', 'Gaegu', cursive, sans-serif;
     --font-header: var(--font-ui);
+    /* 콘콘체가 글자가 꽉 차 보여서 UI 글자에만 자간을 약 1px(≈110%) 벌림 */
+    --ui-letter-spacing: 0.08em;
     --font-hand: 'NostalgicMyoeunHeullim', 'Nanum Pen Script', cursive;
     --font-task: 'NostalgicMyoeunHeullim', 'OngleipKonkon', 'Gaegu', cursive, sans-serif;
 
@@ -243,6 +245,7 @@
 
   .logo {
     font-family: var(--font-header);
+    letter-spacing: var(--ui-letter-spacing);
     font-size: clamp(28px, 6vw, 42px);
     font-weight: 700;
     margin: 0;
@@ -301,12 +304,14 @@
 
   .auth-user {
     font-family: var(--font-ui);
+    letter-spacing: var(--ui-letter-spacing);
     font-size: 12px;
     color: var(--ink-soft);
   }
 
   .auth-btn {
     font-family: var(--font-ui);
+    letter-spacing: var(--ui-letter-spacing);
     font-size: 12px;
     line-height: 18px;
     color: var(--ink-soft);
@@ -340,6 +345,7 @@
 
   .auth-hint {
     font-family: var(--font-ui);
+    letter-spacing: var(--ui-letter-spacing);
     font-size: 11px;
     color: var(--ink-soft);
     opacity: 0.8;
@@ -351,6 +357,7 @@
     border-radius: 12px;
     padding: 3px 10px;
     font-family: var(--font-ui);
+    letter-spacing: var(--ui-letter-spacing);
     font-size: 12px;
     line-height: 18px;
     color: var(--ink-soft);
@@ -492,6 +499,7 @@
 
   .trash-toggle-btn {
     font-family: var(--font-ui);
+    letter-spacing: var(--ui-letter-spacing);
     font-size: 13px;
     color: var(--ink-soft);
     padding: 2px 4px;
@@ -655,6 +663,7 @@
   .revive-hint {
     margin: 0 0 2px;
     font-family: var(--font-ui);
+    letter-spacing: var(--ui-letter-spacing);
     font-size: 13px;
     color: var(--ink-soft);
   }
@@ -720,6 +729,7 @@
 
   .archive-revive-btn {
     font-family: var(--font-ui);
+    letter-spacing: var(--ui-letter-spacing);
     font-size: 13px;
     color: var(--ink-soft);
     padding: 2px 4px;
@@ -981,6 +991,7 @@
     /* 기존 14px의 150% */
     font-size: 21px;
     font-family: var(--font-ui);
+    letter-spacing: var(--ui-letter-spacing);
   }
 
   .focus-duration-row {
@@ -994,6 +1005,7 @@
      이 카드 안에서 갑자기 튀는 버튼 UI가 되지 않도록 함. */
   .focus-duration-btn {
     font-family: var(--font-ui);
+    letter-spacing: var(--ui-letter-spacing);
     font-size: 16px;
     color: var(--ink);
     padding: 2px;
@@ -1009,6 +1021,7 @@
   .focus-duration-custom-input {
     width: 48px;
     font-family: var(--font-ui);
+    letter-spacing: var(--ui-letter-spacing);
     font-size: 14px;
     color: var(--ink);
     background: none;
@@ -1024,6 +1037,7 @@
     display: block;
     margin: 10px auto 0;
     font-family: var(--font-ui);
+    letter-spacing: var(--ui-letter-spacing);
     font-size: 13px;
     color: var(--ink);
     opacity: 0.85;
@@ -1160,6 +1174,7 @@
      스타일로 통일 — primary/danger는 배경색 대신 글자색으로만 구분. */
   .focus-footer-btn {
     font-family: var(--font-ui);
+    letter-spacing: var(--ui-letter-spacing);
     font-size: 15px;
     color: var(--focus-ink-soft);
     padding: 4px 6px;
@@ -1191,6 +1206,7 @@
   .focus-exit-confirm p {
     margin: 0 0 4px;
     font-family: var(--font-ui);
+    letter-spacing: var(--ui-letter-spacing);
     /* 기존 13px의 120% */
     font-size: 16px;
     color: var(--urgent);
@@ -1554,6 +1570,7 @@
     display: none;
     flex: 0 0 auto;
     font-family: var(--font-ui);
+    letter-spacing: var(--ui-letter-spacing);
     font-size: 13px;
     color: var(--ink-soft);
     white-space: nowrap;
@@ -1825,6 +1842,7 @@
   .due-badge {
     flex: 0 0 auto;
     font-family: var(--font-ui);
+    letter-spacing: var(--ui-letter-spacing);
     font-size: 12px;
     color: var(--ink-soft);
     background: var(--tape-edge);
@@ -1860,6 +1878,7 @@
      "밝은 배경" 전제로 그려지게 함. */
   .date-picker-input {
     font-family: var(--font-ui);
+    letter-spacing: var(--ui-letter-spacing);
     font-size: 13px;
     color: var(--ink);
     background: transparent;
@@ -1899,6 +1918,7 @@
     background: transparent;
     color: var(--ink-soft);
     font-family: var(--font-ui);
+    letter-spacing: var(--ui-letter-spacing);
     font-size: 12px;
     border-radius: 3px;
     pointer-events: none;
@@ -1914,6 +1934,7 @@
 
   .date-clear-btn {
     font-family: var(--font-ui);
+    letter-spacing: var(--ui-letter-spacing);
     font-size: 12px;
     color: var(--ink-soft);
     padding: 1px 2px;
@@ -2165,6 +2186,7 @@
   .confirm-message {
     margin: 0 0 18px;
     font-family: var(--font-ui);
+    letter-spacing: var(--ui-letter-spacing);
     font-size: 17px;
     line-height: 1.5;
     white-space: pre-line;
@@ -2192,6 +2214,7 @@
 
   .confirm-btn {
     font-family: var(--font-ui);
+    letter-spacing: var(--ui-letter-spacing);
     font-size: 16px;
     padding: 5px 14px;
     border-radius: 14px;
@@ -2228,6 +2251,7 @@
     padding: 7px 16px;
     border-radius: 16px;
     font-family: var(--font-ui);
+    letter-spacing: var(--ui-letter-spacing);
     font-size: 16px;
     color: var(--paper);
     background: var(--ink);
