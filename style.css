@@ -980,7 +980,7 @@
     color: var(--ink-soft);
     /* 기존 14px의 150% */
     font-size: 21px;
-    font-family: var(--font-task);
+    font-family: var(--font-ui);
   }
 
   .focus-duration-row {
