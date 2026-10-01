@@ -1169,8 +1169,8 @@
   }
 
   function refreshSubtaskProgress(li, task) {
-    if (!li) return;
-    li.querySelectorAll('.subtask-progress').forEach(el => { el.textContent = subtaskProgressText(task); });
+    const el = li && li.querySelector(':scope > .task-row > .subtask-progress');
+    if (el) el.textContent = subtaskProgressText(task);
   }
 
   // waiting에서 완료된 하위 항목을 펼친 task id -> 자동으로 접히는 시각.
@@ -1300,17 +1300,6 @@
       const subList = document.createElement('ul');
       subList.className = 'subtask-list';
       task.subtasks.forEach(sub => subList.appendChild(renderSubtaskItem(boardId, task.id, sub)));
-      // waiting은 미완료 하위 항목 줄이 있으면 (완료/전체)를 제목 줄이 아니라
-      // 그 줄 오른쪽 끝에 둠 — 제목 줄 폭을 안 먹어서 쓸데없이 줄바꿈이 안
-      // 생김. 미완료 항목이 없어 줄이 접혀 있으면 CSS가 제목 줄 쪽 알약을 보임.
-      if (boardId === 'waiting') {
-        const slot = document.createElement('li');
-        slot.className = 'subtask-progress-slot';
-        const slotPill = makeSubtaskProgress(task);
-        makeToggle(slotPill);
-        slot.appendChild(slotPill);
-        subList.appendChild(slot);
-      }
       // 목록을 grid 래퍼로 감싸서 CSS가 실제 높이만큼 0fr <-> 1fr로 접고
       // 펼 수 있게 함(.subtask-collapse 참고) — max-height 방식은 목표 값이
       // 실제 높이와 안 맞아 애니메이션 타이밍이 어긋났음.
