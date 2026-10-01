@@ -718,6 +718,14 @@
      기록처럼 취소선을 긋지 않고 보통 텍스트 색으로 보여줌. */
   .upcoming-item-text {
     text-decoration: none;
+    /* 텍스트가 남는 폭을 다 차지하면 (완료/전체) 알약이 오른쪽 끝으로 밀려남 —
+     알약이 항목 바로 옆에 붙도록 텍스트는 내용만큼만 차지하고, 남는 폭은
+     날짜 칩 앞 여백(margin-left:auto)이 가져가게 함. */
+    flex: 0 1 auto;
+  }
+
+  .archive-item .upcoming-item-text ~ .due-badge {
+    margin-left: auto;
   }
 
   .archive-item-controls {
