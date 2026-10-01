@@ -1558,6 +1558,9 @@
   /* 마감일 배지(.due-badge)와 같은 알약 모양 */
   .subtask-progress.subtask-progress-toggle {
     font-size: 12px;
+    /* 기본 .subtask-progress의 줄 높이(24.7px)를 물려받으면 알약이 세로로
+       커지므로 .due-badge와 같게 되돌림 */
+    line-height: normal;
     background: var(--tape-edge);
     border-radius: 10px;
     padding: 1px 7px;
