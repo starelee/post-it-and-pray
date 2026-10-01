@@ -74,6 +74,17 @@
     return wrap;
   }
 
+  // 날짜 아이콘/배지를 눌러 날짜 행이 열릴 때 네이티브 달력까지 바로 띄움.
+  // showPicker가 없거나(구형 브라우저) 사용자 동작 밖이라 거부되면 포커스만.
+  function focusAndShowPicker(dateInput) {
+    dateInput.focus();
+    try {
+      if (typeof dateInput.showPicker === 'function') dateInput.showPicker();
+    } catch (e) {
+      /* 포커스만으로 충분 */
+    }
+  }
+
   const WEEKDAY_KO = ['일', '월', '화', '수', '목', '금', '토'];
 
   // pray later 카드/리갈패드 "다가오는 일" 사이의 7일 경계를 실시간으로
@@ -1270,7 +1281,16 @@
       backBtn.className = 'back-btn';
       backBtn.type = 'button';
       backBtn.setAttribute('aria-label', 'today로 되돌리기');
-      backBtn.textContent = '←';
+      // 폰트 글리프 ←는 가늘고 작아서 체크 표시와 결이 안 맞음 — 체크와 같은
+      // 둥근 끝 선으로 직접 그린 화살표.
+      const ns = 'http://www.w3.org/2000/svg';
+      const arrow = document.createElementNS(ns, 'svg');
+      arrow.setAttribute('class', 'back-arrow');
+      arrow.setAttribute('viewBox', '0 0 24 24');
+      const path = document.createElementNS(ns, 'path');
+      path.setAttribute('d', 'M20 12H5M11 5.5L4.5 12l6.5 6.5');
+      arrow.appendChild(path);
+      backBtn.appendChild(arrow);
       backBtn.addEventListener('click', () => moveTask('waiting', 'today', task.id));
       row.appendChild(backBtn);
     } else {
@@ -1570,7 +1590,7 @@
           // 피커가 뜨면) 아직 리플로우 전이라 iOS가 이 줄이 실제로 펼쳐진
           // 상태를 못 보고 다시 접어버리는 것으로 보임 — 한 프레임 뒤로
           // 미뤄서 레이아웃이 자리잡은 다음에 포커스를 줌.
-          requestAnimationFrame(() => dateInput.focus());
+          requestAnimationFrame(() => focusAndShowPicker(dateInput));
         }
       };
       dateBtn.addEventListener('click', () => {
@@ -2979,7 +2999,7 @@
       dateBadge.hidden = true;
       dateBadge.addEventListener('click', () => {
         dateRow.hidden = !dateRow.hidden;
-        if (!dateRow.hidden) dateInput.focus();
+        if (!dateRow.hidden) focusAndShowPicker(dateInput);
       });
       // draftControls(호버해야 보임)가 아니라 add-row 안에 둬서 날짜를
       // 지정해두면 호버 여부와 상관없이 항상 보이게 함.
@@ -3046,7 +3066,7 @@
       dateRow.appendChild(dateClearBtn);
       dateBtn.addEventListener('click', () => {
         dateRow.hidden = !dateRow.hidden;
-        if (!dateRow.hidden) dateInput.focus();
+        if (!dateRow.hidden) focusAndShowPicker(dateInput);
       });
       insertAfterAddRow(dateRow);
 
