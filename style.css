@@ -1,4 +1,11 @@
   @font-face {
+    font-family: 'IsYun';
+    src: url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_2202-2@1.0/LeeSeoyun.woff') format('woff');
+    font-weight: normal;
+    font-display: swap;
+}
+
+  @font-face {
     font-family: 'NostalgicMyoeunHeullim';
     src: url('https://cdn.jsdelivr.net/gh/projectnoonnu/2601-1@1.0/Griun_MyoeunHeullim-Rg.woff2') format('woff2');
     font-weight: normal;
@@ -37,9 +44,9 @@
 
   :root {
     /* 폰트 역할별 스택 — UI: 버튼·라벨 등 화면 크롬 / hand: 포스트잇 제목·태그라인 같은 손글씨 강조 / task: 할 일 본문 텍스트 */
-    --font-ui: 'Gaegu', cursive, sans-serif;
+    --font-ui: 'IsYun', 'Gaegu', cursive, sans-serif;
     --font-hand: 'NostalgicMyoeunHeullim', 'Nanum Pen Script', cursive;
-    --font-task: 'NostalgicMyoeunHeullim', 'Gaegu', cursive, sans-serif;
+    --font-task: 'NostalgicMyoeunHeullim', 'IsYun', 'Gaegu', cursive, sans-serif;
 
     /* 호버로 펼쳐지고 접히는 것들의 공통 타이밍 — 마우스를 올리자마자 아이콘이
        우르르 뜨지 않게 아주 잠깐 기다렸다가(expand-delay) 펼치고, 뗄 땐 살짝
@@ -299,6 +306,7 @@
   .auth-btn {
     font-family: var(--font-ui);
     font-size: 12px;
+    line-height: 18px;
     color: var(--ink-soft);
     background: none;
     border: 1px solid var(--ink-soft);
@@ -341,8 +349,8 @@
     border-radius: 12px;
     padding: 3px 10px;
     font-family: var(--font-ui);
-    font-size: 13px;
-    line-height: 1.4;
+    font-size: 12px;
+    line-height: 18px;
     color: var(--ink-soft);
     cursor: pointer;
     opacity: 0.85;
