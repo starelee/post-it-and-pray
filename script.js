@@ -834,7 +834,8 @@
   // 자리에서 이어지는 click(예: task-text의 편집 진입)을 눌러서 롱프레스와
   // 탭이 동시에 발동하지 않게 함.
   function attachLongPress(el, onLongPress, excludeSelector) {
-    const LONG_PRESS_MS = 480;
+    // 스크롤하려고 손가락을 올렸다가 의도치 않게 펼쳐지는 일이 있어서 길게.
+    const LONG_PRESS_MS = 750;
     const MOVE_TOLERANCE = 10;
     let timer = null;
     let startX = 0;
@@ -865,12 +866,17 @@
       }
     }, { passive: true });
 
-    el.addEventListener('touchend', () => {
+    const cancelPending = () => {
       if (timer) {
         clearTimeout(timer);
         timer = null;
       }
-    });
+    };
+    el.addEventListener('touchend', cancelPending);
+    // 브라우저가 스크롤을 넘겨받으면 touchmove 대신 touchcancel이 오거나
+    // 스크롤 이벤트만 오는 경우가 있어서 둘 다 대기 중인 롱프레스를 취소함.
+    el.addEventListener('touchcancel', cancelPending);
+    window.addEventListener('scroll', cancelPending, { passive: true, capture: true });
 
     // 캡처 단계에서 먼저 가로채서, 방금 롱프레스로 처리된 그 손가락이
     // 뗄 때 뒤이어 오는 click이 task-text 편집 진입 같은 원래 동작을
