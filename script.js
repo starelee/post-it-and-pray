@@ -1173,6 +1173,26 @@
     if (el) el.textContent = subtaskProgressText(task);
   }
 
+  // waiting에서 완료된 하위 항목을 펼친 task id -> 자동으로 접히는 시각.
+  // 재렌더로 li가 새로 만들어져도 펼침 상태/남은 시간이 유지되게 함.
+  const DONE_OPEN_MS = 30000;
+  const doneOpenUntil = new Map();
+  const doneOpenTimers = new Map();
+
+  function toggleDoneOpen(id, li) {
+    clearTimeout(doneOpenTimers.get(id));
+    if (li.classList.toggle('done-open')) {
+      doneOpenUntil.set(id, Date.now() + DONE_OPEN_MS);
+      doneOpenTimers.set(id, setTimeout(() => {
+        doneOpenUntil.delete(id);
+        const cur = findTaskLi(id);
+        if (cur) cur.classList.remove('done-open');
+      }, DONE_OPEN_MS));
+    } else {
+      doneOpenUntil.delete(id);
+    }
+  }
+
   function renderItem(boardId, task, opts) {
     opts = opts || {};
     const li = document.createElement('li');
@@ -1224,7 +1244,23 @@
     // 완료된 gotta do 항목)에서만 드러냄 — 체크 직후 재렌더 전에도 어긋나지
     // 않게 하려고 JS에서 조건 분기 안 함.
     const progress = makeSubtaskProgress(task);
-    if (progress) row.appendChild(progress);
+    if (progress) {
+      // waiting은 완료된 하위 항목을 숨겨두고, (완료/전체)를 눌러야 아래로
+      // 펼쳐짐. 다시 누르거나 30초가 지나면 접힘.
+      if (boardId === 'waiting' && task.subtasks.some(s => s.done)) {
+        progress.classList.add('subtask-progress-toggle');
+        progress.setAttribute('role', 'button');
+        progress.tabIndex = 0;
+        progress.setAttribute('aria-label', '완료된 하위 항목 보기/숨기기');
+        if (doneOpenUntil.get(task.id) > Date.now()) li.classList.add('done-open');
+        const toggle = () => toggleDoneOpen(task.id, li);
+        progress.addEventListener('click', toggle);
+        progress.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); }
+        });
+      }
+      row.appendChild(progress);
+    }
 
     let badge = null;
     if (task.dueDate) {

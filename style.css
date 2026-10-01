@@ -1555,6 +1555,19 @@
     line-height: 24.7px;
   }
 
+  .subtask-progress.subtask-progress-toggle {
+    cursor: pointer;
+    padding: 0 4px;
+    border-radius: 6px;
+    transition: background 0.15s ease, color 0.15s ease;
+  }
+
+  .subtask-progress.subtask-progress-toggle:hover,
+  .task-item.done-open .subtask-progress-toggle {
+    background: rgba(0, 0, 0, 0.07);
+    color: var(--ink);
+  }
+
   .subtask-progress[hidden] {
     display: none;
   }
@@ -1620,19 +1633,17 @@
     transition: max-height var(--collapse-dur) var(--collapse-ease),
                 opacity var(--collapse-dur) var(--collapse-ease),
                 margin-top var(--collapse-dur) var(--collapse-ease);
-    /* 호버하고 바로 펼쳐지면 지나가다 스친 것만으로도 튀어나와 정신없음 —
-       잠깐 머무를 때만 펼치도록 펼침 지연을 다른 요소보다 길게 */
-    transition-delay: 0.45s;
+    transition-delay: var(--expand-delay);
   }
 
-  .task-list[data-tasklist="waiting"] .task-item:not(:hover):not(:focus-within):not(.controls-open) .subtask-item.done {
+  .task-list[data-tasklist="waiting"] .task-item:not(.done-open) .subtask-item.done {
     max-height: 0;
     opacity: 0;
     margin-top: 0;
     transition-delay: var(--collapse-delay);
   }
 
-  .task-list[data-tasklist="waiting"] .task-item:not(:hover):not(:focus-within):not(.controls-open) > .subtask-collapse:not(:has(.subtask-item:not(.done))),
+  .task-list[data-tasklist="waiting"] .task-item:not(.done-open) > .subtask-collapse:not(:has(.subtask-item:not(.done))),
   .task-list[data-tasklist="someday"] .task-item:not(:hover):not(:focus-within):not(.controls-open) > .subtask-collapse,
   .task-list[data-tasklist="today"] .task-item.done:not(:hover):not(:focus-within):not(.controls-open) > .subtask-collapse {
     grid-template-rows: 0fr;
