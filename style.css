@@ -1568,6 +1568,13 @@
     transition: color 0.15s ease;
   }
 
+  /* 제목과 알약 사이: .task-row의 gap(8px)을 3px로 줄여 제목이 쓸 수 있는
+     폭을 늘림 (날짜 칩과 같게) */
+  .subtask-progress.subtask-progress-toggle,
+  .due-badge {
+    margin-left: -5px;
+  }
+
   .subtask-progress.subtask-progress-toggle:focus {
     outline: none;
   }
