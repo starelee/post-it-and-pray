@@ -1555,17 +1555,18 @@
     line-height: 24.7px;
   }
 
+  /* 마감일 배지(.due-badge)와 같은 알약 모양 */
   .subtask-progress.subtask-progress-toggle {
+    font-size: 12px;
+    background: var(--tape-edge);
+    border-radius: 10px;
+    padding: 1px 7px;
     cursor: pointer;
-    padding: 0 4px;
-    border-radius: 6px;
-    transition: background 0.15s ease, color 0.15s ease;
+    transition: opacity 0.15s ease;
   }
 
-  .subtask-progress.subtask-progress-toggle:hover,
-  .task-item.done-open .subtask-progress-toggle {
-    background: rgba(0, 0, 0, 0.07);
-    color: var(--ink);
+  .subtask-progress.subtask-progress-toggle:hover {
+    opacity: 0.75;
   }
 
   .subtask-progress[hidden] {
