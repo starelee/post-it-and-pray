@@ -1169,8 +1169,8 @@
   }
 
   function refreshSubtaskProgress(li, task) {
-    const el = li && li.querySelector(':scope > .task-row > .subtask-progress');
-    if (el) el.textContent = subtaskProgressText(task);
+    if (!li) return;
+    li.querySelectorAll('.subtask-progress').forEach(el => { el.textContent = subtaskProgressText(task); });
   }
 
   // waiting에서 완료된 하위 항목을 펼친 task id -> 자동으로 접히는 시각.
@@ -1244,21 +1244,28 @@
     // 완료된 gotta do 항목)에서만 드러냄 — 체크 직후 재렌더 전에도 어긋나지
     // 않게 하려고 JS에서 조건 분기 안 함.
     const progress = makeSubtaskProgress(task);
+    // waiting(완료된 하위 항목)과 완료된 gotta do 항목(하위 항목 전체)은
+    // 접어두고, (완료/전체)를 눌러야 아래로 펼쳐짐. 다시 누르거나 30초가
+    // 지나면 접힘.
+    const togglable = boardId === 'waiting' ? task.subtasks.some(s => s.done) : task.done;
+    const makeToggle = (el) => {
+      if (!togglable) return;
+      el.classList.add('subtask-progress-toggle');
+      el.setAttribute('role', 'button');
+      el.tabIndex = 0;
+      el.setAttribute('aria-label', '완료된 하위 항목 보기/숨기기');
+      const toggle = () => toggleDoneOpen(task.id, li);
+      // 눌러서 포커스가 가면 :focus-within 때문에 아이콘 줄(.task-controls)까지
+      // 같이 펼쳐지고 포커스 링도 생김 — 마우스/터치로 누를 땐 포커스를 막음.
+      el.addEventListener('mousedown', (e) => e.preventDefault());
+      el.addEventListener('click', toggle);
+      el.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); }
+      });
+    };
     if (progress) {
-      // waiting은 완료된 하위 항목을 숨겨두고, (완료/전체)를 눌러야 아래로
-      // 펼쳐짐. 다시 누르거나 30초가 지나면 접힘.
-      if (boardId === 'waiting' && task.subtasks.some(s => s.done)) {
-        progress.classList.add('subtask-progress-toggle');
-        progress.setAttribute('role', 'button');
-        progress.tabIndex = 0;
-        progress.setAttribute('aria-label', '완료된 하위 항목 보기/숨기기');
-        if (doneOpenUntil.get(task.id) > Date.now()) li.classList.add('done-open');
-        const toggle = () => toggleDoneOpen(task.id, li);
-        progress.addEventListener('click', toggle);
-        progress.addEventListener('keydown', (e) => {
-          if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); }
-        });
-      }
+      if (togglable && doneOpenUntil.get(task.id) > Date.now()) li.classList.add('done-open');
+      makeToggle(progress);
       row.appendChild(progress);
     }
 
@@ -1293,6 +1300,17 @@
       const subList = document.createElement('ul');
       subList.className = 'subtask-list';
       task.subtasks.forEach(sub => subList.appendChild(renderSubtaskItem(boardId, task.id, sub)));
+      // waiting은 미완료 하위 항목 줄이 있으면 (완료/전체)를 제목 줄이 아니라
+      // 그 줄 오른쪽 끝에 둠 — 제목 줄 폭을 안 먹어서 쓸데없이 줄바꿈이 안
+      // 생김. 미완료 항목이 없어 줄이 접혀 있으면 CSS가 제목 줄 쪽 알약을 보임.
+      if (boardId === 'waiting') {
+        const slot = document.createElement('li');
+        slot.className = 'subtask-progress-slot';
+        const slotPill = makeSubtaskProgress(task);
+        makeToggle(slotPill);
+        slot.appendChild(slotPill);
+        subList.appendChild(slot);
+      }
       // 목록을 grid 래퍼로 감싸서 CSS가 실제 높이만큼 0fr <-> 1fr로 접고
       // 펼 수 있게 함(.subtask-collapse 참고) — max-height 방식은 목표 값이
       // 실제 높이와 안 맞아 애니메이션 타이밍이 어긋났음.

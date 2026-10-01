@@ -1568,9 +1568,33 @@
     transition: color 0.15s ease;
   }
 
+  .subtask-progress.subtask-progress-toggle:focus {
+    outline: none;
+  }
+
   .subtask-progress.subtask-progress-toggle:hover,
+  .subtask-progress.subtask-progress-toggle:focus-visible,
   .task-item.done-open .subtask-progress-toggle {
     color: var(--accent);
+  }
+
+  /* waiting: 미완료 하위 항목 줄이 있으면 알약은 그 줄 오른쪽 끝(슬롯)에만 보이고
+     제목 줄 쪽 알약은 숨김. 없으면(줄이 접힘) 제목 줄 알약만 보임. */
+  .subtask-progress-slot {
+    display: none;
+    flex: 1 1 auto;
+    justify-content: flex-end;
+    align-items: center;
+    list-style: none;
+    margin: 5px 0 0 !important;
+  }
+
+  .task-list[data-tasklist="waiting"] .task-item:has(.subtask-item:not(.done)) > .task-row > .subtask-progress {
+    display: none;
+  }
+
+  .task-list[data-tasklist="waiting"] .task-item:has(.subtask-item:not(.done)) .subtask-progress-slot {
+    display: flex;
   }
 
   .subtask-progress[hidden] {
@@ -1650,7 +1674,7 @@
 
   .task-list[data-tasklist="waiting"] .task-item:not(.done-open) > .subtask-collapse:not(:has(.subtask-item:not(.done))),
   .task-list[data-tasklist="someday"] .task-item:not(:hover):not(:focus-within):not(.controls-open) > .subtask-collapse,
-  .task-list[data-tasklist="today"] .task-item.done:not(:hover):not(:focus-within):not(.controls-open) > .subtask-collapse {
+  .task-list[data-tasklist="today"] .task-item.done:not(.done-open) > .subtask-collapse {
     grid-template-rows: 0fr;
     opacity: 0;
     transition-delay: var(--collapse-delay);
