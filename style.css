@@ -768,7 +768,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 17px;
+    font-size: 19px;
     line-height: 1;
     color: var(--ink);
     padding: 0;
@@ -1160,7 +1160,9 @@
   .focus-pause-row {
     display: flex;
     justify-content: center;
-    align-items: center;
+    /* center 정렬이면 ⏸ 글리프가 섞인 일시정지 버튼의 줄 높이 때문에 옆의
+       시간 추가 글자가 1px 어긋남 — 글자 기준선끼리 맞춤. */
+    align-items: baseline;
     gap: 14px;
     margin: 6px 0 10px;
   }
@@ -1175,7 +1177,9 @@
        폰트로 그려져 서로 기준선이 어긋났음 — 이모지 폰트를 명시해 둘 다
        같은 폰트로 그림. */
     font-family: 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji', sans-serif;
-    font-size: 22px;
+    /* 이모지 글리프가 폰트 크기의 약 1.2배로 그려져서, 19px로 두면 gotta do
+       체크박스(20px)와 비슷한 크기가 됨. */
+    font-size: 19px;
     line-height: 1;
     display: inline-flex;
     align-items: center;
@@ -1191,6 +1195,9 @@
 
   .checkbox.focus-check-btn .check-path {
     stroke-dashoffset: 0;
+    /* 타이머 박스가 빨개지면 강조색(분홍) 체크가 배경에 묻혀 사라지므로
+       글자색으로 그림. */
+    stroke: var(--ink-soft);
   }
 
   .focus-pause-btn {
@@ -2040,7 +2047,7 @@
   /* 월 그룹 제목(예: "2026-09")은 포스트잇 제목과 같은 26px를 그대로
      쓰기엔 done 패널 안에서 너무 커 보여서 살짝 줄임. */
   .archive-groups .sticky-title-toggle {
-    font-size: 17px;
+    font-size: 19px;
     margin-bottom: 4px;
   }
 
@@ -2099,7 +2106,7 @@
   .empty-hint {
     color: var(--ink-soft);
     font-family: var(--font-task);
-    font-size: 17px;
+    font-size: 19px;
     padding: 4px 0 8px;
   }
 
@@ -2291,7 +2298,7 @@
     margin: 0 0 18px;
     font-family: var(--font-ui);
     letter-spacing: var(--ui-letter-spacing);
-    font-size: 17px;
+    font-size: 19px;
     line-height: 1.5;
     white-space: pre-line;
     color: var(--ink-soft);
