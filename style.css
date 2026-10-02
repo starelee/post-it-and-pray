@@ -1167,7 +1167,7 @@
 
   /* 세 아이콘이 같은 32px 칸 안에서 가운데 정렬되게 고정 — 이모지는
      폰트마다 줄 높이/기준선이 달라 padding만으로는 들쭉날쭉해짐. */
-  .focus-icon-btn {
+  .focus-footer-btn.focus-icon-btn {
     width: 32px;
     height: 32px;
     padding: 0;
@@ -1184,12 +1184,12 @@
 
   /* gotta do의 .checkbox 클래스를 그대로 쓰고(크기/테두리/체크 SVG 동일),
      완료된 항목(.task-item.done)과 같은 상태만 여기서 맞춤. */
-  .focus-check-btn {
+  .checkbox.focus-check-btn {
     margin: 0 6px;
     border-color: var(--ink-soft);
   }
 
-  .focus-check-btn .check-path {
+  .checkbox.focus-check-btn .check-path {
     stroke-dashoffset: 0;
   }
 
