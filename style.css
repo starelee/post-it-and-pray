@@ -1195,9 +1195,6 @@
 
   .checkbox.focus-check-btn .check-path {
     stroke-dashoffset: 0;
-    /* 타이머 박스가 빨개지면 강조색(분홍) 체크가 배경에 묻혀 사라지므로
-       글자색으로 그림. */
-    stroke: var(--ink-soft);
   }
 
   .focus-pause-btn {
