@@ -3960,7 +3960,7 @@
         doneBtn.addEventListener('click', finishFocusAsDone);
         const waitBtn = makeFocusIconBtn('⏳', '대기중으로 변경');
         waitBtn.addEventListener('click', finishFocusAsWaiting);
-        const exitBtn = makeFocusIconBtn('✕', '나가기');
+        const exitBtn = makeFocusIconBtn('❌', '나가기');
         exitBtn.addEventListener('click', () => {
           focusState.exitConfirmOpen = true;
           renderFocusPanel();
