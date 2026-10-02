@@ -9,6 +9,8 @@
   // 애니메이션 길이 — style.css의 celebrate-burst-* 지속 시간(0.95s, 가장
   // 오래 걸리는 애니메이션)과 맞춰둠.
   const FOCUS_CELEBRATE_MS = 950;
+  // 타이머 종이색이 빨갛게 변하기 시작하는 남은 시간(초).
+  const FOCUS_URGENT_SEC = 60;
   const BOARD_IDS = ['today', 'waiting', 'someday', 'scheduled'];
   // Boards a task can be manually moved between with the move buttons.
   const MOVE_TARGET_IDS = ['today', 'waiting', 'someday'];
@@ -3438,11 +3440,6 @@
     while (el.firstChild) el.removeChild(el.firstChild);
   }
 
-  // 1분 이하로 남으면 숫자 앞에 급한 느낌의 이모지를 붙임.
-  function focusCountdownText(sec) {
-    return (sec <= 60 ? '🔥 ' : '') + formatFocusClock(sec);
-  }
-
   function formatFocusClock(sec) {
     const m = Math.floor(sec / 60);
     const s = sec % 60;
@@ -3870,7 +3867,7 @@
       if (focusState.paused) countdownBox.classList.add('focus-paused');
       const num = document.createElement('div');
       num.className = 'focus-countdown-number';
-      num.textContent = focusCountdownText(focusState.remainingSec);
+      num.textContent = formatFocusClock(focusState.remainingSec);
       countdownBox.appendChild(num);
 
       // 일시정지/재개 옆에 시간 추가를 같이 둠 — 둘 다 타이머 진행 중에
@@ -3959,10 +3956,7 @@
         const doneBtn = makeFocusIconBtn('☑', '완료로 표시', 'focus-footer-btn-primary');
         doneBtn.addEventListener('click', finishFocusAsDone);
         const waitBtn = makeFocusIconBtn('⏳', '대기중으로 변경');
-        waitBtn.addEventListener('click', () => {
-          moveTask(focusState.taskBoardId, 'waiting', focusState.taskId);
-          exitFocusMode(false);
-        });
+        waitBtn.addEventListener('click', finishFocusAsWaiting);
         const exitBtn = makeFocusIconBtn('✕', '나가기');
         exitBtn.addEventListener('click', () => {
           focusState.exitConfirmOpen = true;
@@ -3975,6 +3969,7 @@
       }
       focusBodyEl.appendChild(countdownBox);
       focusBodyEl.appendChild(makeFocusQuickAddTaskRow());
+      applyFocusPaper();
       return;
     }
 
@@ -4041,6 +4036,34 @@
     }, 300);
   }
 
+  // 대기중으로 넘기는 것도 "이 일은 내 손을 떠났다"는 완료의 한 형태라
+  // 완료와 같은 축하 애니메이션을 보여줌 — 뒤집히는 애니메이션이 끝난 뒤
+  // 대기중 카드로 옮기고, 옮겨진 항목에서 위글+빵빠레를 터뜨림.
+  function finishFocusAsWaiting() {
+    const boardId = focusState.taskBoardId;
+    const taskId = focusState.taskId;
+    exitFocusMode(false);
+    setTimeout(() => {
+      moveTask(boardId, 'waiting', taskId);
+      const li = findTaskLi(taskId);
+      if (!li) return;
+      li.classList.add('celebrate-flash');
+      setTimeout(() => li.classList.remove('celebrate-flash'), FOCUS_CELEBRATE_MS);
+    }, 300);
+  }
+
+  // 남은 시간이 FOCUS_URGENT_SEC 이하로 줄어들수록 카드 종이색(분홍)이
+  // 점점 빨갛게 변함 — 0초에 가까울수록 더 진하게.
+  function applyFocusPaper() {
+    if (!todayFocusVisible) return;
+    let paper = 'var(--paper-focus)';
+    if (focusState && focusState.step === 'running' && focusState.remainingSec < FOCUS_URGENT_SEC) {
+      const t = Math.min(1, Math.max(0, 1 - focusState.remainingSec / FOCUS_URGENT_SEC));
+      paper = 'color-mix(in srgb, var(--paper-focus), var(--paper-focus-urgent) ' + Math.round(t * 100) + '%)';
+    }
+    todayStickyEl.style.setProperty('--paper', paper);
+  }
+
   function startFocusCountdown(durationSec) {
     focusState.step = 'running';
     focusState.endAt = Date.now() + durationSec * 1000;
@@ -4105,8 +4128,9 @@
       // 걸 다 날려버리므로, 진행 중엔 숫자/탭 제목만 직접 갱신함 — 상태가
       // 실제로 바뀌는 시점(0 도달)에만 전체 렌더링.
       updateFocusDocumentTitle();
+      applyFocusPaper();
       const numEl = focusBodyEl.querySelector('.focus-countdown-number');
-      if (numEl) numEl.textContent = focusCountdownText(remaining);
+      if (numEl) numEl.textContent = formatFocusClock(remaining);
     }, 1000);
   }
 
