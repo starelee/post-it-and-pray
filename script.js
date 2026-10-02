@@ -3953,7 +3953,10 @@
         const actions = document.createElement('div');
         actions.className = 'focus-countdown-actions';
         // 완료/대기중/나가기는 글자 대신 이모지 아이콘만 — 의미는 title로.
-        const doneBtn = makeFocusIconBtn('☑', '완료로 표시', 'focus-footer-btn-primary');
+        // 완료 아이콘은 gotta do 체크리스트의 체크박스와 같은 SVG(체크된
+        // 상태)를 그대로 씀.
+        const doneBtn = makeFocusIconBtn('', '완료로 표시', 'focus-check-btn');
+        doneBtn.appendChild(makeCheckSvg());
         doneBtn.addEventListener('click', finishFocusAsDone);
         const waitBtn = makeFocusIconBtn('⏳', '대기중으로 변경');
         waitBtn.addEventListener('click', finishFocusAsWaiting);
