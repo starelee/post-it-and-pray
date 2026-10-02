@@ -1010,7 +1010,7 @@
 
   .focus-duration-hint {
     margin: 0 0 14px;
-    color: var(--ink-soft);
+    color: var(--ink);
     /* 기존 14px의 150% */
     font-size: 21px;
     font-family: var(--font-ui);
@@ -1030,7 +1030,7 @@
     font-family: var(--font-ui);
     letter-spacing: var(--ui-letter-spacing);
     font-size: 16px;
-    color: var(--ink);
+    color: var(--ink-soft);
     padding: 2px;
     transition: color 0.15s ease, transform 0.15s ease;
   }
@@ -1046,7 +1046,7 @@
     font-family: var(--font-ui);
     letter-spacing: var(--ui-letter-spacing);
     font-size: 14px;
-    color: var(--ink);
+    color: var(--ink-soft);
     background: none;
     border: none;
     border-bottom: 1px dashed var(--focus-box-border);
