@@ -4059,16 +4059,18 @@
     }, 300);
   }
 
-  // 남은 시간이 FOCUS_URGENT_SEC 이하로 줄어들수록 카드 종이색(분홍)이
-  // 점점 빨갛게 변함 — 0초에 가까울수록 더 진하게.
+  // 남은 시간이 FOCUS_URGENT_SEC 이하로 줄어들수록 카드 전체가 아니라
+  // 가운데 타이머 박스(.focus-countdown-box)의 배경만 점점 빨갛게 변함 —
+  // 0초에 가까울수록 더 진하게.
   function applyFocusPaper() {
-    if (!todayFocusVisible) return;
-    let paper = 'var(--paper-focus)';
+    const box = focusBodyEl && focusBodyEl.querySelector('.focus-countdown-box');
+    if (!box) return;
     if (focusState && focusState.step === 'running' && focusState.remainingSec < FOCUS_URGENT_SEC) {
       const t = Math.min(1, Math.max(0, 1 - focusState.remainingSec / FOCUS_URGENT_SEC));
-      paper = 'color-mix(in srgb, var(--paper-focus), var(--paper-focus-urgent) ' + Math.round(t * 100) + '%)';
+      box.style.background = 'color-mix(in srgb, var(--focus-box-fill), var(--paper-focus-urgent) ' + Math.round(t * 100) + '%)';
+    } else {
+      box.style.background = '';
     }
-    todayStickyEl.style.setProperty('--paper', paper);
   }
 
   function startFocusCountdown(durationSec) {
