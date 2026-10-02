@@ -1167,7 +1167,7 @@
 
   /* 세 아이콘이 같은 32px 칸 안에서 가운데 정렬되게 고정 — 이모지는
      폰트마다 줄 높이/기준선이 달라 padding만으로는 들쭉날쭉해짐. */
-  .focus-icon-btn {
+  .focus-footer-btn.focus-icon-btn {
     width: 32px;
     height: 32px;
     padding: 0;
