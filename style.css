@@ -780,6 +780,8 @@
     width: 18px;
     height: 18px;
     overflow: visible;
+    /* 항목 글자 중심보다 살짝 내려앉아 보여서 1px 올림. */
+    transform: translateY(-1px);
   }
 
   .back-arrow path {
