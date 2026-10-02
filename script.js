@@ -3438,6 +3438,11 @@
     while (el.firstChild) el.removeChild(el.firstChild);
   }
 
+  // 1분 이하로 남으면 숫자 앞에 급한 느낌의 이모지를 붙임.
+  function focusCountdownText(sec) {
+    return (sec <= 60 ? '🔥 ' : '') + formatFocusClock(sec);
+  }
+
   function formatFocusClock(sec) {
     const m = Math.floor(sec / 60);
     const s = sec % 60;
@@ -3796,6 +3801,16 @@
     return btn;
   }
 
+  function makeFocusIconBtn(icon, label, extraClass) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'focus-footer-btn focus-icon-btn' + (extraClass ? ' ' + extraClass : '');
+    btn.textContent = icon;
+    btn.title = label;
+    btn.setAttribute('aria-label', label);
+    return btn;
+  }
+
   function renderFocusPanel() {
     if (!focusState) return;
     updateFocusDocumentTitle();
@@ -3855,13 +3870,12 @@
       if (focusState.paused) countdownBox.classList.add('focus-paused');
       const num = document.createElement('div');
       num.className = 'focus-countdown-number';
-      num.textContent = formatFocusClock(focusState.remainingSec);
+      num.textContent = focusCountdownText(focusState.remainingSec);
       countdownBox.appendChild(num);
 
-      // 일시정지/재개는 완료로 표시·시간 추가·나가기랑 한 줄에 묶지 않고
-      // 시간 숫자 바로 밑에 따로 뗌 — 다른 버튼들보다 훨씬 자주 누르게
-      // 될 버튼이라 눈에 먼저 띄어야 함. 나가기 확인 중엔 그 확인 버튼만
-      // 보여야 하니 같이 숨김.
+      // 일시정지/재개 옆에 시간 추가를 같이 둠 — 둘 다 타이머 진행 중에
+      // 자주 쓰는 버튼이라 숫자 바로 밑 한 줄에 묶음. 나가기 확인 중엔 그
+      // 확인 버튼만 보여야 하니 같이 숨김.
       if (!focusState.exitConfirmOpen) {
         const pauseRow = document.createElement('div');
         pauseRow.className = 'focus-pause-row';
@@ -3871,34 +3885,6 @@
           else pauseFocusCountdown();
         });
         pauseRow.appendChild(pauseBtn);
-        countdownBox.appendChild(pauseRow);
-      }
-
-      // 완료로 표시/시간 추가/나가기는 밑에 새 박스를 만드는 게 아니라 이
-      // 숫자 박스 하단에 그대로 들어감 — #focusFooter는 running 단계에서
-      // 더는 안 씀.
-      if (focusState.exitConfirmOpen) {
-        const confirmWrap = document.createElement('div');
-        confirmWrap.className = 'focus-exit-confirm';
-        const msg = document.createElement('p');
-        msg.textContent = '⚠️ 타이머를 중단하고 메인화면으로 갈까요? 현재 진행 중인 타이머는 초기화됩니다.';
-        confirmWrap.appendChild(msg);
-
-        const yesBtn = makeFocusFooterBtn('네, 나갈게요 (타이머 리셋)', 'focus-footer-btn-danger');
-        yesBtn.addEventListener('click', () => exitFocusMode(false));
-        const noBtn = makeFocusFooterBtn('아니, 계속할게요');
-        noBtn.addEventListener('click', () => {
-          focusState.exitConfirmOpen = false;
-          renderFocusPanel();
-        });
-        confirmWrap.appendChild(yesBtn);
-        confirmWrap.appendChild(noBtn);
-        countdownBox.appendChild(confirmWrap);
-      } else {
-        const actions = document.createElement('div');
-        actions.className = 'focus-countdown-actions';
-        const doneBtn = makeFocusFooterBtn('완료로 표시', 'focus-footer-btn-primary');
-        doneBtn.addEventListener('click', finishFocusAsDone);
 
         // "시간 변경"(전체 재설정) 대신 "시간 추가" — 전체 선택 화면으로
         // 안 바뀌고, 이 자리에서 버튼이 곧장 분 입력창으로 바뀌어 지금
@@ -3941,14 +3927,49 @@
           if (!addTimeInput.value) closeAddTimeInput();
         });
 
-        const exitBtn = makeFocusFooterBtn('나가기');
+        pauseRow.appendChild(addTimeBtn);
+        pauseRow.appendChild(addTimeInput);
+        countdownBox.appendChild(pauseRow);
+      }
+
+      // 완료/대기중/나가기 아이콘은 밑에 새 박스를 만드는 게 아니라 이
+      // 숫자 박스 하단에 그대로 들어감 — #focusFooter는 running 단계에서
+      // 더는 안 씀.
+      if (focusState.exitConfirmOpen) {
+        const confirmWrap = document.createElement('div');
+        confirmWrap.className = 'focus-exit-confirm';
+        const msg = document.createElement('p');
+        msg.textContent = '⚠️ 타이머를 중단하고 메인화면으로 갈까요? 현재 진행 중인 타이머는 초기화됩니다.';
+        confirmWrap.appendChild(msg);
+
+        const yesBtn = makeFocusFooterBtn('네, 나갈게요 (타이머 리셋)', 'focus-footer-btn-danger');
+        yesBtn.addEventListener('click', () => exitFocusMode(false));
+        const noBtn = makeFocusFooterBtn('아니, 계속할게요');
+        noBtn.addEventListener('click', () => {
+          focusState.exitConfirmOpen = false;
+          renderFocusPanel();
+        });
+        confirmWrap.appendChild(yesBtn);
+        confirmWrap.appendChild(noBtn);
+        countdownBox.appendChild(confirmWrap);
+      } else {
+        const actions = document.createElement('div');
+        actions.className = 'focus-countdown-actions';
+        // 완료/대기중/나가기는 글자 대신 이모지 아이콘만 — 의미는 title로.
+        const doneBtn = makeFocusIconBtn('☑', '완료로 표시', 'focus-footer-btn-primary');
+        doneBtn.addEventListener('click', finishFocusAsDone);
+        const waitBtn = makeFocusIconBtn('⏳', '대기중으로 변경');
+        waitBtn.addEventListener('click', () => {
+          moveTask(focusState.taskBoardId, 'waiting', focusState.taskId);
+          exitFocusMode(false);
+        });
+        const exitBtn = makeFocusIconBtn('✕', '나가기');
         exitBtn.addEventListener('click', () => {
           focusState.exitConfirmOpen = true;
           renderFocusPanel();
         });
         actions.appendChild(doneBtn);
-        actions.appendChild(addTimeBtn);
-        actions.appendChild(addTimeInput);
+        actions.appendChild(waitBtn);
         actions.appendChild(exitBtn);
         countdownBox.appendChild(actions);
       }
@@ -4085,7 +4106,7 @@
       // 실제로 바뀌는 시점(0 도달)에만 전체 렌더링.
       updateFocusDocumentTitle();
       const numEl = focusBodyEl.querySelector('.focus-countdown-number');
-      if (numEl) numEl.textContent = formatFocusClock(remaining);
+      if (numEl) numEl.textContent = focusCountdownText(remaining);
     }, 1000);
   }
 

@@ -1157,7 +1157,15 @@
   .focus-pause-row {
     display: flex;
     justify-content: center;
+    align-items: center;
+    gap: 14px;
     margin: 6px 0 10px;
+  }
+
+  .focus-icon-btn {
+    font-size: 22px;
+    line-height: 1;
+    padding: 4px 8px;
   }
 
   .focus-pause-btn {
