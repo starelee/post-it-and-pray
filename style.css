@@ -1171,6 +1171,10 @@
     width: 32px;
     height: 32px;
     padding: 0;
+    /* ❌가 UI 폰트(콘콘체)에 있는 가는 ✕ 글리프로 그려지고 ⏳만 이모지
+       폰트로 그려져 서로 기준선이 어긋났음 — 이모지 폰트를 명시해 둘 다
+       같은 폰트로 그림. */
+    font-family: 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji', sans-serif;
     font-size: 22px;
     line-height: 1;
     display: inline-flex;
