@@ -73,7 +73,7 @@
     --paper-someday: #dbe2f7;
     --paper-lupin: #d9d5c9;
     --paper-focus: #ffb9a8;
-    --paper-focus-urgent: #ff4a3a;
+    --paper-focus-urgent: #f03a17;
     --paper-shadow: rgba(70, 60, 20, 0.28);
     --paper-contact: rgba(70, 60, 20, 0.16);
     --ink: #4a4034;
@@ -111,7 +111,7 @@
       --paper-someday: #2c3350;
       --paper-lupin: #2e2c27;
       --paper-focus: #6e3326;
-      --paper-focus-urgent: #b02418;
+      --paper-focus-urgent: #b42c11;
       --paper-shadow: rgba(0, 0, 0, 0.5);
       --paper-contact: rgba(0, 0, 0, 0.35);
       --ink: #ecdfc2;
@@ -144,7 +144,7 @@
     --paper-someday: #2c3350;
     --paper-lupin: #2e2c27;
     --paper-focus: #6e3326;
-    --paper-focus-urgent: #b02418;
+    --paper-focus-urgent: #b42c11;
     --paper-shadow: rgba(0, 0, 0, 0.5);
     --paper-contact: rgba(0, 0, 0, 0.35);
     --ink: #ecdfc2;
