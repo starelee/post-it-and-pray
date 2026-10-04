@@ -167,6 +167,58 @@
     --focus-ink-soft: #d6c9c0;
   }
 
+  /* ─────────────────────────────
+     masking tape palette
+     ───────────────────────────── */
+  :root {
+    --tape-today: rgba(249, 183, 167, 0.82);
+    --tape-today-pattern: rgba(143, 79, 72, 0.24);
+
+    --tape-waiting: rgba(177, 216, 194, 0.82);
+    --tape-waiting-pattern: rgba(70, 125, 101, 0.20);
+
+    --tape-someday: rgba(199, 193, 230, 0.82);
+    --tape-someday-pattern: rgba(102, 91, 150, 0.18);
+
+    --tape-fiber-light: rgba(255, 255, 255, 0.20);
+    --tape-fiber-dark: rgba(86, 65, 48, 0.055);
+    --tape-shadow: rgba(73, 55, 35, 0.16);
+  }
+
+  /* 시스템 다크모드 */
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --tape-today: rgba(192, 119, 108, 0.56);
+      --tape-today-pattern: rgba(255, 218, 205, 0.16);
+
+      --tape-waiting: rgba(104, 157, 132, 0.54);
+      --tape-waiting-pattern: rgba(218, 244, 226, 0.14);
+
+      --tape-someday: rgba(126, 119, 173, 0.56);
+      --tape-someday-pattern: rgba(229, 224, 255, 0.14);
+
+      --tape-fiber-light: rgba(255, 255, 255, 0.11);
+      --tape-fiber-dark: rgba(0, 0, 0, 0.08);
+      --tape-shadow: rgba(0, 0, 0, 0.30);
+    }
+  }
+
+  /* 수동 다크모드 */
+  :root[data-theme="dark"] {
+    --tape-today: rgba(192, 119, 108, 0.56);
+    --tape-today-pattern: rgba(255, 218, 205, 0.16);
+
+    --tape-waiting: rgba(104, 157, 132, 0.54);
+    --tape-waiting-pattern: rgba(218, 244, 226, 0.14);
+
+    --tape-someday: rgba(126, 119, 173, 0.56);
+    --tape-someday-pattern: rgba(229, 224, 255, 0.14);
+
+    --tape-fiber-light: rgba(255, 255, 255, 0.11);
+    --tape-fiber-dark: rgba(0, 0, 0, 0.08);
+    --tape-shadow: rgba(0, 0, 0, 0.30);
+  }
+
   * { box-sizing: border-box; }
 
   ::selection {
@@ -872,32 +924,177 @@
     border-radius: 2px 8px 4px 12px / 7px 2px 6px 3px;
   }
 
+  /* ─────────────────────────────
+     masking tape
+     손으로 뜯은 듯한 좌우 끝 + 종이 섬유
+     ───────────────────────────── */
   .tape {
     position: absolute;
     top: -14px;
     left: 50%;
-    width: 74px;
-    height: 26px;
-    background-color: var(--tape);
-    background-image: repeating-linear-gradient(
-      115deg, rgba(255,255,255,0.16) 0 4px, transparent 4px 8px
+    width: 82px;
+    height: 28px;
+    border: 0;
+    pointer-events: none;
+    transform-origin: center;
+    /* 약간 실제 테이프처럼 뒤가 비침 */
+    opacity: 0.96;
+    /* 위/아래는 거의 직선, 좌우만 2~4px 정도 들쭉날쭉하게 */
+    clip-path: polygon(
+      4% 0%,
+      96% 0%,
+      98% 8%,
+      96% 17%,
+      100% 28%,
+      97% 38%,
+      99% 49%,
+      96% 59%,
+      100% 70%,
+      97% 80%,
+      99% 90%,
+      96% 100%,
+      4% 100%,
+      2% 91%,
+      5% 82%,
+      1% 72%,
+      4% 62%,
+      0% 51%,
+      4% 41%,
+      1% 30%,
+      5% 20%,
+      2% 10%
     );
-    border: 1px solid var(--tape-edge);
-    transform: translateX(-50%) rotate(3deg);
-    box-shadow: 0 2px 4px rgba(0,0,0,0.08);
   }
 
-  /* 포스트잇마다 테이프 각도를 달리해 "각각 손으로 붙인" 느낌을 줌 */
+  /* 마테 표면의 아주 미세한 섬유 (모든 tape 공통) */
+  .tape::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background:
+      repeating-linear-gradient(103deg, transparent 0 3px, var(--tape-fiber-light) 3px 4px, transparent 4px 9px),
+      repeating-linear-gradient(7deg, transparent 0 6px, var(--tape-fiber-dark) 6px 7px, transparent 7px 13px);
+    opacity: 0.42;
+    pointer-events: none;
+  }
+
+  /* 좌우 끝을 살짝 흐리게: 뜯으면서 섬유가 일어난 느낌 */
+  .tape::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0.16) 0%,
+      transparent 9%,
+      transparent 91%,
+      rgba(255, 255, 255, 0.13) 100%
+    );
+    opacity: 0.65;
+    pointer-events: none;
+  }
+
+  /* Today: 살구색 꽃 마테 */
   .sticky[data-board="today"] .tape {
-    transform: translateX(-50%) rotate(-2deg);
+    background-color: var(--tape-today);
+    background-image:
+      radial-gradient(circle at 50% 50%, var(--tape-today-pattern) 0 1px, transparent 1.4px),
+      radial-gradient(ellipse at 50% 28%, rgba(255,255,255,0.34) 0 1.7px, transparent 2px),
+      radial-gradient(ellipse at 72% 50%, rgba(255,255,255,0.30) 0 1.7px, transparent 2px),
+      radial-gradient(ellipse at 50% 72%, rgba(255,255,255,0.30) 0 1.7px, transparent 2px),
+      radial-gradient(ellipse at 28% 50%, rgba(255,255,255,0.30) 0 1.7px, transparent 2px);
+    background-size: 17px 17px;
+    transform: translateX(-50%) rotate(-2.5deg);
+    clip-path: polygon(
+      4% 0%,
+      96% 0%,
+      98% 8%,
+      96% 17%,
+      100% 28%,
+      97% 39%,
+      99% 50%,
+      96% 61%,
+      100% 72%,
+      97% 82%,
+      99% 91%,
+      96% 100%,
+      4% 100%,
+      2% 91%,
+      5% 82%,
+      1% 72%,
+      4% 62%,
+      0% 51%,
+      4% 40%,
+      1% 29%,
+      5% 19%,
+      2% 9%
+    );
   }
 
+  /* Waiting: 민트 사선 마테 */
   .sticky[data-board="waiting"] .tape {
-    transform: translateX(-50%) rotate(4deg);
+    background-color: var(--tape-waiting);
+    background-image: repeating-linear-gradient(
+      135deg, transparent 0 7px, var(--tape-waiting-pattern) 7px 9px, transparent 9px 15px
+    );
+    transform: translateX(-50%) rotate(3.5deg);
+    /* today와 찢긴 위치를 일부러 다르게 */
+    clip-path: polygon(
+      3% 0%,
+      97% 0%,
+      100% 11%,
+      97% 21%,
+      99% 31%,
+      96% 43%,
+      100% 54%,
+      97% 66%,
+      99% 76%,
+      96% 88%,
+      98% 100%,
+      3% 100%,
+      5% 89%,
+      1% 79%,
+      4% 68%,
+      2% 57%,
+      5% 46%,
+      0% 35%,
+      4% 23%,
+      1% 12%
+    );
   }
 
+  /* Someday: 라벤더 체크 마테 */
   .sticky[data-board="someday"] .tape {
+    background-color: var(--tape-someday);
+    background-image:
+      linear-gradient(90deg, var(--tape-someday-pattern) 1px, transparent 1px),
+      linear-gradient(var(--tape-someday-pattern) 1px, transparent 1px);
+    background-size: 9px 9px;
     transform: translateX(-50%) rotate(-4deg);
+    clip-path: polygon(
+      5% 0%,
+      96% 0%,
+      98% 9%,
+      95% 20%,
+      99% 30%,
+      97% 40%,
+      100% 52%,
+      96% 63%,
+      99% 74%,
+      96% 84%,
+      98% 92%,
+      95% 100%,
+      4% 100%,
+      1% 90%,
+      4% 80%,
+      0% 69%,
+      3% 58%,
+      1% 47%,
+      5% 37%,
+      2% 26%,
+      4% 15%,
+      2% 7%
+    );
   }
 
   /* 오른쪽 아래 종이 귀퉁이: 아주 작게(18px)만 */
