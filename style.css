@@ -196,7 +196,10 @@
     min-height: 100vh;
     display: flex;
     flex-direction: column;
-    background: radial-gradient(ellipse at 50% 0%, var(--bg-top), var(--bg-bot));
+    background:
+      radial-gradient(circle, rgba(255,255,255,0.16) 0 1px, transparent 1.2px) 0 0 / 24px 24px,
+      radial-gradient(circle, rgba(74,64,52,0.025) 0 1px, transparent 1.2px) 12px 10px / 31px 31px,
+      radial-gradient(ellipse at 50% 0%, var(--bg-top), var(--bg-bot));
     font-family: var(--font-ui);
     color: var(--ink);
     overflow-x: hidden;
@@ -831,10 +834,39 @@
     left: 50%;
     width: 74px;
     height: 26px;
-    background: var(--tape);
+    background-color: var(--tape);
+    background-image: repeating-linear-gradient(
+      115deg, rgba(255,255,255,0.16) 0 4px, transparent 4px 8px
+    );
     border: 1px solid var(--tape-edge);
     transform: translateX(-50%) rotate(3deg);
     box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+  }
+
+  /* 포스트잇마다 테이프 각도를 달리해 "각각 손으로 붙인" 느낌을 줌 */
+  .sticky[data-board="today"] .tape {
+    transform: translateX(-50%) rotate(-2deg);
+  }
+
+  .sticky[data-board="waiting"] .tape {
+    transform: translateX(-50%) rotate(4deg);
+  }
+
+  .sticky[data-board="someday"] .tape {
+    transform: translateX(-50%) rotate(-4deg);
+  }
+
+  /* 오른쪽 아래 종이 귀퉁이: 아주 작게(18px)만 */
+  .sticky::after {
+    content: "";
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    width: 18px;
+    height: 18px;
+    background: linear-gradient(135deg, transparent 48%, rgba(255,255,255,0.28) 50%);
+    border-bottom-right-radius: 4px;
+    pointer-events: none;
   }
 
   .sticky-title {
@@ -1287,6 +1319,27 @@
   .sticky-title .flower {
     color: var(--accent);
     font-size: 18px;
+  }
+
+  @keyframes sticker-icon-pop {
+    0%   { transform: rotate(0deg) scale(1); }
+    40%  { transform: rotate(-7deg) scale(1.14); }
+    70%  { transform: rotate(5deg) scale(0.98); }
+    100% { transform: rotate(0deg) scale(1); }
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .sticky:hover .flower {
+      display: inline-block;
+      transform-origin: 50% 70%;
+      animation: sticker-icon-pop 0.38s ease-out;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .sticky:hover .flower {
+      animation: none;
+    }
   }
 
   .task-list {
