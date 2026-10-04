@@ -812,10 +812,15 @@
     width: min(380px, 86vw);
     background: var(--paper);
     padding: 30px 24px 20px;
-    border-radius: 3px 14px 4px 16px;
+    /* 지금보다 아주 조금 더 삐뚤삐뚤한 모서리 */
+    border-radius: 2px 11px 3px 8px / 5px 3px 8px 2px;
+    /* 마지막 세 줄은 종이 가장자리 두께감 */
     box-shadow:
       0 18px 30px -12px var(--paper-shadow),
-      0 3px 6px var(--paper-contact);
+      0 3px 6px var(--paper-contact),
+      inset 0 0 0 1px rgba(90, 70, 30, 0.035),
+      inset 1px 0 rgba(255,255,255,0.22),
+      inset -1px 0 rgba(80,60,20,0.025);
     transform: rotate(var(--rot, -1.4deg));
     transition: transform 0.25s ease, box-shadow 0.25s ease;
   }
@@ -832,7 +837,39 @@
     transform: rotate(calc(var(--rot, -1.4deg) * 0.4)) translateY(-5px);
     box-shadow:
       0 26px 34px -14px var(--paper-shadow),
-      0 4px 8px var(--paper-contact);
+      0 4px 8px var(--paper-contact),
+      inset 0 0 0 1px rgba(90, 70, 30, 0.035),
+      inset 1px 0 rgba(255,255,255,0.22),
+      inset -1px 0 rgba(80,60,20,0.025);
+  }
+
+  /* 종이 섬유 / 미세한 얼룩 */
+  .sticky::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    pointer-events: none;
+    background-image:
+      radial-gradient(circle at 20% 30%, rgba(80, 60, 25, 0.045) 0 0.6px, transparent 0.8px),
+      radial-gradient(circle at 70% 65%, rgba(255, 255, 255, 0.20) 0 0.7px, transparent 0.9px),
+      repeating-linear-gradient(87deg, transparent 0 7px, rgba(90, 70, 30, 0.012) 7px 8px, transparent 8px 15px);
+    background-size: 9px 11px, 13px 15px, 100% 100%;
+    opacity: 0.65;
+    mix-blend-mode: multiply;
+  }
+
+  /* 보드마다 모서리를 조금씩 다르게: 서로 다른 종이를 붙인 느낌 */
+  .sticky[data-board="today"] {
+    border-radius: 3px 10px 2px 7px / 6px 3px 8px 2px;
+  }
+
+  .sticky[data-board="waiting"] {
+    border-radius: 7px 2px 9px 3px / 2px 6px 3px 8px;
+  }
+
+  .sticky[data-board="someday"] {
+    border-radius: 2px 8px 4px 12px / 7px 2px 6px 3px;
   }
 
   .tape {
@@ -872,7 +909,7 @@
     width: 18px;
     height: 18px;
     background: linear-gradient(135deg, transparent 48%, rgba(255,255,255,0.28) 50%);
-    border-bottom-right-radius: 4px;
+    border-bottom-right-radius: inherit;
     pointer-events: none;
   }
 
