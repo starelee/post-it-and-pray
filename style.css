@@ -187,9 +187,15 @@
     display: none;
   }
 
+  /* html 높이를 뷰포트로 고정하면 body 배경(canvas로 전파됨)의 그라디언트가
+     뷰포트 높이에서 끝나고 스크롤 아래에서 다시 반복되어 이음새가 보임.
+     min-height만 두어 문서 전체 높이에 걸쳐 그라디언트가 늘어나게 함. */
   html, body {
-    height: 100%;
     margin: 0;
+  }
+
+  html {
+    min-height: 100%;
   }
 
   body {
@@ -199,7 +205,8 @@
     background:
       radial-gradient(circle, rgba(255,255,255,0.16) 0 1px, transparent 1.2px) 0 0 / 24px 24px,
       radial-gradient(circle, rgba(74,64,52,0.025) 0 1px, transparent 1.2px) 12px 10px / 31px 31px,
-      radial-gradient(ellipse at 50% 0%, var(--bg-top), var(--bg-bot));
+      radial-gradient(ellipse at 50% 0%, var(--bg-top), var(--bg-bot)) 0 0 / 100% 100% no-repeat;
+    background-color: var(--bg-bot);
     font-family: var(--font-ui);
     color: var(--ink);
     overflow-x: hidden;
