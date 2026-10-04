@@ -167,6 +167,80 @@
     --focus-ink-soft: #d6c9c0;
   }
 
+  /* ─────────────────────────────
+     masking tape palette
+     ───────────────────────────── */
+  :root {
+    --tape-today: rgba(249, 183, 167, 0.82);
+    --tape-today-pattern: rgba(143, 79, 72, 0.20);
+
+    --tape-waiting: rgba(177, 216, 194, 0.82);
+    --tape-waiting-pattern: rgba(70, 125, 101, 0.15);
+
+    --tape-someday: rgba(199, 193, 230, 0.82);
+    --tape-someday-pattern: rgba(102, 91, 150, 0.14);
+
+    --tape-fiber-light: rgba(255, 255, 255, 0.20);
+    --tape-fiber-dark: rgba(86, 65, 48, 0.055);
+    --tape-shadow: rgba(73, 55, 35, 0.16);
+    --tape-petal: rgba(255, 255, 255, 0.30);
+    --tape-edge-light: rgba(255, 255, 255, 0.24);
+
+    /* 배경 도트 / 포스트잇 접힌 귀퉁이 */
+    --bg-dot-primary: rgba(255, 255, 255, 0.10);
+    --bg-dot-secondary: rgba(74, 64, 52, 0.022);
+    --paper-fold: rgba(255, 255, 255, 0.17);
+    --paper-edge-light: rgba(255, 255, 255, 0.22);
+  }
+
+  /* 시스템 다크모드 */
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --tape-today: rgba(192, 119, 108, 0.56);
+      --tape-today-pattern: rgba(255, 218, 205, 0.09);
+
+      --tape-waiting: rgba(104, 157, 132, 0.54);
+      --tape-waiting-pattern: rgba(218, 244, 226, 0.08);
+
+      --tape-someday: rgba(126, 119, 173, 0.56);
+      --tape-someday-pattern: rgba(229, 224, 255, 0.08);
+
+      --tape-fiber-light: rgba(255, 255, 255, 0.05);
+      --tape-fiber-dark: rgba(0, 0, 0, 0.08);
+      --tape-shadow: rgba(0, 0, 0, 0.30);
+      --tape-petal: rgba(255, 235, 225, 0.10);
+      --tape-edge-light: rgba(255, 255, 255, 0.06);
+
+      --bg-dot-primary: rgba(236, 223, 194, 0.055);
+      --bg-dot-secondary: rgba(236, 223, 194, 0.018);
+      --paper-fold: rgba(255, 255, 255, 0.085);
+      --paper-edge-light: rgba(255, 255, 255, 0.07);
+    }
+  }
+
+  /* 수동 다크모드 */
+  :root[data-theme="dark"] {
+    --tape-today: rgba(192, 119, 108, 0.56);
+    --tape-today-pattern: rgba(255, 218, 205, 0.09);
+
+    --tape-waiting: rgba(104, 157, 132, 0.54);
+    --tape-waiting-pattern: rgba(218, 244, 226, 0.08);
+
+    --tape-someday: rgba(126, 119, 173, 0.56);
+    --tape-someday-pattern: rgba(229, 224, 255, 0.08);
+
+    --tape-fiber-light: rgba(255, 255, 255, 0.05);
+    --tape-fiber-dark: rgba(0, 0, 0, 0.08);
+    --tape-shadow: rgba(0, 0, 0, 0.30);
+    --tape-petal: rgba(255, 235, 225, 0.10);
+    --tape-edge-light: rgba(255, 255, 255, 0.06);
+
+    --bg-dot-primary: rgba(236, 223, 194, 0.055);
+    --bg-dot-secondary: rgba(236, 223, 194, 0.018);
+    --paper-fold: rgba(255, 255, 255, 0.085);
+    --paper-edge-light: rgba(255, 255, 255, 0.07);
+  }
+
   * { box-sizing: border-box; }
 
   ::selection {
@@ -203,8 +277,8 @@
     display: flex;
     flex-direction: column;
     background:
-      radial-gradient(circle, rgba(255,255,255,0.16) 0 1px, transparent 1.2px) 0 0 / 24px 24px,
-      radial-gradient(circle, rgba(74,64,52,0.025) 0 1px, transparent 1.2px) 12px 10px / 31px 31px,
+      radial-gradient(circle, var(--bg-dot-primary) 0 1px, transparent 1.2px) 0 0 / 24px 24px,
+      radial-gradient(circle, var(--bg-dot-secondary) 0 1px, transparent 1.2px) 12px 10px / 31px 31px,
       radial-gradient(ellipse at 50% 0%, var(--bg-top), var(--bg-bot)) 0 0 / 100% 100% no-repeat;
     background-color: var(--bg-bot);
     font-family: var(--font-ui);
@@ -812,10 +886,15 @@
     width: min(380px, 86vw);
     background: var(--paper);
     padding: 30px 24px 20px;
-    border-radius: 3px 14px 4px 16px;
+    /* 지금보다 아주 조금 더 삐뚤삐뚤한 모서리 */
+    border-radius: 2px 11px 3px 8px / 5px 3px 8px 2px;
+    /* 마지막 세 줄은 종이 가장자리 두께감 */
     box-shadow:
       0 18px 30px -12px var(--paper-shadow),
-      0 3px 6px var(--paper-contact);
+      0 3px 6px var(--paper-contact),
+      inset 0 0 0 1px rgba(90, 70, 30, 0.035),
+      inset 1px 0 var(--paper-edge-light),
+      inset -1px 0 rgba(80,60,20,0.025);
     transform: rotate(var(--rot, -1.4deg));
     transition: transform 0.25s ease, box-shadow 0.25s ease;
   }
@@ -832,47 +911,218 @@
     transform: rotate(calc(var(--rot, -1.4deg) * 0.4)) translateY(-5px);
     box-shadow:
       0 26px 34px -14px var(--paper-shadow),
-      0 4px 8px var(--paper-contact);
+      0 4px 8px var(--paper-contact),
+      inset 0 0 0 1px rgba(90, 70, 30, 0.035),
+      inset 1px 0 var(--paper-edge-light),
+      inset -1px 0 rgba(80,60,20,0.025);
   }
 
+  /* 종이 섬유 / 미세한 얼룩 */
+  .sticky::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    pointer-events: none;
+    background-image:
+      radial-gradient(circle at 20% 30%, rgba(80, 60, 25, 0.045) 0 0.6px, transparent 0.8px),
+      radial-gradient(circle at 70% 65%, rgba(255, 255, 255, 0.20) 0 0.7px, transparent 0.9px),
+      repeating-linear-gradient(87deg, transparent 0 7px, rgba(90, 70, 30, 0.012) 7px 8px, transparent 8px 15px);
+    background-size: 9px 11px, 13px 15px, 100% 100%;
+    opacity: 0.65;
+    mix-blend-mode: multiply;
+  }
+
+  /* 보드마다 모서리를 조금씩 다르게: 서로 다른 종이를 붙인 느낌 */
+  .sticky[data-board="today"] {
+    border-radius: 3px 10px 2px 7px / 6px 3px 8px 2px;
+  }
+
+  .sticky[data-board="waiting"] {
+    border-radius: 7px 2px 9px 3px / 2px 6px 3px 8px;
+  }
+
+  .sticky[data-board="someday"] {
+    border-radius: 2px 8px 4px 12px / 7px 2px 6px 3px;
+  }
+
+  /* ─────────────────────────────
+     masking tape
+     .tape(바깥)은 그림자 + 회전 담당, 찢긴 모양(clip-path)은 ::before/::after에만 줘서
+     drop-shadow가 clip-path에 잘리지 않게 함. 좌우 끝만 2~4px 들쭉날쭉.
+     ───────────────────────────── */
   .tape {
+    --tape-clip: polygon(
+      2% 0%,
+      98% 0%,
+      98% 10%,
+      99.5% 22%,
+      97.5% 34%,
+      99% 46%,
+      97% 58%,
+      99.5% 70%,
+      98% 82%,
+      99% 92%,
+      98% 100%,
+      2% 100%,
+      1% 92%,
+      2% 82%,
+      0.5% 70%,
+      3% 58%,
+      1% 46%,
+      2.5% 34%,
+      0.5% 22%,
+      2% 10%
+    );
     position: absolute;
     top: -14px;
     left: 50%;
-    width: 74px;
-    height: 26px;
-    background-color: var(--tape);
-    background-image: repeating-linear-gradient(
-      115deg, rgba(255,255,255,0.16) 0 4px, transparent 4px 8px
-    );
-    border: 1px solid var(--tape-edge);
-    transform: translateX(-50%) rotate(3deg);
-    box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+    width: 82px;
+    height: 28px;
+    border: 0;
+    pointer-events: none;
+    transform-origin: center;
+    opacity: 0.96;
+    filter:
+      drop-shadow(0 2px 1px var(--tape-shadow))
+      drop-shadow(0 4px 3px rgba(0, 0, 0, 0.035));
   }
 
-  /* 포스트잇마다 테이프 각도를 달리해 "각각 손으로 붙인" 느낌을 줌 */
+  /* 테이프 면(색 + 패턴): 보드별 규칙에서 채움 */
+  .tape::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    clip-path: var(--tape-clip);
+  }
+
+  /* 마테 섬유 + 좌우 끝을 살짝 흐리게(뜯으면서 일어난 느낌) */
+  .tape::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    clip-path: var(--tape-clip);
+    background:
+      linear-gradient(90deg, var(--tape-edge-light) 0%, transparent 9%, transparent 91%, var(--tape-edge-light) 100%),
+      repeating-linear-gradient(103deg, transparent 0 3px, var(--tape-fiber-light) 3px 4px, transparent 4px 9px),
+      repeating-linear-gradient(7deg, transparent 0 6px, var(--tape-fiber-dark) 6px 7px, transparent 7px 13px);
+    opacity: 0.5;
+  }
+
+  /* Today: 살구색 꽃 마테 */
   .sticky[data-board="today"] .tape {
-    transform: translateX(-50%) rotate(-2deg);
+    --tape-clip: polygon(
+      2% 0%,
+      98% 0%,
+      99% 10%,
+      97.5% 22%,
+      99.5% 34%,
+      98% 46%,
+      99.5% 58%,
+      97% 70%,
+      98.5% 82%,
+      98% 92%,
+      97.5% 100%,
+      2.5% 100%,
+      2% 92%,
+      0.5% 82%,
+      3% 70%,
+      1% 58%,
+      2% 46%,
+      0.5% 34%,
+      2.5% 22%,
+      1% 10%
+    );
+    transform: translateX(-50%) rotate(-2.5deg);
+  }
+  .sticky[data-board="today"] .tape::before {
+    background-color: var(--tape-today);
+    background-image:
+      radial-gradient(circle at 50% 50%, var(--tape-today-pattern) 0 1px, transparent 1.4px),
+      radial-gradient(ellipse at 50% 28%, var(--tape-petal) 0 1.7px, transparent 2px),
+      radial-gradient(ellipse at 72% 50%, var(--tape-petal) 0 1.7px, transparent 2px),
+      radial-gradient(ellipse at 50% 72%, var(--tape-petal) 0 1.7px, transparent 2px),
+      radial-gradient(ellipse at 28% 50%, var(--tape-petal) 0 1.7px, transparent 2px);
+    background-size: 17px 17px;
   }
 
+  /* Waiting: 민트 사선 마테 (today와 찢긴 위치를 일부러 다르게) */
   .sticky[data-board="waiting"] .tape {
-    transform: translateX(-50%) rotate(4deg);
+    --tape-clip: polygon(
+      2.5% 0%,
+      97.5% 0%,
+      97.5% 8%,
+      99% 19%,
+      97% 31%,
+      99.5% 43%,
+      98% 55%,
+      99.5% 67%,
+      97.5% 79%,
+      99% 91%,
+      98% 100%,
+      2% 100%,
+      0.5% 91%,
+      2.5% 79%,
+      1% 67%,
+      2% 55%,
+      0.5% 43%,
+      3% 31%,
+      1% 19%,
+      2.5% 8%
+    );
+    transform: translateX(-50%) rotate(3.5deg);
+  }
+  .sticky[data-board="waiting"] .tape::before {
+    background-color: var(--tape-waiting);
+    background-image: repeating-linear-gradient(
+      135deg, transparent 0 7px, var(--tape-waiting-pattern) 7px 9px, transparent 9px 15px
+    );
   }
 
+  /* Someday: 라벤더 체크 마테 */
   .sticky[data-board="someday"] .tape {
+    --tape-clip: polygon(
+      2% 0%,
+      98% 0%,
+      99.5% 8%,
+      98% 19%,
+      99% 31%,
+      97.5% 43%,
+      99% 55%,
+      98% 67%,
+      99.5% 79%,
+      97% 91%,
+      98.5% 100%,
+      1.5% 100%,
+      3% 91%,
+      1% 79%,
+      2% 67%,
+      0.5% 55%,
+      2.5% 43%,
+      1% 31%,
+      2% 19%,
+      0.5% 8%
+    );
     transform: translateX(-50%) rotate(-4deg);
   }
+  .sticky[data-board="someday"] .tape::before {
+    background-color: var(--tape-someday);
+    background-image:
+      linear-gradient(90deg, var(--tape-someday-pattern) 1px, transparent 1px),
+      linear-gradient(var(--tape-someday-pattern) 1px, transparent 1px);
+    background-size: 9px 9px;
+  }
 
-  /* 오른쪽 아래 종이 귀퉁이: 아주 작게(18px)만 */
+  /* 오른쪽 아래 종이 귀퉁이: 종이가 살짝 들린 정도(15px)만 */
   .sticky::after {
     content: "";
     position: absolute;
     right: 0;
     bottom: 0;
-    width: 18px;
-    height: 18px;
-    background: linear-gradient(135deg, transparent 48%, rgba(255,255,255,0.28) 50%);
-    border-bottom-right-radius: 4px;
+    width: 15px;
+    height: 15px;
+    background: linear-gradient(135deg, transparent 0 51%, var(--paper-fold) 56% 100%);
+    border-bottom-right-radius: inherit;
     pointer-events: none;
   }
 
