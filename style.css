@@ -172,51 +172,73 @@
      ───────────────────────────── */
   :root {
     --tape-today: rgba(249, 183, 167, 0.82);
-    --tape-today-pattern: rgba(143, 79, 72, 0.24);
+    --tape-today-pattern: rgba(143, 79, 72, 0.20);
 
     --tape-waiting: rgba(177, 216, 194, 0.82);
-    --tape-waiting-pattern: rgba(70, 125, 101, 0.20);
+    --tape-waiting-pattern: rgba(70, 125, 101, 0.15);
 
     --tape-someday: rgba(199, 193, 230, 0.82);
-    --tape-someday-pattern: rgba(102, 91, 150, 0.18);
+    --tape-someday-pattern: rgba(102, 91, 150, 0.14);
 
     --tape-fiber-light: rgba(255, 255, 255, 0.20);
     --tape-fiber-dark: rgba(86, 65, 48, 0.055);
     --tape-shadow: rgba(73, 55, 35, 0.16);
+    --tape-petal: rgba(255, 255, 255, 0.30);
+    --tape-edge-light: rgba(255, 255, 255, 0.24);
+
+    /* 배경 도트 / 포스트잇 접힌 귀퉁이 */
+    --bg-dot-primary: rgba(255, 255, 255, 0.10);
+    --bg-dot-secondary: rgba(74, 64, 52, 0.022);
+    --paper-fold: rgba(255, 255, 255, 0.17);
+    --paper-edge-light: rgba(255, 255, 255, 0.22);
   }
 
   /* 시스템 다크모드 */
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
       --tape-today: rgba(192, 119, 108, 0.56);
-      --tape-today-pattern: rgba(255, 218, 205, 0.16);
+      --tape-today-pattern: rgba(255, 218, 205, 0.09);
 
       --tape-waiting: rgba(104, 157, 132, 0.54);
-      --tape-waiting-pattern: rgba(218, 244, 226, 0.14);
+      --tape-waiting-pattern: rgba(218, 244, 226, 0.08);
 
       --tape-someday: rgba(126, 119, 173, 0.56);
-      --tape-someday-pattern: rgba(229, 224, 255, 0.14);
+      --tape-someday-pattern: rgba(229, 224, 255, 0.08);
 
-      --tape-fiber-light: rgba(255, 255, 255, 0.11);
+      --tape-fiber-light: rgba(255, 255, 255, 0.05);
       --tape-fiber-dark: rgba(0, 0, 0, 0.08);
       --tape-shadow: rgba(0, 0, 0, 0.30);
+      --tape-petal: rgba(255, 235, 225, 0.10);
+      --tape-edge-light: rgba(255, 255, 255, 0.06);
+
+      --bg-dot-primary: rgba(236, 223, 194, 0.055);
+      --bg-dot-secondary: rgba(236, 223, 194, 0.018);
+      --paper-fold: rgba(255, 255, 255, 0.085);
+      --paper-edge-light: rgba(255, 255, 255, 0.07);
     }
   }
 
   /* 수동 다크모드 */
   :root[data-theme="dark"] {
     --tape-today: rgba(192, 119, 108, 0.56);
-    --tape-today-pattern: rgba(255, 218, 205, 0.16);
+    --tape-today-pattern: rgba(255, 218, 205, 0.09);
 
     --tape-waiting: rgba(104, 157, 132, 0.54);
-    --tape-waiting-pattern: rgba(218, 244, 226, 0.14);
+    --tape-waiting-pattern: rgba(218, 244, 226, 0.08);
 
     --tape-someday: rgba(126, 119, 173, 0.56);
-    --tape-someday-pattern: rgba(229, 224, 255, 0.14);
+    --tape-someday-pattern: rgba(229, 224, 255, 0.08);
 
-    --tape-fiber-light: rgba(255, 255, 255, 0.11);
+    --tape-fiber-light: rgba(255, 255, 255, 0.05);
     --tape-fiber-dark: rgba(0, 0, 0, 0.08);
     --tape-shadow: rgba(0, 0, 0, 0.30);
+    --tape-petal: rgba(255, 235, 225, 0.10);
+    --tape-edge-light: rgba(255, 255, 255, 0.06);
+
+    --bg-dot-primary: rgba(236, 223, 194, 0.055);
+    --bg-dot-secondary: rgba(236, 223, 194, 0.018);
+    --paper-fold: rgba(255, 255, 255, 0.085);
+    --paper-edge-light: rgba(255, 255, 255, 0.07);
   }
 
   * { box-sizing: border-box; }
@@ -255,8 +277,8 @@
     display: flex;
     flex-direction: column;
     background:
-      radial-gradient(circle, rgba(255,255,255,0.16) 0 1px, transparent 1.2px) 0 0 / 24px 24px,
-      radial-gradient(circle, rgba(74,64,52,0.025) 0 1px, transparent 1.2px) 12px 10px / 31px 31px,
+      radial-gradient(circle, var(--bg-dot-primary) 0 1px, transparent 1.2px) 0 0 / 24px 24px,
+      radial-gradient(circle, var(--bg-dot-secondary) 0 1px, transparent 1.2px) 12px 10px / 31px 31px,
       radial-gradient(ellipse at 50% 0%, var(--bg-top), var(--bg-bot)) 0 0 / 100% 100% no-repeat;
     background-color: var(--bg-bot);
     font-family: var(--font-ui);
@@ -871,7 +893,7 @@
       0 18px 30px -12px var(--paper-shadow),
       0 3px 6px var(--paper-contact),
       inset 0 0 0 1px rgba(90, 70, 30, 0.035),
-      inset 1px 0 rgba(255,255,255,0.22),
+      inset 1px 0 var(--paper-edge-light),
       inset -1px 0 rgba(80,60,20,0.025);
     transform: rotate(var(--rot, -1.4deg));
     transition: transform 0.25s ease, box-shadow 0.25s ease;
@@ -891,7 +913,7 @@
       0 26px 34px -14px var(--paper-shadow),
       0 4px 8px var(--paper-contact),
       inset 0 0 0 1px rgba(90, 70, 30, 0.035),
-      inset 1px 0 rgba(255,255,255,0.22),
+      inset 1px 0 var(--paper-edge-light),
       inset -1px 0 rgba(80,60,20,0.025);
   }
 
@@ -931,27 +953,25 @@
      ───────────────────────────── */
   .tape {
     --tape-clip: polygon(
-      4% 0%,
-      96% 0%,
-      98% 8%,
-      96% 17%,
-      100% 28%,
-      97% 38%,
-      99% 49%,
-      96% 59%,
-      100% 70%,
-      97% 80%,
-      99% 90%,
-      96% 100%,
-      4% 100%,
-      2% 91%,
-      5% 82%,
-      1% 72%,
-      4% 62%,
-      0% 51%,
-      4% 41%,
-      1% 30%,
-      5% 20%,
+      2% 0%,
+      98% 0%,
+      98% 10%,
+      99.5% 22%,
+      97.5% 34%,
+      99% 46%,
+      97% 58%,
+      99.5% 70%,
+      98% 82%,
+      99% 92%,
+      98% 100%,
+      2% 100%,
+      1% 92%,
+      2% 82%,
+      0.5% 70%,
+      3% 58%,
+      1% 46%,
+      2.5% 34%,
+      0.5% 22%,
       2% 10%
     );
     position: absolute;
@@ -983,7 +1003,7 @@
     inset: 0;
     clip-path: var(--tape-clip);
     background:
-      linear-gradient(90deg, rgba(255,255,255,0.28) 0%, transparent 9%, transparent 91%, rgba(255,255,255,0.22) 100%),
+      linear-gradient(90deg, var(--tape-edge-light) 0%, transparent 9%, transparent 91%, var(--tape-edge-light) 100%),
       repeating-linear-gradient(103deg, transparent 0 3px, var(--tape-fiber-light) 3px 4px, transparent 4px 9px),
       repeating-linear-gradient(7deg, transparent 0 6px, var(--tape-fiber-dark) 6px 7px, transparent 7px 13px);
     opacity: 0.5;
@@ -992,28 +1012,26 @@
   /* Today: 살구색 꽃 마테 */
   .sticky[data-board="today"] .tape {
     --tape-clip: polygon(
-      4% 0%,
-      96% 0%,
-      98% 8%,
-      96% 17%,
-      100% 28%,
-      97% 39%,
-      99% 50%,
-      96% 61%,
-      100% 72%,
-      97% 82%,
-      99% 91%,
-      96% 100%,
-      4% 100%,
-      2% 91%,
-      5% 82%,
-      1% 72%,
-      4% 62%,
-      0% 51%,
-      4% 40%,
-      1% 29%,
-      5% 19%,
-      2% 9%
+      2% 0%,
+      98% 0%,
+      99% 10%,
+      97.5% 22%,
+      99.5% 34%,
+      98% 46%,
+      99.5% 58%,
+      97% 70%,
+      98.5% 82%,
+      98% 92%,
+      97.5% 100%,
+      2.5% 100%,
+      2% 92%,
+      0.5% 82%,
+      3% 70%,
+      1% 58%,
+      2% 46%,
+      0.5% 34%,
+      2.5% 22%,
+      1% 10%
     );
     transform: translateX(-50%) rotate(-2.5deg);
   }
@@ -1021,36 +1039,36 @@
     background-color: var(--tape-today);
     background-image:
       radial-gradient(circle at 50% 50%, var(--tape-today-pattern) 0 1px, transparent 1.4px),
-      radial-gradient(ellipse at 50% 28%, rgba(255,255,255,0.34) 0 1.7px, transparent 2px),
-      radial-gradient(ellipse at 72% 50%, rgba(255,255,255,0.30) 0 1.7px, transparent 2px),
-      radial-gradient(ellipse at 50% 72%, rgba(255,255,255,0.30) 0 1.7px, transparent 2px),
-      radial-gradient(ellipse at 28% 50%, rgba(255,255,255,0.30) 0 1.7px, transparent 2px);
+      radial-gradient(ellipse at 50% 28%, var(--tape-petal) 0 1.7px, transparent 2px),
+      radial-gradient(ellipse at 72% 50%, var(--tape-petal) 0 1.7px, transparent 2px),
+      radial-gradient(ellipse at 50% 72%, var(--tape-petal) 0 1.7px, transparent 2px),
+      radial-gradient(ellipse at 28% 50%, var(--tape-petal) 0 1.7px, transparent 2px);
     background-size: 17px 17px;
   }
 
   /* Waiting: 민트 사선 마테 (today와 찢긴 위치를 일부러 다르게) */
   .sticky[data-board="waiting"] .tape {
     --tape-clip: polygon(
-      3% 0%,
-      97% 0%,
-      100% 11%,
-      97% 21%,
-      99% 31%,
-      96% 43%,
-      100% 54%,
-      97% 66%,
-      99% 76%,
-      96% 88%,
+      2.5% 0%,
+      97.5% 0%,
+      97.5% 8%,
+      99% 19%,
+      97% 31%,
+      99.5% 43%,
+      98% 55%,
+      99.5% 67%,
+      97.5% 79%,
+      99% 91%,
       98% 100%,
-      3% 100%,
-      5% 89%,
-      1% 79%,
-      4% 68%,
-      2% 57%,
-      5% 46%,
-      0% 35%,
-      4% 23%,
-      1% 12%
+      2% 100%,
+      0.5% 91%,
+      2.5% 79%,
+      1% 67%,
+      2% 55%,
+      0.5% 43%,
+      3% 31%,
+      1% 19%,
+      2.5% 8%
     );
     transform: translateX(-50%) rotate(3.5deg);
   }
@@ -1064,28 +1082,26 @@
   /* Someday: 라벤더 체크 마테 */
   .sticky[data-board="someday"] .tape {
     --tape-clip: polygon(
-      5% 0%,
-      96% 0%,
-      98% 9%,
-      95% 20%,
-      99% 30%,
-      97% 40%,
-      100% 52%,
-      96% 63%,
-      99% 74%,
-      96% 84%,
-      98% 92%,
-      95% 100%,
-      4% 100%,
-      1% 90%,
-      4% 80%,
-      0% 69%,
-      3% 58%,
-      1% 47%,
-      5% 37%,
-      2% 26%,
-      4% 15%,
-      2% 7%
+      2% 0%,
+      98% 0%,
+      99.5% 8%,
+      98% 19%,
+      99% 31%,
+      97.5% 43%,
+      99% 55%,
+      98% 67%,
+      99.5% 79%,
+      97% 91%,
+      98.5% 100%,
+      1.5% 100%,
+      3% 91%,
+      1% 79%,
+      2% 67%,
+      0.5% 55%,
+      2.5% 43%,
+      1% 31%,
+      2% 19%,
+      0.5% 8%
     );
     transform: translateX(-50%) rotate(-4deg);
   }
@@ -1097,15 +1113,15 @@
     background-size: 9px 9px;
   }
 
-  /* 오른쪽 아래 종이 귀퉁이: 아주 작게(18px)만 */
+  /* 오른쪽 아래 종이 귀퉁이: 종이가 살짝 들린 정도(15px)만 */
   .sticky::after {
     content: "";
     position: absolute;
     right: 0;
     bottom: 0;
-    width: 18px;
-    height: 18px;
-    background: linear-gradient(135deg, transparent 48%, rgba(255,255,255,0.28) 50%);
+    width: 15px;
+    height: 15px;
+    background: linear-gradient(135deg, transparent 0 51%, var(--paper-fold) 56% 100%);
     border-bottom-right-radius: inherit;
     pointer-events: none;
   }
