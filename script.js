@@ -3777,7 +3777,7 @@
     const input = document.createElement('input');
     input.type = 'text';
     input.className = 'focus-quick-add-input';
-    input.placeholder = '이것도 해야 돼..';
+    input.placeholder = '얘도 해야함..';
     input.maxLength = 100;
     plus.addEventListener('click', () => input.focus());
     input.addEventListener('keydown', (e) => {
