@@ -84,9 +84,6 @@
     --tape: rgba(255, 255, 255, 0.6);
     --tape-edge: rgba(255, 255, 255, 0.25);
     --divider: #cdbd7c;
-    --bezel-top: #48453f;
-    --bezel-bot: #2c2a26;
-    --bezel-highlight: rgba(255,255,255,0.08);
     --input-line: #d8c98f;
     --legal-paper: #fffdf0;
     --legal-line: rgba(90, 120, 180, 0.22);
@@ -122,9 +119,6 @@
       --tape: rgba(255, 255, 255, 0.14);
       --tape-edge: rgba(255, 255, 255, 0.05);
       --divider: #5c5537;
-      --bezel-top: #171613;
-      --bezel-bot: #0a0a09;
-      --bezel-highlight: rgba(255,255,255,0.05);
       --input-line: #524b34;
       --legal-paper: #3d3826;
       --legal-line: rgba(120, 150, 200, 0.16);
@@ -155,9 +149,6 @@
     --tape: rgba(255, 255, 255, 0.14);
     --tape-edge: rgba(255, 255, 255, 0.05);
     --divider: #5c5537;
-    --bezel-top: #171613;
-    --bezel-bot: #0a0a09;
-    --bezel-highlight: rgba(255,255,255,0.05);
     --input-line: #524b34;
     --legal-paper: #3d3826;
     --legal-line: rgba(120, 150, 200, 0.16);
@@ -1490,37 +1481,28 @@
   }
 
   /* 아이콘만 있는 버튼 설명 — 기본 title은 1초쯤 뒤에야 떠서, 올리자마자
-     아이콘 바로 아래에 회색 글씨로 뜨게 함(data-tip). */
-  .focus-icon-btn[data-tip],
-  .focus-check-btn[data-tip] {
+     아이콘 줄 아래에 회색 글씨로 뜨게 함. 어느 아이콘이든 같은 자리(줄
+     가운데)에 떠야 정렬이 안 흔들림 — 버튼은 hover 때 transform이 걸려
+     자식 ::after의 기준이 버튼으로 바뀌므로, 줄(::after)에 띄우고 글자는
+     스크립트(attachFocusIconHints)가 data-hint로 넣어줌. */
+  .focus-countdown-actions {
     position: relative;
   }
 
-  .focus-icon-btn[data-tip]::after,
-  .focus-check-btn[data-tip]::after {
-    content: attr(data-tip);
+  .focus-countdown-actions::after {
+    content: attr(data-hint);
     position: absolute;
-    top: calc(100% + 2px);
+    /* 줄 아래쪽 padding(16px) 안, 아이콘 바로 밑 */
+    top: calc(100% - 14px);
     left: 50%;
     transform: translateX(-50%);
-    z-index: 5;
     white-space: nowrap;
     font-family: var(--font-ui);
     letter-spacing: var(--ui-letter-spacing);
     font-size: 14px;
     line-height: 1.3;
-    font-weight: normal;
     color: var(--ink-soft);
-    opacity: 0;
     pointer-events: none;
-    transition: opacity 0.12s ease;
-  }
-
-  .focus-icon-btn[data-tip]:hover::after,
-  .focus-icon-btn[data-tip]:focus-visible::after,
-  .focus-check-btn[data-tip]:hover::after,
-  .focus-check-btn[data-tip]:focus-visible::after {
-    opacity: 1;
   }
 
   .focus-pause-btn {
@@ -2538,25 +2520,6 @@
 
   .new-task-input::placeholder {
     color: var(--ink-soft);
-  }
-
-  .bezel {
-    height: 22px;
-    background: linear-gradient(to bottom, var(--bezel-top), var(--bezel-bot));
-    position: relative;
-    box-shadow: inset 0 1px 0 var(--bezel-highlight);
-  }
-
-  .bezel::after {
-    content: "";
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: var(--bezel-highlight);
-    transform: translate(-50%, -50%);
   }
 
   /* 앱 스타일 확인 모달 (브라우저 기본 confirm 대체) */
