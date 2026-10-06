@@ -1450,7 +1450,7 @@
   }
 
   .focus-end-label {
-    margin: -4px 0 10px;
+    margin: 2px 0 10px;
     text-align: center;
     font-family: var(--font-ui);
     letter-spacing: var(--ui-letter-spacing);
@@ -1499,7 +1499,7 @@
     gap: 14px;
     /* 숫자와 글씨 사이 시각적 간격을 기존의 절반 정도로(숫자 line-height를
        1로 고정한 뒤 음수 여백으로 맞춤). */
-    margin: -5px 0 10px;
+    margin: -1px 0 10px;
   }
 
   /* 세 아이콘이 같은 32px 칸 안에서 가운데 정렬되게 고정 — 이모지는
