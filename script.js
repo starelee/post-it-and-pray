@@ -3676,9 +3676,10 @@
   // 공통 팩토리로 뽑음. showReselect는 pick-duration에서만 true로 넘어와
   // "다시 선택"을 박스 맨 아래(예전 add-subtask-row 자리)에 붙여줌 —
   // 진행 중/종료 후엔 안 보임.
-  function makeFocusTaskBox(showReselect) {
+  function makeFocusTaskBox(showReselect, flat) {
     const box = document.createElement('div');
-    box.className = 'focus-box focus-task-box';
+    // flat: 진행 중/종료 화면 — 둥근 점선 박스 없이 글씨만(구분은 아래 타이머 띠의 점선)
+    box.className = 'focus-box focus-task-box' + (flat ? ' focus-flat' : '');
     box.appendChild(makeFocusPickedTaskLabel());
     appendFocusSubtasks(box, focusState.taskBoardId, focusState.taskId);
     if (showReselect) {
@@ -3702,7 +3703,7 @@
   function makeFocusDurationBox(onPick) {
     const pick = onPick || (sec => startFocusCountdown(sec));
     const durationBox = document.createElement('div');
-    durationBox.className = 'focus-box focus-duration-box';
+    durationBox.className = 'focus-box focus-duration-box focus-flat';
     const hint = document.createElement('p');
     hint.className = 'focus-duration-hint';
     hint.textContent = '얼마나 집중할까요?';
@@ -3931,7 +3932,7 @@
       // 본문 쪽에 보여줌 — 카운트다운이 시작된 뒤에야(running/ended)
       // 제목 자리가 실제 할 일 텍스트로 바뀜.
       focusTitleEl.textContent = FOCUS_TITLE_TEXT;
-      focusBodyEl.appendChild(makeFocusTaskBox(true));
+      focusBodyEl.appendChild(makeFocusTaskBox(true, true));
       focusBodyEl.appendChild(makeFocusDurationBox());
       return;
     }
@@ -3941,9 +3942,9 @@
       // 텍스트는 pick-duration과 마찬가지로 본문 쪽에 표시. "다시 선택"은
       // 진행 중엔 안 보임(showReselect 생략).
       focusTitleEl.textContent = FOCUS_TITLE_TEXT;
-      focusBodyEl.appendChild(makeFocusTaskBox());
+      focusBodyEl.appendChild(makeFocusTaskBox(false, true));
       const countdownBox = document.createElement('div');
-      countdownBox.className = 'focus-box focus-duration-box focus-countdown-box';
+      countdownBox.className = 'focus-box focus-duration-box focus-countdown-box focus-flat';
       if (focusState.paused) countdownBox.classList.add('focus-paused');
       const num = document.createElement('div');
       num.className = 'focus-countdown-number';
@@ -4042,11 +4043,11 @@
 
     if (focusState.step === 'ended') {
       focusTitleEl.textContent = FOCUS_TITLE_TEXT;
-      focusBodyEl.appendChild(makeFocusTaskBox());
+      focusBodyEl.appendChild(makeFocusTaskBox(false, true));
       // 진행 중 카운트다운 박스와 같은 반투명 점선 박스 안에 00:00 + 아이콘 4개
       // 한 줄로(숫자는 00:00으로 남김) — 완료는 gotta do 체크박스와 같은 SVG, 나머지는 이모지.
       const endBox = document.createElement('div');
-      endBox.className = 'focus-box focus-duration-box focus-countdown-box';
+      endBox.className = 'focus-box focus-duration-box focus-countdown-box focus-flat';
       // 0초에 도달한 순간 박스는 가장 급박한 색(100%)이었으니 거기서 시작해
       // 기본색으로 천천히 번지듯 돌아옴(디졸브) — 갑자기 평온해지지 않게.
       endBox.classList.add('focus-dissolve');
