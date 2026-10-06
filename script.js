@@ -3833,11 +3833,15 @@
   }
 
   // 아이콘 줄의 버튼(data-tip)에 마우스/키보드 포커스가 가면 줄의
-  // data-hint에 그 설명을 넣어 CSS가 줄 아래 한 자리에 보여줌.
+  // data-hint에 그 설명을 넣어 CSS가 그 아이콘 밑(세로는 고정)에 보여줌.
   function attachFocusIconHints(row) {
     const show = (e) => {
       const btn = e.target.closest('[data-tip]');
-      if (btn && row.contains(btn)) row.dataset.hint = btn.dataset.tip;
+      if (!btn || !row.contains(btn)) return;
+      row.dataset.hint = btn.dataset.tip;
+      // 가로는 올린 아이콘의 가운데, 세로는 CSS의 고정값. offsetLeft는
+      // hover 때 걸리는 scale의 영향을 안 받음.
+      row.style.setProperty('--hint-x', (btn.offsetLeft + btn.offsetWidth / 2) + 'px');
     };
     const hide = () => { delete row.dataset.hint; };
     row.addEventListener('mouseover', show);
