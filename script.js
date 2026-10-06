@@ -3832,6 +3832,20 @@
     return btn;
   }
 
+  // 아이콘 줄의 버튼(data-tip)에 마우스/키보드 포커스가 가면 줄의
+  // data-hint에 그 설명을 넣어 CSS가 줄 아래 한 자리에 보여줌.
+  function attachFocusIconHints(row) {
+    const show = (e) => {
+      const btn = e.target.closest('[data-tip]');
+      if (btn && row.contains(btn)) row.dataset.hint = btn.dataset.tip;
+    };
+    const hide = () => { delete row.dataset.hint; };
+    row.addEventListener('mouseover', show);
+    row.addEventListener('focusin', show);
+    row.addEventListener('mouseleave', hide);
+    row.addEventListener('focusout', hide);
+  }
+
   function renderFocusPanel() {
     if (!focusState) return;
     updateFocusDocumentTitle();
@@ -3975,6 +3989,7 @@
         actions.appendChild(doneBtn);
         actions.appendChild(waitBtn);
         actions.appendChild(exitBtn);
+        attachFocusIconHints(actions);
         countdownBox.appendChild(actions);
       }
       focusBodyEl.appendChild(countdownBox);
@@ -4032,6 +4047,7 @@
       choices.appendChild(restartBtn);
       choices.appendChild(waitBtn);
       choices.appendChild(failBtn);
+      attachFocusIconHints(choices);
       endBox.appendChild(choices);
       focusBodyEl.appendChild(endBox);
       return;
