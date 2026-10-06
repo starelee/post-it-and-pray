@@ -108,7 +108,8 @@
       --paper-someday: #2c3350;
       --paper-lupin: #2e2c27;
       --paper-focus: #6e3326;
-      --paper-focus-urgent: #b42c11;
+      --paper-focus-urgent: #fff1dc;
+      --focus-urgent-ink: #2c2a26;
       --paper-shadow: rgba(0, 0, 0, 0.5);
       --paper-contact: rgba(0, 0, 0, 0.35);
       --ink: #ecdfc2;
@@ -138,7 +139,8 @@
     --paper-someday: #2c3350;
     --paper-lupin: #2e2c27;
     --paper-focus: #6e3326;
-    --paper-focus-urgent: #b42c11;
+    --paper-focus-urgent: #fff1dc;
+    --focus-urgent-ink: #2c2a26;
     --paper-shadow: rgba(0, 0, 0, 0.5);
     --paper-contact: rgba(0, 0, 0, 0.35);
     --ink: #ecdfc2;
@@ -1410,8 +1412,38 @@
     color: var(--ink-soft);
   }
 
+  /* 마지막 FOCUS_URGENT_SEC 동안 박스가 급박한 색으로 바뀌는 정도(--focus-t,
+     0~100%). 배경은 이 값에 비례해 섞고, 글씨색(--ink 계열)은 배경과
+     글씨의 명암이 같아지는 지점(약 33%)에서 짧은 구간(~5%)에 빠르게
+     뒤집어서, 중간 회색 배경에 회색 글씨가 되는 구간 없이 계속 읽히게 함. 라이트는 진한 빨강 배경에 기존 글씨색 그대로,
+     다크는 어두운 카드 위에서 밝게 번쩍이는 크림색 배경 + 어두운 글씨.
+     @property로 등록해서 transition으로 부드럽게 변하고, 타이머가 끝나면
+     100% → 0%로 천천히 되돌아오는 디졸브(.focus-dissolve)에도 같이 씀. */
+  @property --focus-t {
+    syntax: '<percentage>';
+    inherits: true;
+    initial-value: 0%;
+  }
+
+  :root {
+    --focus-box-ink: var(--ink);
+    --focus-box-ink-soft: var(--ink-soft);
+    --focus-box-focus-ink-soft: var(--focus-ink-soft);
+    --focus-urgent-ink: var(--ink);
+  }
+
   .focus-countdown-box {
     margin: 0 0 16px;
+    --focus-ink-t: clamp(0%, calc((var(--focus-t) - 33%) * 20), 100%);
+    --ink: color-mix(in srgb, var(--focus-box-ink), var(--focus-urgent-ink) var(--focus-ink-t));
+    --ink-soft: color-mix(in srgb, var(--focus-box-ink-soft), var(--focus-urgent-ink) var(--focus-ink-t));
+    --focus-ink-soft: color-mix(in srgb, var(--focus-box-focus-ink-soft), var(--focus-urgent-ink) var(--focus-ink-t));
+    background: color-mix(in srgb, var(--focus-box-fill), var(--paper-focus-urgent) var(--focus-t));
+    transition: --focus-t 1s linear;
+  }
+
+  .focus-countdown-box.focus-dissolve {
+    transition: --focus-t 2.6s ease-out;
   }
 
   /* 완료로 표시/나가기가 숫자 박스 하단에 그대로 들어감 — 새 박스를

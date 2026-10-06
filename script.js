@@ -4037,6 +4037,13 @@
       // 한 줄로(숫자는 00:00으로 남김) — 완료는 gotta do 체크박스와 같은 SVG, 나머지는 이모지.
       const endBox = document.createElement('div');
       endBox.className = 'focus-box focus-duration-box focus-countdown-box';
+      // 0초에 도달한 순간 박스는 가장 급박한 색(100%)이었으니 거기서 시작해
+      // 기본색으로 천천히 번지듯 돌아옴(디졸브) — 갑자기 평온해지지 않게.
+      endBox.classList.add('focus-dissolve');
+      endBox.style.setProperty('--focus-t', '100%');
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        endBox.style.setProperty('--focus-t', '0%');
+      }));
       const endNum = document.createElement('div');
       endNum.className = 'focus-countdown-number';
       endNum.textContent = formatFocusClock(0);
@@ -4132,9 +4139,9 @@
     if (!box) return;
     if (focusState && focusState.step === 'running' && focusState.remainingSec < FOCUS_URGENT_SEC) {
       const t = Math.min(1, Math.max(0, 1 - focusState.remainingSec / FOCUS_URGENT_SEC));
-      box.style.background = 'color-mix(in srgb, var(--focus-box-fill), var(--paper-focus-urgent) ' + Math.round(t * 100) + '%)';
+      box.style.setProperty('--focus-t', Math.round(t * 100) + '%');
     } else {
-      box.style.background = '';
+      box.style.removeProperty('--focus-t');
     }
   }
 
