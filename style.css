@@ -1449,8 +1449,28 @@
     transition: --focus-t 3s ease-out;
   }
 
+  /* 마지막 몇 초 숫자만 좌우로 떨림 — 세기는 --focus-shake(0~1)로 점점 커짐
+     (1px → 3px). 버튼은 그대로 두어 누르기 쉽게. */
+  .focus-countdown-box.focus-shaking .focus-countdown-number {
+    animation: focus-number-shake 0.18s linear infinite;
+  }
+
+  @keyframes focus-number-shake {
+    0%, 100% { transform: translateX(0); }
+    20% { transform: translateX(calc(1px + var(--focus-shake, 0) * 2px)); }
+    40% { transform: translateX(calc(-1px - var(--focus-shake, 0) * 2px)); }
+    60% { transform: translateX(calc(0.6px + var(--focus-shake, 0) * 1.2px)); }
+    80% { transform: translateX(calc(-0.6px - var(--focus-shake, 0) * 1.2px)); }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .focus-countdown-box.focus-shaking .focus-countdown-number {
+      animation: none;
+    }
+  }
+
   .focus-end-label {
-    margin: 6px 0 10px;
+    margin: 2px 0 10px;
     text-align: center;
     font-family: var(--font-ui);
     letter-spacing: var(--ui-letter-spacing);
@@ -1475,6 +1495,9 @@
   .focus-countdown-number {
     font-family: var(--font-hand);
     font-size: 64px;
+    /* 글꼴마다 다른 기본 줄 높이(normal)에 숫자 아래 여백이 끌려다니지 않게
+       고정 — 숫자와 바로 밑 줄(일시정지/다 됐어요) 사이 간격을 일정하게. */
+    line-height: 1;
     text-align: center;
     color: var(--ink);
     padding: 4px 0;
@@ -1494,7 +1517,9 @@
        시간 추가 글자가 1px 어긋남 — 글자 기준선끼리 맞춤. */
     align-items: baseline;
     gap: 14px;
-    margin: 6px 0 10px;
+    /* 숫자와 글씨 사이 시각적 간격을 기존의 절반 정도로(숫자 line-height를
+       1로 고정한 뒤 음수 여백으로 맞춤). */
+    margin: -1px 0 10px;
   }
 
   /* 세 아이콘이 같은 32px 칸 안에서 가운데 정렬되게 고정 — 이모지는

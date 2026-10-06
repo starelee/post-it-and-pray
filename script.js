@@ -11,6 +11,7 @@
   const FOCUS_CELEBRATE_MS = 950;
   // 타이머 종이색이 빨갛게 변하기 시작하는 남은 시간(초).
   const FOCUS_URGENT_SEC = 60;
+  const FOCUS_SHAKE_SEC = 10;
   const BOARD_IDS = ['today', 'waiting', 'someday', 'scheduled'];
   // Boards a task can be manually moved between with the move buttons.
   const MOVE_TARGET_IDS = ['today', 'waiting', 'someday'];
@@ -4141,11 +4142,22 @@
   function applyFocusPaper() {
     const box = focusBodyEl && focusBodyEl.querySelector('.focus-countdown-box');
     if (!box) return;
-    if (focusState && focusState.step === 'running' && focusState.remainingSec < FOCUS_URGENT_SEC) {
+    const running = focusState && focusState.step === 'running';
+    if (running && focusState.remainingSec < FOCUS_URGENT_SEC) {
       const t = Math.min(1, Math.max(0, 1 - focusState.remainingSec / FOCUS_URGENT_SEC));
       box.style.setProperty('--focus-t', Math.round(t * 100) + '%');
     } else {
       box.style.removeProperty('--focus-t');
+    }
+    // 마지막 FOCUS_SHAKE_SEC초 — 숫자만 초조하게 떨림. 0초에 가까울수록 세게
+    // (--focus-shake 0→1), 일시정지 중엔 멈춤.
+    if (running && !focusState.paused && focusState.remainingSec <= FOCUS_SHAKE_SEC) {
+      const s = Math.min(1, Math.max(0, 1 - focusState.remainingSec / FOCUS_SHAKE_SEC));
+      box.style.setProperty('--focus-shake', s.toFixed(2));
+      box.classList.add('focus-shaking');
+    } else {
+      box.style.removeProperty('--focus-shake');
+      box.classList.remove('focus-shaking');
     }
   }
 
