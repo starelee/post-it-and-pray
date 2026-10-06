@@ -1487,6 +1487,44 @@
     stroke-dashoffset: 0;
   }
 
+  /* 아이콘만 있는 버튼 설명 — 기본 title은 1초쯤 뒤에야 떠서, 올리자마자
+     뜨는 말풍선으로 대신함(data-tip). */
+  .focus-icon-btn[data-tip],
+  .focus-check-btn[data-tip] {
+    position: relative;
+  }
+
+  .focus-icon-btn[data-tip]::after,
+  .focus-check-btn[data-tip]::after {
+    content: attr(data-tip);
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 50%;
+    transform: translate(-50%, -3px);
+    z-index: 5;
+    padding: 3px 10px;
+    border-radius: 12px;
+    white-space: nowrap;
+    font-family: var(--font-ui);
+    letter-spacing: var(--ui-letter-spacing);
+    font-size: 14px;
+    line-height: 1.4;
+    font-weight: normal;
+    color: var(--paper);
+    background: var(--ink);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.12s ease, transform 0.12s ease;
+  }
+
+  .focus-icon-btn[data-tip]:hover::after,
+  .focus-icon-btn[data-tip]:focus-visible::after,
+  .focus-check-btn[data-tip]:hover::after,
+  .focus-check-btn[data-tip]:focus-visible::after {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+
   .focus-pause-btn {
     font-size: 16px;
   }

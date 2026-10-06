@@ -3827,7 +3827,7 @@
     btn.type = 'button';
     btn.className = 'focus-footer-btn focus-icon-btn' + (extraClass ? ' ' + extraClass : '');
     btn.textContent = icon;
-    btn.title = label;
+    btn.dataset.tip = label;
     btn.setAttribute('aria-label', label);
     return btn;
   }
@@ -3964,7 +3964,7 @@
         const doneBtn = document.createElement('button');
         doneBtn.type = 'button';
         doneBtn.className = 'checkbox focus-check-btn';
-        doneBtn.title = '완료로 표시';
+        doneBtn.dataset.tip = '완료로 표시';
         doneBtn.setAttribute('aria-label', '완료로 표시');
         doneBtn.appendChild(makeCheckSvg());
         doneBtn.addEventListener('click', finishFocusAsDone);
@@ -4000,13 +4000,13 @@
       const doneBtn = document.createElement('button');
       doneBtn.type = 'button';
       doneBtn.className = 'checkbox focus-check-btn';
-      doneBtn.title = '완료로 표시';
+      doneBtn.dataset.tip = '완료로 표시';
       doneBtn.setAttribute('aria-label', '완료로 표시');
       doneBtn.appendChild(makeCheckSvg());
       doneBtn.addEventListener('click', finishFocusAsDone);
 
       // 같은 할 일로 시간 선택 단계로 돌아가 타이머를 다시 맞춤.
-      const restartBtn = makeFocusIconBtn('🔄', '타이머 다시 설정하기');
+      const restartBtn = makeFocusIconBtn('🔄', '타이머 재설정');
       restartBtn.addEventListener('click', () => {
         focusState.step = 'pick-duration';
         focusState.endAt = null;
@@ -4025,7 +4025,7 @@
         exitFocusMode(false);
       });
 
-      const failBtn = makeFocusIconBtn('😥', '앗.. 못했어요');
+      const failBtn = makeFocusIconBtn('😥', '앗... 못했어요');
       failBtn.addEventListener('click', () => exitFocusMode(false));
 
       choices.appendChild(doneBtn);
