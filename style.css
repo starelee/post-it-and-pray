@@ -1390,26 +1390,40 @@
     color: var(--ink-soft);
   }
 
+  /* 메인 화면 .add-row와 같은 모양 — "+" 버튼과 왼쪽 정렬 입력창. 글씨는 메인과
+     같은 크기/글꼴이고, 연한 글씨(+, placeholder)만 코랄 위에서 안 묻히게
+     --focus-ink-soft를 씀. 밑줄은 메인처럼 평소엔 없고 입력할 때만 보임. */
   .focus-quick-add-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
     margin-top: 12px;
-    text-align: center;
+  }
+
+  .focus-quick-add-plus {
+    color: var(--focus-ink-soft);
   }
 
   .focus-quick-add-input {
-    width: 100%;
+    flex: 1;
+    min-width: 0;
     font-family: var(--font-task);
-    font-size: 15px;
+    font-size: 18px;
     color: var(--ink);
     background: none;
     border: none;
-    border-bottom: 1px dashed var(--focus-box-border);
+    border-bottom: 1px dashed transparent;
     outline: none;
-    text-align: center;
     padding: 4px 0;
+    transition: border-color 0.15s ease;
+  }
+
+  .focus-quick-add-input:focus {
+    border-bottom-color: var(--focus-box-border);
   }
 
   .focus-quick-add-input::placeholder {
-    color: var(--ink-soft);
+    color: var(--focus-ink-soft);
   }
 
   /* 마지막 FOCUS_URGENT_SEC 동안 박스가 급박한 색으로 바뀌는 정도(--focus-t,
