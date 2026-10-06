@@ -1038,7 +1038,8 @@
   }
 
   /* Waiting: 민트 사선 마테 (today와 찢긴 위치를 일부러 다르게) */
-  .sticky[data-board="waiting"] .tape {
+  .sticky[data-board="waiting"] .tape,
+  .confirm-card .tape {
     --tape-clip: polygon(
       2.5% 0%,
       97.5% 0%,
@@ -1063,7 +1064,8 @@
     );
     transform: translateX(-50%) rotate(3.5deg);
   }
-  .sticky[data-board="waiting"] .tape::before {
+  .sticky[data-board="waiting"] .tape::before,
+  .confirm-card .tape::before {
     background-color: var(--tape-waiting);
     background-image: repeating-linear-gradient(
       135deg, transparent 0 7px, var(--tape-waiting-pattern) 7px 9px, transparent 9px 15px
@@ -1370,6 +1372,7 @@
     color: var(--accent);
   }
 
+  /* gotta do/waiting의 하위 항목 입력창처럼 밑줄 없이 */
   .focus-add-subtask-input {
     width: 90px;
     font-family: var(--font-task);
@@ -1377,7 +1380,6 @@
     color: var(--ink);
     background: none;
     border: none;
-    border-bottom: 1px dashed var(--focus-box-border);
     outline: none;
     padding: 1px 2px;
   }
@@ -2578,17 +2580,6 @@
 
   .confirm-overlay.open .confirm-card {
     transform: translateY(0) rotate(-1deg) scale(1);
-  }
-
-  .confirm-tape {
-    position: absolute;
-    top: -10px;
-    left: 50%;
-    width: 84px;
-    height: 22px;
-    background: var(--tape);
-    border: 1px solid var(--tape-edge);
-    transform: translateX(-50%) rotate(2deg);
   }
 
   .confirm-title {
