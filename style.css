@@ -2645,6 +2645,12 @@
     transition: opacity 0.15s ease, color 0.15s ease, border-color 0.15s ease;
   }
 
+  .confirm-btn small {
+    display: block;
+    font-size: 0.75em;
+    font-weight: normal;
+  }
+
   .confirm-btn:hover {
     color: var(--accent);
     border-color: var(--accent);

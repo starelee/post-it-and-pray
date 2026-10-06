@@ -2491,6 +2491,17 @@
     card.style.top = top + 'px';
   }
 
+  // 라벨에 줄바꿈이 있으면 둘째 줄부터 작은 글씨로 보조 설명처럼 표시.
+  function setConfirmBtnLabel(btn, label) {
+    const [main, ...rest] = label.split('\n');
+    btn.textContent = main;
+    if (rest.length) {
+      const sub = document.createElement('small');
+      sub.textContent = rest.join(' ');
+      btn.appendChild(sub);
+    }
+  }
+
   let confirmQueue = Promise.resolve();
   function showConfirm(opts) {
     const run = confirmQueue.then(() => showConfirmNow(opts));
@@ -2511,8 +2522,8 @@
     contentEl.innerHTML = '';
     contentEl.hidden = !content;
     if (content) contentEl.appendChild(content);
-    okBtn.textContent = confirmLabel;
-    cancelBtn.textContent = cancelLabel;
+    setConfirmBtnLabel(okBtn, confirmLabel);
+    setConfirmBtnLabel(cancelBtn, cancelLabel);
     const prevFocus = document.activeElement;
 
     return new Promise(resolve => {
@@ -4096,8 +4107,9 @@
       const ok = await showConfirm({
         title: '타이머를 중단하고 메인화면으로 갈까요?',
         message: '현재 진행 중인 타이머는 초기화됩니다.',
-        confirmLabel: '네, 나갈게요 (타이머 리셋)',
-        cancelLabel: '아니, 계속할게요'
+        confirmLabel: '네, 나갈게요\n(타이머 리셋)',
+        cancelLabel: '계속 할게요\n(돌아가기)',
+        anchorEl: document.getElementById('todaySticky')
       });
       if (ok) exitFocusMode(false);
       else if (!wasPaused) resumeFocusCountdown();
