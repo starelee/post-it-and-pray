@@ -821,6 +821,34 @@
     return document.querySelector('.task-item[data-id="' + id + '"]');
   }
 
+  // 데스크탑: 수정 중(입력창 포커스)에 같은 항목의 아이콘 버튼(긴급/+/🍅/날짜/
+  // 대기/휴지통 등)을 누르면 mousedown에서 입력창이 blur되고, blur 핸들러가
+  // 예약한 commit()+render()가 mouseup→click보다 먼저 돌아 버튼이 DOM에서
+  // 사라져 클릭이 날아갔음(수정 모드만 풀리고 누른 기능은 안 먹힘).
+  // 그래서 ① 이 항목 안 버튼의 mousedown은 포커스를 뺏지 않게 막고(입력창이
+  // 계속 포커스), ② 이어지는 click은 가로채서 먼저 수정을 커밋+재렌더링한 뒤,
+  // 새로 그려진 li에서 같은 순서의 버튼을 찾아 다시 클릭함. 새 li에는 진행 중
+  // 수정이 없으므로 재발사된 클릭은 그대로 원래 핸들러로 감.
+  document.addEventListener('mousedown', (e) => {
+    const btn = e.target.closest && e.target.closest('.task-item button');
+    const li = btn && btn.closest('.task-item');
+    if (li && li._activeEditCommit) e.preventDefault();
+  }, true);
+
+  document.addEventListener('click', (e) => {
+    const btn = e.target.closest && e.target.closest('.task-item button');
+    const li = btn && btn.closest('.task-item');
+    if (!li || !li._activeEditCommit) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const index = Array.prototype.indexOf.call(li.querySelectorAll('button'), btn);
+    const id = li.dataset.id;
+    li._activeEditCommit();
+    const freshLi = findTaskLi(id);
+    const freshBtn = freshLi && freshLi.querySelectorAll('button')[index];
+    if (freshBtn) freshBtn.click();
+  }, true);
+
   // 상위 항목 텍스트가 지금 편집 중(startEditTask로 만든 입력창이 살아
   // 있음)일 때 날짜/긴급/+(하위 항목 추가) 같은 옆 버튼을 그대로 누르면,
   // 그 클릭은 아직 수정 전인 옛 DOM 위에서 먼저 실행되고 — 입력창의 blur
