@@ -1449,18 +1449,18 @@
     transition: --focus-t 3s ease-out;
   }
 
-  /* 마지막 몇 초 숫자만 좌우로 떨림 — 세기는 --focus-shake(0~1)로 점점 커짐
-     (1px → 3px). 버튼은 그대로 두어 누르기 쉽게. */
+  /* 마지막 1분 숫자만 좌우로 떨림 — 세기는 --focus-shake(0~1, 1 = 3px)로
+     점점 커짐. 버튼은 그대로 두어 누르기 쉽게. */
   .focus-countdown-box.focus-shaking .focus-countdown-number {
     animation: focus-number-shake 0.18s linear infinite;
   }
 
   @keyframes focus-number-shake {
     0%, 100% { transform: translateX(0); }
-    20% { transform: translateX(calc(1px + var(--focus-shake, 0) * 2px)); }
-    40% { transform: translateX(calc(-1px - var(--focus-shake, 0) * 2px)); }
-    60% { transform: translateX(calc(0.6px + var(--focus-shake, 0) * 1.2px)); }
-    80% { transform: translateX(calc(-0.6px - var(--focus-shake, 0) * 1.2px)); }
+    20% { transform: translateX(calc(var(--focus-shake, 0) * 3px)); }
+    40% { transform: translateX(calc(var(--focus-shake, 0) * -3px)); }
+    60% { transform: translateX(calc(var(--focus-shake, 0) * 1.8px)); }
+    80% { transform: translateX(calc(var(--focus-shake, 0) * -1.8px)); }
   }
 
   @media (prefers-reduced-motion: reduce) {
@@ -1500,7 +1500,7 @@
     line-height: 1;
     text-align: center;
     color: var(--ink);
-    padding: 4px 0;
+    padding: 7px 0 4px;
     transition: opacity 0.2s ease;
   }
 

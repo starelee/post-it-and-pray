@@ -4149,11 +4149,16 @@
     } else {
       box.style.removeProperty('--focus-t');
     }
-    // 마지막 FOCUS_SHAKE_SEC초 — 숫자만 초조하게 떨림. 0초에 가까울수록 세게
-    // (--focus-shake 0→1), 일시정지 중엔 멈춤.
-    if (running && !focusState.paused && focusState.remainingSec <= FOCUS_SHAKE_SEC) {
-      const s = Math.min(1, Math.max(0, 1 - focusState.remainingSec / FOCUS_SHAKE_SEC));
-      box.style.setProperty('--focus-shake', s.toFixed(2));
+    // 숫자만 떨림 — FOCUS_URGENT_SEC(60초)부터 아주 약하게 시작해서
+    // FOCUS_SHAKE_SEC(10초)에 1px까지 커지고, 거기서부터는 0초까지 3px로
+    // 더 세짐. 세기는 최대(3px) 대비 비율(--focus-shake, 0~1). 일시정지
+    // 중엔 멈춤.
+    if (running && !focusState.paused && focusState.remainingSec < FOCUS_URGENT_SEC) {
+      const r = focusState.remainingSec;
+      const px = r > FOCUS_SHAKE_SEC
+        ? 0.4 + 0.6 * (FOCUS_URGENT_SEC - r) / (FOCUS_URGENT_SEC - FOCUS_SHAKE_SEC)
+        : 1 + 2 * (1 - r / FOCUS_SHAKE_SEC);
+      box.style.setProperty('--focus-shake', (Math.min(3, px) / 3).toFixed(3));
       box.classList.add('focus-shaking');
     } else {
       box.style.removeProperty('--focus-shake');
