@@ -1496,11 +1496,6 @@
     font-size: 15px;
   }
 
-  /* 종료 화면은 숫자 없이 아이콘 줄만 있는 박스 — 위쪽 여백은 뺌. */
-  .focus-end-choices {
-    margin-top: 0;
-  }
-
   .focus-footer {
     display: flex;
     justify-content: center;

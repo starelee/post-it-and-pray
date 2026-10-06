@@ -3986,10 +3986,14 @@
     if (focusState.step === 'ended') {
       focusTitleEl.textContent = FOCUS_TITLE_TEXT;
       focusBodyEl.appendChild(makeFocusTaskBox());
-      // 진행 중 카운트다운 박스와 같은 반투명 점선 박스 안에 아이콘 4개만
-      // 한 줄로 — 완료는 gotta do 체크박스와 같은 SVG, 나머지는 이모지.
+      // 진행 중 카운트다운 박스와 같은 반투명 점선 박스 안에 00:00 + 아이콘 4개
+      // 한 줄로(숫자는 00:00으로 남김) — 완료는 gotta do 체크박스와 같은 SVG, 나머지는 이모지.
       const endBox = document.createElement('div');
       endBox.className = 'focus-box focus-duration-box focus-countdown-box';
+      const endNum = document.createElement('div');
+      endNum.className = 'focus-countdown-number';
+      endNum.textContent = formatFocusClock(0);
+      endBox.appendChild(endNum);
       const choices = document.createElement('div');
       choices.className = 'focus-countdown-actions focus-end-choices';
 
