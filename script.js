@@ -3871,9 +3871,8 @@
       countdownBox.appendChild(num);
 
       // 일시정지/재개 옆에 시간 추가를 같이 둠 — 둘 다 타이머 진행 중에
-      // 자주 쓰는 버튼이라 숫자 바로 밑 한 줄에 묶음. 나가기 확인 중엔 그
-      // 확인 버튼만 보여야 하니 같이 숨김.
-      if (!focusState.exitConfirmOpen) {
+      // 자주 쓰는 버튼이라 숫자 바로 밑 한 줄에 묶음.
+      {
         const pauseRow = document.createElement('div');
         pauseRow.className = 'focus-pause-row';
         const pauseBtn = makeFocusFooterBtn(focusState.paused ? '▶ 재개' : '⏸ 일시정지', 'focus-pause-btn');
@@ -3932,24 +3931,7 @@
       // 완료/대기중/나가기 아이콘은 밑에 새 박스를 만드는 게 아니라 이
       // 숫자 박스 하단에 그대로 들어감 — #focusFooter는 running 단계에서
       // 더는 안 씀.
-      if (focusState.exitConfirmOpen) {
-        const confirmWrap = document.createElement('div');
-        confirmWrap.className = 'focus-exit-confirm';
-        const msg = document.createElement('p');
-        msg.textContent = '⚠️ 타이머를 중단하고 메인화면으로 갈까요? 현재 진행 중인 타이머는 초기화됩니다.';
-        confirmWrap.appendChild(msg);
-
-        const yesBtn = makeFocusFooterBtn('네, 나갈게요 (타이머 리셋)', 'focus-footer-btn-danger');
-        yesBtn.addEventListener('click', () => exitFocusMode(false));
-        const noBtn = makeFocusFooterBtn('아니, 계속할게요');
-        noBtn.addEventListener('click', () => {
-          focusState.exitConfirmOpen = false;
-          renderFocusPanel();
-        });
-        confirmWrap.appendChild(yesBtn);
-        confirmWrap.appendChild(noBtn);
-        countdownBox.appendChild(confirmWrap);
-      } else {
+      {
         const actions = document.createElement('div');
         actions.className = 'focus-countdown-actions';
         // 완료/대기중/나가기는 글자 대신 이모지 아이콘만 — 의미는 title로.
@@ -3965,10 +3947,7 @@
         const waitBtn = makeFocusIconBtn('⏳', '대기중으로 변경');
         waitBtn.addEventListener('click', finishFocusAsWaiting);
         const exitBtn = makeFocusIconBtn('❌', '나가기');
-        exitBtn.addEventListener('click', () => {
-          focusState.exitConfirmOpen = true;
-          renderFocusPanel();
-        });
+        exitBtn.addEventListener('click', confirmExitFocus);
         actions.appendChild(doneBtn);
         actions.appendChild(waitBtn);
         actions.appendChild(exitBtn);
@@ -4103,6 +4082,28 @@
     saveFocusState();
     updateFocusDocumentTitle();
     renderFocusPanel();
+  }
+
+  // ❌ 누르는 즉시 타이머를 멈추고 확인 모달을 띄움. 나가면 리셋, 계속하면
+  // 원래 상태로 복귀(원래 일시정지 중이었으면 그대로 멈춰둠).
+  let focusExitConfirming = false;
+  async function confirmExitFocus() {
+    if (focusExitConfirming || !focusState) return;
+    focusExitConfirming = true;
+    const wasPaused = focusState.paused;
+    if (!wasPaused) pauseFocusCountdown();
+    try {
+      const ok = await showConfirm({
+        title: '타이머를 중단하고 메인화면으로 갈까요?',
+        message: '현재 진행 중인 타이머는 초기화됩니다.',
+        confirmLabel: '네, 나갈게요 (타이머 리셋)',
+        cancelLabel: '아니, 계속할게요'
+      });
+      if (ok) exitFocusMode(false);
+      else if (!wasPaused) resumeFocusCountdown();
+    } finally {
+      focusExitConfirming = false;
+    }
   }
 
   // 재개 — 멈춰있던 remainingSec 기준으로 endAt을 지금 시각에 새로 맞춰
