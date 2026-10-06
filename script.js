@@ -4152,7 +4152,7 @@
     if (!wasPaused) pauseFocusCountdown();
     try {
       const ok = await showConfirm({
-        title: '타이머를 중단하고 메인화면으로 갈까요?',
+        title: '이 일을 중단하고 메인으로 돌아갈까요?',
         message: '현재 진행 중인 타이머는 초기화됩니다.',
         confirmLabel: '네, 나갈게요\n(타이머 리셋)',
         cancelLabel: '계속 할게요\n(돌아가기)',
