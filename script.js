@@ -4050,7 +4050,7 @@
       endBox.appendChild(endNum);
       const endLabel = document.createElement('div');
       endLabel.className = 'focus-end-label';
-      endLabel.textContent = '타이머 종료';
+      endLabel.textContent = '다 됐어요!';
       endBox.appendChild(endLabel);
       const choices = document.createElement('div');
       choices.className = 'focus-countdown-actions focus-end-choices';
