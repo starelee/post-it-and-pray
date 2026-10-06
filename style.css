@@ -1376,11 +1376,11 @@
   /* 상위 항목과 같은 톤(--ink)으로 한 단계 올림 — 하위 항목 add-row가
      있던 자리(박스 맨 아래)로 옮겨왔으니 그쪽과 톤을 맞춤. */
   /* 완료 목록의 "↻ 또 하기"(.archive-revive-btn)와 같은 모양 — 기호 + 글씨,
-     왼쪽 정렬(박스는 세로 flex라 align-self로 왼쪽에 붙임). 코랄/다크 카드
+     오른쪽 정렬(박스는 세로 flex라 align-self로 오른쪽에 붙임). 코랄/다크 카드
      위에서 안 묻히게 글씨색만 --focus-ink-soft. */
   .focus-reselect-btn {
     display: block;
-    align-self: flex-start;
+    align-self: flex-end;
     margin: 10px 0 0;
     font-family: var(--font-ui);
     letter-spacing: var(--ui-letter-spacing);
