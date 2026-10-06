@@ -3767,11 +3767,19 @@
   function makeFocusQuickAddTaskRow() {
     const wrap = document.createElement('div');
     wrap.className = 'focus-quick-add-row';
+    // 메인(.add-row)처럼 "+" 버튼 + 왼쪽 정렬 입력창 — "+"를 눌러도 입력창에
+    // 포커스가 가게 함.
+    const plus = document.createElement('button');
+    plus.type = 'button';
+    plus.className = 'plus focus-quick-add-plus';
+    plus.setAttribute('aria-label', '새 할 일 등록');
+    plus.textContent = '+';
     const input = document.createElement('input');
     input.type = 'text';
     input.className = 'focus-quick-add-input';
-    input.placeholder = '+ 새 할일 추가';
+    input.placeholder = '이것도 해야 돼..';
     input.maxLength = 100;
+    plus.addEventListener('click', () => input.focus());
     input.addEventListener('keydown', (e) => {
       if (e.key !== 'Enter') return;
       const text = input.value;
@@ -3782,6 +3790,7 @@
       const fresh = focusBodyEl.querySelector('.focus-quick-add-input');
       if (fresh) fresh.focus();
     });
+    wrap.appendChild(plus);
     wrap.appendChild(input);
     return wrap;
   }
