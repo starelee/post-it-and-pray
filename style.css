@@ -1241,6 +1241,25 @@
     text-align: center;
   }
 
+  /* 시간 선택/진행 중/종료 화면: 둥근 점선 박스 대신 평문 + 메인 화면에서 쓰던 가로
+     점선 구분선. 상위/하위 항목은 박스 없이 글씨만, 타이머 영역은 위아래
+     점선 사이에 반투명 흰 배경 띠로. */
+  .focus-box.focus-flat {
+    border: none;
+    border-radius: 0;
+  }
+
+  .focus-task-box.focus-flat {
+    padding: 4px 0 16px;
+    margin: 0;
+  }
+
+  .focus-duration-box.focus-flat {
+    border-top: 1px dashed var(--focus-box-border);
+    border-bottom: 1px dashed var(--focus-box-border);
+    margin: 0;
+  }
+
   /* 타이머(시간 선택) 박스만 살짝 어둡게 칠함 — 상위/하위 항목 박스는
      테두리만. */
   .focus-duration-box {
