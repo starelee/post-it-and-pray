@@ -1500,7 +1500,7 @@
     line-height: 1;
     text-align: center;
     color: var(--ink);
-    padding: 7px 0 4px;
+    padding: 12px 0 4px;
     transition: opacity 0.2s ease;
   }
 
