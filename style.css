@@ -1250,8 +1250,14 @@
   }
 
   .focus-task-box.focus-flat {
-    padding: 4px 0 16px;
+    padding: 9px 0 16px;
     margin: 0;
+    gap: 11px;
+  }
+
+  /* 위 gap을 5px 늘린 만큼 [할일 다시 고르기]는 기존 간격 그대로 */
+  .focus-task-box.focus-flat .focus-reselect-btn {
+    margin-top: 5px;
   }
 
   .focus-duration-box.focus-flat {
@@ -1338,7 +1344,7 @@
     font-family: var(--font-ui);
     letter-spacing: var(--ui-letter-spacing);
     font-size: 16px;
-    color: var(--ink-soft);
+    color: var(--focus-ink-soft);
     padding: 2px;
     transition: color 0.15s ease, transform 0.15s ease;
   }
@@ -1354,12 +1360,17 @@
     font-family: var(--font-ui);
     letter-spacing: var(--ui-letter-spacing);
     font-size: 14px;
-    color: var(--ink-soft);
+    color: var(--ink);
     background: none;
     border: none;
     border-bottom: 1px dashed var(--focus-box-border);
     outline: none;
     text-align: center;
+  }
+
+  /* 코랄/다크 카드 위에서 기본 placeholder 색은 거의 안 보임 */
+  .focus-duration-custom-input::placeholder {
+    color: var(--focus-ink-soft);
   }
 
   /* 상위 항목과 같은 톤(--ink)으로 한 단계 올림 — 하위 항목 add-row가
