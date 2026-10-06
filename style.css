@@ -1492,15 +1492,20 @@
   .focus-countdown-actions::after {
     content: attr(data-hint);
     position: absolute;
-    /* 줄 아래쪽 padding(16px) 안, 아이콘 바로 밑 */
-    top: calc(100% - 14px);
+    /* 아이콘 크기/글자 모양과 무관하게 줄 맨 위에서 고정 거리에 고정 높이
+       박스로 두고, 글자는 그 안에서 세로 가운데 — 문구마다 위치가 안
+       달라지게. */
+    top: 36px;
+    height: 18px;
+    display: flex;
+    align-items: center;
     left: 50%;
     transform: translateX(-50%);
     white-space: nowrap;
     font-family: var(--font-ui);
     letter-spacing: var(--ui-letter-spacing);
     font-size: 14px;
-    line-height: 1.3;
+    line-height: 1;
     color: var(--ink-soft);
     pointer-events: none;
   }
