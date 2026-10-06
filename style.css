@@ -1430,6 +1430,8 @@
     gap: 4px;
     flex-wrap: wrap;
     margin-top: 14px;
+    /* 아이콘 밑에 뜨는 설명(data-tip)이 박스 테두리를 넘지 않게 자리 확보 */
+    padding-bottom: 16px;
   }
 
 
@@ -1481,11 +1483,44 @@
      완료된 항목(.task-item.done)과 같은 상태만 여기서 맞춤. */
   .checkbox.focus-check-btn {
     margin: 0 6px;
-    border-color: var(--ink-soft);
   }
 
   .checkbox.focus-check-btn .check-path {
     stroke-dashoffset: 0;
+  }
+
+  /* 아이콘만 있는 버튼 설명 — 기본 title은 1초쯤 뒤에야 떠서, 올리자마자
+     아이콘 바로 아래에 회색 글씨로 뜨게 함(data-tip). */
+  .focus-icon-btn[data-tip],
+  .focus-check-btn[data-tip] {
+    position: relative;
+  }
+
+  .focus-icon-btn[data-tip]::after,
+  .focus-check-btn[data-tip]::after {
+    content: attr(data-tip);
+    position: absolute;
+    top: calc(100% + 2px);
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 5;
+    white-space: nowrap;
+    font-family: var(--font-ui);
+    letter-spacing: var(--ui-letter-spacing);
+    font-size: 14px;
+    line-height: 1.3;
+    font-weight: normal;
+    color: var(--ink-soft);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.12s ease;
+  }
+
+  .focus-icon-btn[data-tip]:hover::after,
+  .focus-icon-btn[data-tip]:focus-visible::after,
+  .focus-check-btn[data-tip]:hover::after,
+  .focus-check-btn[data-tip]:focus-visible::after {
+    opacity: 1;
   }
 
   .focus-pause-btn {
@@ -1495,13 +1530,6 @@
   .focus-empty-hint {
     color: var(--focus-ink-soft);
     font-size: 15px;
-  }
-
-  .focus-end-choices {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    align-items: stretch;
   }
 
   .focus-footer {
@@ -2643,6 +2671,12 @@
     color: var(--ink-soft);
     cursor: pointer;
     transition: opacity 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+  }
+
+  .confirm-btn small {
+    display: block;
+    font-size: 0.75em;
+    font-weight: normal;
   }
 
   .confirm-btn:hover {

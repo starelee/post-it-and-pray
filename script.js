@@ -199,13 +199,26 @@
   }
   archiveFlagBtns.forEach(btn => btn.addEventListener('click', toggleArchivePanel));
 
-  const archiveCloseBtn = document.getElementById('archiveCloseBtn');
-  if (archiveCloseBtn) {
-    archiveCloseBtn.addEventListener('click', () => {
-      archivePanelEl.classList.remove('open');
-      setTrashViewOpen(false);
-    });
+  function closeArchivePanel() {
+    archivePanelEl.classList.remove('open');
+    setTrashViewOpen(false);
   }
+
+  const archiveCloseBtn = document.getElementById('archiveCloseBtn');
+  if (archiveCloseBtn) archiveCloseBtn.addEventListener('click', closeArchivePanel);
+
+  // Esc — 입력 중이 아니고 확인 모달도 안 떠 있을 때만 done 리갈패드 닫기.
+  // (입력칸/모달의 Esc는 각자 먼저 처리하므로 건드리지 않음.)
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape' || e.defaultPrevented) return;
+    if (!archivePanelEl.classList.contains('open')) return;
+    const modal = document.getElementById('confirmModal');
+    if (modal && !modal.hidden) return;
+    const a = document.activeElement;
+    if (a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA' || a.tagName === 'SELECT' || a.isContentEditable)) return;
+    e.preventDefault();
+    closeArchivePanel();
+  });
 
   // "not my problem... yet" 자리가 Ctrl+Z(휴지통)로 통째로 바뀌는 lupin
   // 모드 방식 — 목록 아래에 덧붙이지 않고 같은 자리를 갈아끼움. lupin처럼
@@ -2491,6 +2504,17 @@
     card.style.top = top + 'px';
   }
 
+  // 라벨에 줄바꿈이 있으면 둘째 줄부터 작은 글씨로 보조 설명처럼 표시.
+  function setConfirmBtnLabel(btn, label) {
+    const [main, ...rest] = label.split('\n');
+    btn.textContent = main;
+    if (rest.length) {
+      const sub = document.createElement('small');
+      sub.textContent = rest.join(' ');
+      btn.appendChild(sub);
+    }
+  }
+
   let confirmQueue = Promise.resolve();
   function showConfirm(opts) {
     const run = confirmQueue.then(() => showConfirmNow(opts));
@@ -2511,8 +2535,8 @@
     contentEl.innerHTML = '';
     contentEl.hidden = !content;
     if (content) contentEl.appendChild(content);
-    okBtn.textContent = confirmLabel;
-    cancelBtn.textContent = cancelLabel;
+    setConfirmBtnLabel(okBtn, confirmLabel);
+    setConfirmBtnLabel(cancelBtn, cancelLabel);
     const prevFocus = document.activeElement;
 
     return new Promise(resolve => {
@@ -3803,7 +3827,7 @@
     btn.type = 'button';
     btn.className = 'focus-footer-btn focus-icon-btn' + (extraClass ? ' ' + extraClass : '');
     btn.textContent = icon;
-    btn.title = label;
+    btn.dataset.tip = label;
     btn.setAttribute('aria-label', label);
     return btn;
   }
@@ -3871,9 +3895,8 @@
       countdownBox.appendChild(num);
 
       // 일시정지/재개 옆에 시간 추가를 같이 둠 — 둘 다 타이머 진행 중에
-      // 자주 쓰는 버튼이라 숫자 바로 밑 한 줄에 묶음. 나가기 확인 중엔 그
-      // 확인 버튼만 보여야 하니 같이 숨김.
-      if (!focusState.exitConfirmOpen) {
+      // 자주 쓰는 버튼이라 숫자 바로 밑 한 줄에 묶음.
+      {
         const pauseRow = document.createElement('div');
         pauseRow.className = 'focus-pause-row';
         const pauseBtn = makeFocusFooterBtn(focusState.paused ? '▶ 재개' : '⏸ 일시정지', 'focus-pause-btn');
@@ -3932,24 +3955,7 @@
       // 완료/대기중/나가기 아이콘은 밑에 새 박스를 만드는 게 아니라 이
       // 숫자 박스 하단에 그대로 들어감 — #focusFooter는 running 단계에서
       // 더는 안 씀.
-      if (focusState.exitConfirmOpen) {
-        const confirmWrap = document.createElement('div');
-        confirmWrap.className = 'focus-exit-confirm';
-        const msg = document.createElement('p');
-        msg.textContent = '⚠️ 타이머를 중단하고 메인화면으로 갈까요? 현재 진행 중인 타이머는 초기화됩니다.';
-        confirmWrap.appendChild(msg);
-
-        const yesBtn = makeFocusFooterBtn('네, 나갈게요 (타이머 리셋)', 'focus-footer-btn-danger');
-        yesBtn.addEventListener('click', () => exitFocusMode(false));
-        const noBtn = makeFocusFooterBtn('아니, 계속할게요');
-        noBtn.addEventListener('click', () => {
-          focusState.exitConfirmOpen = false;
-          renderFocusPanel();
-        });
-        confirmWrap.appendChild(yesBtn);
-        confirmWrap.appendChild(noBtn);
-        countdownBox.appendChild(confirmWrap);
-      } else {
+      {
         const actions = document.createElement('div');
         actions.className = 'focus-countdown-actions';
         // 완료/대기중/나가기는 글자 대신 이모지 아이콘만 — 의미는 title로.
@@ -3958,17 +3964,14 @@
         const doneBtn = document.createElement('button');
         doneBtn.type = 'button';
         doneBtn.className = 'checkbox focus-check-btn';
-        doneBtn.title = '완료로 표시';
+        doneBtn.dataset.tip = '완료로 표시';
         doneBtn.setAttribute('aria-label', '완료로 표시');
         doneBtn.appendChild(makeCheckSvg());
         doneBtn.addEventListener('click', finishFocusAsDone);
         const waitBtn = makeFocusIconBtn('⏳', '대기중으로 변경');
         waitBtn.addEventListener('click', finishFocusAsWaiting);
         const exitBtn = makeFocusIconBtn('❌', '나가기');
-        exitBtn.addEventListener('click', () => {
-          focusState.exitConfirmOpen = true;
-          renderFocusPanel();
-        });
+        exitBtn.addEventListener('click', confirmExitFocus);
         actions.appendChild(doneBtn);
         actions.appendChild(waitBtn);
         actions.appendChild(exitBtn);
@@ -3983,14 +3986,27 @@
     if (focusState.step === 'ended') {
       focusTitleEl.textContent = FOCUS_TITLE_TEXT;
       focusBodyEl.appendChild(makeFocusTaskBox());
+      // 진행 중 카운트다운 박스와 같은 반투명 점선 박스 안에 00:00 + 아이콘 4개
+      // 한 줄로(숫자는 00:00으로 남김) — 완료는 gotta do 체크박스와 같은 SVG, 나머지는 이모지.
+      const endBox = document.createElement('div');
+      endBox.className = 'focus-box focus-duration-box focus-countdown-box';
+      const endNum = document.createElement('div');
+      endNum.className = 'focus-countdown-number';
+      endNum.textContent = formatFocusClock(0);
+      endBox.appendChild(endNum);
       const choices = document.createElement('div');
-      choices.className = 'focus-end-choices';
+      choices.className = 'focus-countdown-actions focus-end-choices';
 
-      const doneBtn = makeFocusFooterBtn('완료로 표시', 'focus-footer-btn-primary');
+      const doneBtn = document.createElement('button');
+      doneBtn.type = 'button';
+      doneBtn.className = 'checkbox focus-check-btn';
+      doneBtn.dataset.tip = '완료로 표시';
+      doneBtn.setAttribute('aria-label', '완료로 표시');
+      doneBtn.appendChild(makeCheckSvg());
       doneBtn.addEventListener('click', finishFocusAsDone);
 
       // 같은 할 일로 시간 선택 단계로 돌아가 타이머를 다시 맞춤.
-      const restartBtn = makeFocusFooterBtn('타이머 다시 설정하기');
+      const restartBtn = makeFocusIconBtn('🔄', '타이머 재설정');
       restartBtn.addEventListener('click', () => {
         focusState.step = 'pick-duration';
         focusState.endAt = null;
@@ -4003,20 +4019,21 @@
         renderFocusPanel();
       });
 
-      const waitBtn = makeFocusFooterBtn('대기중으로 변경');
+      const waitBtn = makeFocusIconBtn('⏳', '대기중으로 변경');
       waitBtn.addEventListener('click', () => {
         moveTask(focusState.taskBoardId, 'waiting', focusState.taskId);
         exitFocusMode(false);
       });
 
-      const failBtn = makeFocusFooterBtn('앗.. 못했어요');
+      const failBtn = makeFocusIconBtn('😥', '앗... 못했어요');
       failBtn.addEventListener('click', () => exitFocusMode(false));
 
       choices.appendChild(doneBtn);
       choices.appendChild(restartBtn);
       choices.appendChild(waitBtn);
       choices.appendChild(failBtn);
-      focusBodyEl.appendChild(choices);
+      endBox.appendChild(choices);
+      focusBodyEl.appendChild(endBox);
       return;
     }
   }
@@ -4103,6 +4120,29 @@
     saveFocusState();
     updateFocusDocumentTitle();
     renderFocusPanel();
+  }
+
+  // ❌ 누르는 즉시 타이머를 멈추고 확인 모달을 띄움. 나가면 리셋, 계속하면
+  // 원래 상태로 복귀(원래 일시정지 중이었으면 그대로 멈춰둠).
+  let focusExitConfirming = false;
+  async function confirmExitFocus() {
+    if (focusExitConfirming || !focusState) return;
+    focusExitConfirming = true;
+    const wasPaused = focusState.paused;
+    if (!wasPaused) pauseFocusCountdown();
+    try {
+      const ok = await showConfirm({
+        title: '타이머를 중단하고 메인화면으로 갈까요?',
+        message: '현재 진행 중인 타이머는 초기화됩니다.',
+        confirmLabel: '네, 나갈게요\n(타이머 리셋)',
+        cancelLabel: '계속 할게요\n(돌아가기)',
+        anchorEl: document.querySelector('.focus-countdown-box')
+      });
+      if (ok) exitFocusMode(false);
+      else if (!wasPaused) resumeFocusCountdown();
+    } finally {
+      focusExitConfirming = false;
+    }
   }
 
   // 재개 — 멈춰있던 remainingSec 기준으로 endAt을 지금 시각에 새로 맞춰
