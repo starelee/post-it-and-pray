@@ -3686,7 +3686,7 @@
       const reselectBtn = document.createElement('button');
       reselectBtn.type = 'button';
       reselectBtn.className = 'focus-reselect-btn';
-      reselectBtn.textContent = '[할일 다시 고르기]';
+      reselectBtn.textContent = '↻ 다시 고르기';
       reselectBtn.addEventListener('click', () => {
         focusState = { step: 'pick-task' };
         saveFocusState();
