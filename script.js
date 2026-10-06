@@ -2186,6 +2186,7 @@
       input.value = sub.text;
       input.maxLength = 100;
       input.size = Math.max(2, sub.text.length);
+      fitSubtaskEditInput(input, chipEl);
       chipEl.replaceWith(input);
       input.focus();
       input.select();
@@ -2873,6 +2874,31 @@
     if (boardId === 'scheduled') render('today');
   }
 
+  // 하위 항목 수정 입력창 너비 — size(글자 수)는 한글처럼 폭이 넓은 글자에서
+  // 실제보다 훨씬 좁게 잡혀 글자가 잘렸음. 원래 칩 너비에서 시작해 글자를
+  // 입력하는 만큼 같은 글꼴로 실제 폭을 재서 늘림. chipEl은 아직 DOM에
+  // 붙어 있을 때(replaceWith 전에) 넘겨야 너비를 잴 수 있음.
+  function fitSubtaskEditInput(input, chipEl) {
+    const startW = chipEl && chipEl.offsetWidth ? chipEl.offsetWidth : 0;
+    const probe = document.createElement('span');
+    probe.style.cssText = 'position:absolute;visibility:hidden;white-space:pre;left:-9999px;top:0;';
+    const fit = () => {
+      if (!input.isConnected) return;
+      const cs = getComputedStyle(input);
+      probe.style.font = cs.font;
+      probe.style.letterSpacing = cs.letterSpacing;
+      probe.textContent = input.value || ' ';
+      document.body.appendChild(probe);
+      const textW = probe.getBoundingClientRect().width;
+      probe.remove();
+      input.style.boxSizing = 'content-box';
+      input.style.width = Math.ceil(Math.max(startW, textW + 8)) + 'px';
+    };
+    input.addEventListener('input', fit);
+    // 붙은 직후(replaceWith 다음 틱)에 한 번 맞춤 — 그때부터 폰트가 계산됨
+    requestAnimationFrame(fit);
+  }
+
   function startEditSubtask(boardId, taskId, subId) {
     const task = boards[boardId].find(t => t.id === taskId);
     const sub = task && task.subtasks.find(s => s.id === subId);
@@ -2888,6 +2914,7 @@
     input.value = sub.text;
     input.maxLength = 100;
     input.size = Math.max(2, sub.text.length);
+    fitSubtaskEditInput(input, chipEl);
     chipEl.replaceWith(input);
     input.focus();
     input.select();
@@ -3602,6 +3629,7 @@
     input.value = sub.text;
     input.maxLength = 100;
     input.size = Math.max(2, sub.text.length);
+    fitSubtaskEditInput(input, chipEl);
     chipEl.replaceWith(input);
     input.focus();
     input.select();
