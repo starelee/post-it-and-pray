@@ -3986,14 +3986,23 @@
     if (focusState.step === 'ended') {
       focusTitleEl.textContent = FOCUS_TITLE_TEXT;
       focusBodyEl.appendChild(makeFocusTaskBox());
+      // 진행 중 카운트다운 박스와 같은 반투명 점선 박스 안에 아이콘 4개만
+      // 한 줄로 — 완료는 gotta do 체크박스와 같은 SVG, 나머지는 이모지.
+      const endBox = document.createElement('div');
+      endBox.className = 'focus-box focus-duration-box focus-countdown-box';
       const choices = document.createElement('div');
-      choices.className = 'focus-end-choices';
+      choices.className = 'focus-countdown-actions focus-end-choices';
 
-      const doneBtn = makeFocusFooterBtn('완료로 표시', 'focus-footer-btn-primary');
+      const doneBtn = document.createElement('button');
+      doneBtn.type = 'button';
+      doneBtn.className = 'checkbox focus-check-btn';
+      doneBtn.title = '완료로 표시';
+      doneBtn.setAttribute('aria-label', '완료로 표시');
+      doneBtn.appendChild(makeCheckSvg());
       doneBtn.addEventListener('click', finishFocusAsDone);
 
       // 같은 할 일로 시간 선택 단계로 돌아가 타이머를 다시 맞춤.
-      const restartBtn = makeFocusFooterBtn('타이머 다시 설정하기');
+      const restartBtn = makeFocusIconBtn('🔄', '타이머 다시 설정하기');
       restartBtn.addEventListener('click', () => {
         focusState.step = 'pick-duration';
         focusState.endAt = null;
@@ -4006,20 +4015,21 @@
         renderFocusPanel();
       });
 
-      const waitBtn = makeFocusFooterBtn('대기중으로 변경');
+      const waitBtn = makeFocusIconBtn('⏳', '대기중으로 변경');
       waitBtn.addEventListener('click', () => {
         moveTask(focusState.taskBoardId, 'waiting', focusState.taskId);
         exitFocusMode(false);
       });
 
-      const failBtn = makeFocusFooterBtn('앗.. 못했어요');
+      const failBtn = makeFocusIconBtn('😥', '앗.. 못했어요');
       failBtn.addEventListener('click', () => exitFocusMode(false));
 
       choices.appendChild(doneBtn);
       choices.appendChild(restartBtn);
       choices.appendChild(waitBtn);
       choices.appendChild(failBtn);
-      focusBodyEl.appendChild(choices);
+      endBox.appendChild(choices);
+      focusBodyEl.appendChild(endBox);
       return;
     }
   }
