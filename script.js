@@ -199,13 +199,26 @@
   }
   archiveFlagBtns.forEach(btn => btn.addEventListener('click', toggleArchivePanel));
 
-  const archiveCloseBtn = document.getElementById('archiveCloseBtn');
-  if (archiveCloseBtn) {
-    archiveCloseBtn.addEventListener('click', () => {
-      archivePanelEl.classList.remove('open');
-      setTrashViewOpen(false);
-    });
+  function closeArchivePanel() {
+    archivePanelEl.classList.remove('open');
+    setTrashViewOpen(false);
   }
+
+  const archiveCloseBtn = document.getElementById('archiveCloseBtn');
+  if (archiveCloseBtn) archiveCloseBtn.addEventListener('click', closeArchivePanel);
+
+  // Esc — 입력 중이 아니고 확인 모달도 안 떠 있을 때만 done 리갈패드 닫기.
+  // (입력칸/모달의 Esc는 각자 먼저 처리하므로 건드리지 않음.)
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape' || e.defaultPrevented) return;
+    if (!archivePanelEl.classList.contains('open')) return;
+    const modal = document.getElementById('confirmModal');
+    if (modal && !modal.hidden) return;
+    const a = document.activeElement;
+    if (a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA' || a.tagName === 'SELECT' || a.isContentEditable)) return;
+    e.preventDefault();
+    closeArchivePanel();
+  });
 
   // "not my problem... yet" 자리가 Ctrl+Z(휴지통)로 통째로 바뀌는 lupin
   // 모드 방식 — 목록 아래에 덧붙이지 않고 같은 자리를 갈아끼움. lupin처럼
