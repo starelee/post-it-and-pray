@@ -3686,7 +3686,7 @@
       const reselectBtn = document.createElement('button');
       reselectBtn.type = 'button';
       reselectBtn.className = 'focus-reselect-btn';
-      reselectBtn.textContent = '[다시 선택]';
+      reselectBtn.textContent = '[할일 다시 고르기]';
       reselectBtn.addEventListener('click', () => {
         focusState = { step: 'pick-task' };
         saveFocusState();
@@ -3706,7 +3706,7 @@
     durationBox.className = 'focus-box focus-duration-box focus-flat';
     const hint = document.createElement('p');
     hint.className = 'focus-duration-hint';
-    hint.textContent = '얼마나 집중할까요?';
+    hint.textContent = '⏲️ 얼마나 집중할까요?';
     durationBox.appendChild(hint);
     const row = document.createElement('div');
     row.className = 'focus-duration-row';
