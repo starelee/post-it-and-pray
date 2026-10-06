@@ -1442,8 +1442,20 @@
     transition: --focus-t 1s linear;
   }
 
+  /* 디졸브 중엔 글씨도 배경과 같이 천천히 돌아오게 뒤집는 구간을 넓힘(기본은
+     좁은 구간에서 확 뒤집어서, 천천히 번지는 배경과 따로 노는 느낌이 남). */
   .focus-countdown-box.focus-dissolve {
-    transition: --focus-t 2.6s ease-out;
+    --focus-ink-t: clamp(0%, calc((var(--focus-t) - 29%) * 8), 100%);
+    transition: --focus-t 3s ease-out;
+  }
+
+  .focus-end-label {
+    margin: 6px 0 10px;
+    text-align: center;
+    font-family: var(--font-ui);
+    letter-spacing: var(--ui-letter-spacing);
+    font-size: 16px;
+    color: var(--ink);
   }
 
   /* 완료로 표시/나가기가 숫자 박스 하단에 그대로 들어감 — 새 박스를

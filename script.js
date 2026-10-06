@@ -4048,6 +4048,10 @@
       endNum.className = 'focus-countdown-number';
       endNum.textContent = formatFocusClock(0);
       endBox.appendChild(endNum);
+      const endLabel = document.createElement('div');
+      endLabel.className = 'focus-end-label';
+      endLabel.textContent = '타이머 종료';
+      endBox.appendChild(endLabel);
       const choices = document.createElement('div');
       choices.className = 'focus-countdown-actions focus-end-choices';
 
