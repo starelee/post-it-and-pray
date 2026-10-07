@@ -63,6 +63,10 @@
     --collapse-dur: 0.32s;
     /* 빠르게 출발해서 끝에서 천천히 안착하는 ease-out 계열 곡선 */
     --collapse-ease: cubic-bezier(0.32, 0.72, 0, 1);
+    /* 보드 이동 도착 흔들림 — 눈에 더 잘 띄게 키우거나 줄이고 싶으면 여기 숫자만 바꾸면 됨 */
+    --wiggle-deg: 5deg;
+    --wiggle-scale: 1.04;
+    --wiggle-dur: 0.7s;
     /* 네이티브 폼 컨트롤(특히 iOS의 date input)이 다크 모드에서도 항상
        자기 자체는 밝은 배경으로 그려서, 우리 쪽 글자색(--ink, 다크에서는
        밝은 크림색)이 흰 배경 위에 흰 글자처럼 거의 안 보이던 문제 —
@@ -2014,19 +2018,42 @@
     transform-origin: center left;
   }
 
-  /* waiting/someday/pray later -> gotta do, 그리고 gotta do -> waiting 로
-     넘어간 항목이 잘 도착했음을 알리는 가벼운 흔들림. */
+  /* 보드 이동 — 도착 자리가 눈에 보일 때의 장난기 있는 흔들림. 항목 전체(하위 항목·아이콘 줄
+     포함)가 가운데를 축으로 살짝 커졌다가 점점 잦아들며 흔들리고, 옅은 막이 같이 떴다 사라져서
+     눈에 더 잘 띔(이전엔 줄 하나가 왼쪽 끝을 축으로 ±3도만 돌아서 글자가 거의 안 움직였음). */
   @keyframes move-arrive-wiggle {
-    0%, 100% { transform: rotate(0); }
-    20% { transform: rotate(-3deg); }
-    40% { transform: rotate(2.5deg); }
-    60% { transform: rotate(-2deg); }
-    80% { transform: rotate(1deg); }
+    0%   { transform: scale(1) rotate(0); }
+    15%  { transform: scale(var(--wiggle-scale)) rotate(calc(var(--wiggle-deg) * -1)); }
+    35%  { transform: scale(calc(1 + (var(--wiggle-scale) - 1) * 0.7)) rotate(calc(var(--wiggle-deg) * 0.8)); }
+    55%  { transform: scale(calc(1 + (var(--wiggle-scale) - 1) * 0.3)) rotate(calc(var(--wiggle-deg) * -0.5)); }
+    75%  { transform: scale(1) rotate(calc(var(--wiggle-deg) * 0.25)); }
+    100% { transform: scale(1) rotate(0); }
   }
 
-  .move-arrive-wiggle .task-row {
-    animation: move-arrive-wiggle 0.45s ease-in-out both;
-    transform-origin: center left;
+  @keyframes move-veil {
+    0%, 25% { background: var(--flash-fill); }
+    100%    { background: transparent; }
+  }
+
+  .move-arrive-wiggle {
+    border-radius: 6px;
+    transform-origin: center;
+    animation:
+      move-arrive-wiggle var(--wiggle-dur) ease-in-out both,
+      move-veil 0.6s ease-out both;
+  }
+
+  /* 보드 이동 — 출발 자리가 사라지는 연출. 투명해지면서 높이도 접혀서 아래 항목이 점프하지
+     않고 미끄러져 올라옴(길이는 JS가 --move-out-dur로 넘김: 보일 땐 0.2초, 안 보일 땐 0.4초). */
+  @keyframes move-out {
+    from { max-height: var(--move-h); opacity: 1; }
+    to   { max-height: 0; opacity: 0; padding-top: 0; padding-bottom: 0; margin-top: 0; margin-bottom: 0; }
+  }
+
+  .task-item.move-out {
+    overflow: hidden;
+    pointer-events: none;
+    animation: move-out var(--move-out-dur, 200ms) var(--collapse-ease) forwards;
   }
 
   /* gotta do -> someday/pray later 로 넘어간 항목 — 나중에 할 일이라 강조는
@@ -3202,7 +3229,7 @@
     align-self: flex-start;
   }
 
-  /* 검색 결과로 이동했을 때 그 항목을 잠깐 강조 — 카드 색(노랑/주황/파랑/크림)에
+  /* 검색 결과로 이동하거나 손댈 항목으로 옮겼을 때 그 항목을 잠깐 강조 — 카드 색(노랑/주황/파랑/크림)에
      상관없이 보이도록 색 대신 "밝은 반투명 막 + 회색 윤곽선(+ 살짝 뜬 그림자)"로.
      윤곽선은 글자색(--ink)에서 따와서 다크 모드에서는 밝은 선이 됨. */
   :root {
@@ -3219,12 +3246,12 @@
     --flash-fill: rgba(255, 255, 255, 0.18);
   }
 
-  .search-flash {
+  .attention-flash {
     border-radius: 6px;
-    animation: search-flash 2.2s ease-out;
+    animation: attention-flash 1.4s ease-out;
   }
 
-  @keyframes search-flash {
+  @keyframes attention-flash {
     0% {
       background: transparent;
       box-shadow: 0 0 0 0 transparent;

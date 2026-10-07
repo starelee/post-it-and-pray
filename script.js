@@ -370,6 +370,11 @@
   // 먼저 펼친 뒤 스크롤하고, 항목에 포커스를 주고 잠깐 강조함.
   function goToTask(boardId, taskId) {
     closeSearchPanel();
+    revealTask(boardId, taskId);
+  }
+
+  // 항목 위치로 이동해서 보여줌(검색 결과 이동과, 손댈 항목으로 옮겼을 때 공용).
+  function revealTask(boardId, taskId) {
     if (isLupinOpen()) setLupinOpen(false); // waiting 뒷면(lupin)이 보이는 중이면 앞면으로
     let el = findTaskLi(taskId);
     let focusEl = null;
@@ -402,10 +407,10 @@
       if (!el.isConnected) return;
       el.scrollIntoView({ behavior: 'smooth', block: 'center' });
       try { focusEl.focus({ preventScroll: true }); } catch (e) { /* 포커스 불가면 강조만 */ }
-      el.classList.remove('search-flash');
+      el.classList.remove('attention-flash');
       void el.offsetWidth; // 연속으로 눌러도 애니메이션이 다시 돌도록
-      el.classList.add('search-flash');
-      setTimeout(() => el.classList.remove('search-flash'), 2000);
+      el.classList.add('attention-flash');
+      setTimeout(() => el.classList.remove('attention-flash'), 1500);
     }, delay);
   }
 
@@ -3593,6 +3598,70 @@
     if (archivePanelEl.classList.contains('open')) renderTrash();
   }
 
+  // ─────────────────────────────
+  // 보드 이동 연출 규칙 (완료/취소선과는 별개)
+  //  0. 옮긴 뒤 곧 손댈 항목(waiting/someday/pray later → gotta do):
+  //     도착 자리를 펼치고 스크롤해서 포커스 + 반투명 막으로 보여줌.
+  //  1. 손대지 않을 항목:
+  //   1-1. 도착 자리가 지금 보이면: 출발 자리는 살짝(0.2초) 사라지고, 도착 자리에서 장난기 있는 흔들림.
+  //   1-2. 안 보이면(접힌 구역, 모바일에서 화면 밖, 7일 넘게 남은 pray later 등):
+  //        출발 자리는 조금 더 길게(0.4초) 사라지고, 하단 알림으로 "○○으로 옮겼어요".
+  // 데이터는 곧바로 옮기고 저장하며(되돌리기도 그대로), 화면 갱신만 사라지는 연출이 끝난 뒤에 함.
+  // ─────────────────────────────
+  const MOVE_OUT_MS = 200;
+  const MOVE_OUT_LONG_MS = 400;
+  const MOVE_TO_LABEL = { today: 'gotta do로', waiting: 'waiting으로', someday: 'someday로', scheduled: 'pray later로' };
+
+  function wantsEditAfterMove(fromBoardId, toBoardId) {
+    return toBoardId === 'today' && (fromBoardId === 'waiting' || fromBoardId === 'someday' || fromBoardId === 'scheduled');
+  }
+
+  function isElementInViewport(el) {
+    const r = el.getBoundingClientRect();
+    return r.width > 0 && r.bottom > 40 && r.top < window.innerHeight - 40;
+  }
+
+  // 도착 자리가 지금 사용자 눈에 보이나 — 목록이 펼쳐져 있고(접힌 구역/lupin 뒷면/focus 화면이
+  // 아님) 화면 안에 있어야 함. 새 항목은 목록 맨 아래에 붙으므로 목록 아래쪽이 보이는지로 판단.
+  function isMoveDestinationVisible(toBoardId, task) {
+    if (toBoardId === 'scheduled' && task.dueDate && daysUntilDue(task.dueDate) > 7) return false; // done 패널에만 있음
+    if (toBoardId === 'waiting' && isLupinOpen()) return false;
+    const listEl = getListEl(toBoardId);
+    if (!listEl || listEl.offsetParent === null) return false;
+    // 새 항목은 목록 맨 아래에 붙으니, 목록이 보이는 것만으로는 부족하고 그 아래에 항목 하나
+    // 들어갈 자리(약 70px)까지 화면 안이어야 함.
+    const r = listEl.getBoundingClientRect();
+    return r.width > 0 && r.bottom > 40 && r.bottom + 70 < window.innerHeight;
+  }
+
+  function finishMove(fromBoardId, toBoardId, task, renderFn) {
+    const id = task.id;
+    const edit = wantsEditAfterMove(fromBoardId, toBoardId);
+    const visible = edit || isMoveDestinationVisible(toBoardId, task);
+    const reduce = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+    const srcLi = findTaskLi(id);
+    const canAnimate = !!srcLi && srcLi.offsetParent !== null && !reduce;
+    const outMs = canAnimate ? (visible ? MOVE_OUT_MS : MOVE_OUT_LONG_MS) : 0;
+    if (canAnimate) {
+      srcLi.style.setProperty('--move-h', srcLi.offsetHeight + 'px');
+      srcLi.style.setProperty('--move-out-dur', outMs + 'ms');
+      srcLi.classList.add('move-out');
+    }
+    const toastText = MOVE_TO_LABEL[toBoardId] + ' 옮겼어요';
+    if (!visible) showToast(toastText);
+    setTimeout(() => {
+      if (visible && !edit) moveHighlight = { id, mode: 'wiggle' };
+      renderFn();
+      if (edit) {
+        revealTask(toBoardId, id);
+      } else if (visible) {
+        // 보일 거라고 봤는데 실제로 안 보이면(화면 밖 등) 알림으로 대신 알림
+        const li = findTaskLi(id);
+        if (!li || li.offsetParent === null || !isElementInViewport(li)) showToast(toastText);
+      }
+    }, outMs);
+  }
+
   function moveTask(fromBoardId, toBoardId, id) {
     const idx = boards[fromBoardId].findIndex(t => t.id === id);
     if (idx === -1) return;
@@ -3607,21 +3676,16 @@
       delete task.doneAt;
     }
     boards[toBoardId].push(task);
-    if (toBoardId === 'today' && (fromBoardId === 'waiting' || fromBoardId === 'someday' || fromBoardId === 'scheduled')) {
-      moveHighlight = { id, mode: 'wiggle' };
-    } else if (fromBoardId === 'today' && toBoardId === 'waiting') {
-      moveHighlight = { id, mode: 'wiggle' };
-    } else if (fromBoardId === 'today' && toBoardId === 'someday') {
-      moveHighlight = { id, mode: 'fade' };
-    }
     saveBoards();
-    render(fromBoardId);
-    render(toBoardId);
-    // scheduled 항목(오늘 마감/지난 마감분)은 실제로 today 카드 안에
-    // 그려져 있어서, scheduled 쪽이 오가면 today도 같이 다시 그려야
-    // 화면에서 바로 사라지거나 나타남 — 안 하면 새로고침 전까진 그대로
-    // 남아있는 것처럼 보임.
-    if (fromBoardId === 'scheduled' || toBoardId === 'scheduled') render('today');
+    finishMove(fromBoardId, toBoardId, task, () => {
+      render(fromBoardId);
+      render(toBoardId);
+      // scheduled 항목(오늘 마감/지난 마감분)은 실제로 today 카드 안에
+      // 그려져 있어서, scheduled 쪽이 오가면 today도 같이 다시 그려야
+      // 화면에서 바로 사라지거나 나타남 — 안 하면 새로고침 전까진 그대로
+      // 남아있는 것처럼 보임.
+      if (fromBoardId === 'scheduled' || toBoardId === 'scheduled') render('today');
+    });
   }
 
   // Assigning a date on a today/someday task moves it into `scheduled`;
@@ -3667,9 +3731,16 @@
         delete task.from;
         boards[backTo].push(task);
         saveBoards();
-        render('today');
-        render('scheduled');
-        render(backTo);
+        const rerender = () => {
+          render('today');
+          render('scheduled');
+          render(backTo);
+          if (archivePanelEl.classList.contains('open')) renderUpcoming();
+        };
+        // 이미 gotta do 카드 안에 보이던 항목이 제자리에 남는 경우는 옮겨 가는 게 아니라 연출 없이 바로 갱신
+        if (wasInTodayCard) rerender();
+        else finishMove('scheduled', backTo, task, rerender);
+        return;
       }
       if (archivePanelEl.classList.contains('open')) renderUpcoming();
     } else if (dateValue) {
@@ -3677,14 +3748,13 @@
       task.dueDate = dateValue;
       task.from = boardId;
       boards.scheduled.push(task);
-      if (boardId === 'today') {
-        moveHighlight = { id, mode: 'fade' };
-      }
       saveBoards();
-      render(boardId);
-      render('today');
-      render('scheduled');
-      if (archivePanelEl.classList.contains('open')) renderUpcoming();
+      finishMove(boardId, 'scheduled', task, () => {
+        render(boardId);
+        render('today');
+        render('scheduled');
+        if (archivePanelEl.classList.contains('open')) renderUpcoming();
+      });
     }
   }
 
@@ -3702,10 +3772,10 @@
 
   // Set right before a render caused by moveTask, so the freshly rebuilt li
   // for that one task can play a one-shot arrival animation — renderItem
-  // consumes and clears it as soon as it matches. 'wiggle' is a light shake,
-  // used both for waiting/someday/scheduled -> today and for today ->
-  // waiting; 'fade' is a soft fade/rise-in for today -> someday. Any other
-  // transition gets no animation.
+  // consumes and clears it as soon as it matches. 'wiggle' is the playful
+  // arrival shake for moves into a place the user can see (finishMove decides
+  // — see the move rules there); 'fade' is the soft rise-in used when a
+  // checked/unchecked task re-lands below the divider (toggleTask).
   let moveHighlight = null;
 
   // draft: 등록 전 입력창에서 마우스로 미리 정해둔 긴급/날짜/하위 항목
