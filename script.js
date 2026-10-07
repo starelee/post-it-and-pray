@@ -2701,8 +2701,23 @@
     let noteArea = null;
     let newSubInput = null;
 
+    // focus 카운트다운 중에 연 모달은 뒷화면(타이머)이 가려지고 흐려지니,
+    // 남은 시간을 모달 맨 위에 같이 보여주고 매초 갱신함.
+    let clockEl = null;
+    let clockTimer = null;
+    const refreshClock = () => {
+      if (!clockEl || !focusState) return;
+      clockEl.textContent = (focusState.paused ? '⏸ ' : '⏰ ') + formatFocusClock(focusState.remainingSec || 0);
+    };
+
     function buildView() {
       clearEl(card);
+      if (readOnly && focusState && isFocusLocked()) {
+        clockEl = document.createElement('p');
+        clockEl.className = 'note-focus-clock';
+        card.appendChild(clockEl);
+        refreshClock();
+      }
       const title = document.createElement('p');
       title.className = 'note-view-title';
       title.textContent = task.text;
@@ -2830,6 +2845,7 @@
 
     okBtn.hidden = readOnly;
     if (editing) setTimeout(focusNoteArea, 60);
+    if (clockEl) clockTimer = setInterval(refreshClock, 500);
     const ok = await showConfirm({
       title: '메모',
       content: card,
@@ -2851,6 +2867,7 @@
       }
     });
     okBtn.hidden = false;
+    clearInterval(clockTimer);
     if (!ok || !editing) return;
 
     // 모달이 떠 있던 사이 상태가 바뀌었을 수 있어 id로 다시 찾음
