@@ -1104,7 +1104,7 @@
     /* 위쪽 가장자리를 축으로 삼아서, 항목 아이콘 줄이 열려 카드가 길어져도 위쪽 정렬은 그대로
        두고 아래로만 늘어남(가운데 축이면 높이가 변할 때 위쪽 모서리가 따라 움직임). */
     transform-origin: center top;
-    transition: box-shadow 0.25s var(--ease-ui);
+    transition: transform 0.25s var(--ease-ui), box-shadow 0.25s var(--ease-ui);
   }
 
   @media (max-width: 480px) {
@@ -1115,9 +1115,10 @@
     }
   }
 
-  /* 호버/포커스 때 카드를 들어 올리거나 기울기를 바꾸지 않음 — 항목에 마우스를 올릴 때마다 보드 3개가
-     같이 꿈틀거려서 정신이 산만했음. 그림자만 살짝 짙어짐. */
+  /* 보드에 들어올 때 살짝 들리는 동작은 유지. 항목 아이콘 줄이 열려 높이가 변해도 이 transform은
+     그대로라 위쪽 정렬이 안 움직임(기준점이 위쪽이라서). */
   .sticky:hover, .sticky:focus-within {
+    transform: rotate(calc(var(--rot, -1.4deg) * 0.4)) translateY(-5px);
     box-shadow:
       0 26px 34px -14px var(--paper-shadow),
       0 4px 8px var(--paper-contact),
