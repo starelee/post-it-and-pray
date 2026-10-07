@@ -2662,13 +2662,10 @@
   // "수정"을 누르면 같은 모달 안에서 셋 다 입력칸으로 바뀜(저장/취소).
   // 기존 확인 모달(showConfirm)을 그대로 쓰고, 확인 버튼의 beforeConfirm이
   // false를 돌려주면 닫히지 않는 점을 이용해 읽기→수정 전환을 처리함.
-  // readOnly(focus 카운트다운 중)면 수정 없이 "닫기"만.
   async function openNoteModal(boardId, taskId, opts) {
     opts = opts || {};
     const task = boards[boardId] && boards[boardId].find(t => t.id === taskId);
     if (!task) return;
-    const readOnly = !!opts.readOnly;
-    if (readOnly && !task.note) return;
     const overlay = document.getElementById('confirmModal');
     const okBtn = document.getElementById('confirmOk');
     const cancelBtn = document.getElementById('confirmCancel');
@@ -2701,23 +2698,8 @@
     let noteArea = null;
     let newSubInput = null;
 
-    // focus 카운트다운 중에 연 모달은 뒷화면(타이머)이 가려지고 흐려지니,
-    // 남은 시간을 모달 맨 위에 같이 보여주고 매초 갱신함.
-    let clockEl = null;
-    let clockTimer = null;
-    const refreshClock = () => {
-      if (!clockEl || !focusState) return;
-      clockEl.textContent = (focusState.paused ? '⏸ ' : '⏰ ') + formatFocusClock(focusState.remainingSec || 0);
-    };
-
     function buildView() {
       clearEl(card);
-      if (readOnly && focusState && isFocusLocked()) {
-        clockEl = document.createElement('p');
-        clockEl.className = 'note-focus-clock';
-        card.appendChild(clockEl);
-        refreshClock();
-      }
       const title = document.createElement('p');
       title.className = 'note-view-title';
       title.textContent = task.text;
@@ -2843,9 +2825,7 @@
       buildView();
     }
 
-    okBtn.hidden = readOnly;
     if (editing) setTimeout(focusNoteArea, 60);
-    if (clockEl) clockTimer = setInterval(refreshClock, 500);
     const ok = await showConfirm({
       title: '메모',
       content: card,
@@ -2866,8 +2846,6 @@
         }
       }
     });
-    okBtn.hidden = false;
-    clearInterval(clockTimer);
     if (!ok || !editing) return;
 
     // 모달이 떠 있던 사이 상태가 바뀌었을 수 있어 id로 다시 찾음
@@ -3980,18 +3958,25 @@
     box.className = 'focus-box focus-task-box' + (flat ? ' focus-flat' : '');
     box.appendChild(makeFocusPickedTaskLabel());
     appendFocusSubtasks(box, focusState.taskBoardId, focusState.taskId);
+    // 메모는 알약 대신 박스 안에 바로 보여줌 — 카운트다운 중엔 읽기 전용이고,
+    // 시간 고르는 단계에선 누르면 메모 수정 모달이 열림(제목 수정과 같은 방식).
     const focusTask = boards[focusState.taskBoardId] && boards[focusState.taskBoardId].find(t => t.id === focusState.taskId);
     if (focusTask && focusTask.note) {
-      const noteBadge = document.createElement('button');
-      noteBadge.type = 'button';
-      noteBadge.className = 'note-badge focus-note-badge';
-      noteBadge.textContent = '메모';
-      noteBadge.setAttribute('aria-label', '메모 보기');
-      // 카운트다운 중엔 읽기 전용 — 몰입 중에 수정 화면을 열지 않게 함.
-      noteBadge.addEventListener('click', () => {
-        openNoteModal(focusState.taskBoardId, focusState.taskId, { anchorEl: box, readOnly: isFocusLocked() });
-      });
-      box.appendChild(noteBadge);
+      const noteEl = document.createElement('p');
+      noteEl.className = 'focus-note';
+      noteEl.textContent = focusTask.note;
+      if (!isFocusLocked()) {
+        noteEl.classList.add('focus-note-editable');
+        noteEl.tabIndex = 0;
+        noteEl.setAttribute('role', 'button');
+        noteEl.setAttribute('aria-label', '메모 수정');
+        const edit = () => openNoteModal(focusState.taskBoardId, focusState.taskId, { anchorEl: box, startEditing: true });
+        noteEl.addEventListener('click', edit);
+        noteEl.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); edit(); }
+        });
+      }
+      box.appendChild(noteEl);
     }
     if (showReselect) {
       const reselectBtn = document.createElement('button');
