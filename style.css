@@ -300,9 +300,12 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: center;
+    /* 세로 가운데 정렬(center)이면 가장 긴 보드의 높이가 바뀔 때마다(항목 아이콘 줄이 열리고 닫힐 때
+       +-22px) 화면 전체가 반 만큼씩 위아래로 움직여서 보드 3개가 같이 출렁였음. 위에서부터 쌓고,
+       위 여백만 화면 높이에 비례해 줘서 큰 화면에서도 비슷한 위치에 놓음. */
+    justify-content: flex-start;
     gap: clamp(18px, 4vh, 40px);
-    padding: 32px 20px 24px;
+    padding: clamp(32px, 14vh, 160px) 20px 24px;
   }
 
   @media (max-width: 480px) {
