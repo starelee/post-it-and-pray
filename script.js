@@ -5602,7 +5602,36 @@
     openAddSubtaskRow(null, Number(li.dataset.id), true);
   });
 
+  // 보드 윗 여백 — 화면 안에서 보드가 차지하는 높이에 맞춰 정함. 보드가 화면보다 한참 작으면 가운데에
+  // 가깝게 내려오되 SCREEN_TOP_MAX까지만(그 이상은 스크롤만 늘림), 화면을 거의 채우면 SCREEN_TOP_MIN.
+  // 호버로 열린 아이콘 줄(.task-controls) 높이는 빼고 재서, 마우스를 올리고 내릴 때는 위치가 안 바뀜.
+  const SCREEN_TOP_MIN = 32;
+  const SCREEN_TOP_MIN_STACKED = 20; // 카드가 세로로 쌓이는 폭(821px 이하)에서는 위 여백을 더 줄임
+  const SCREEN_TOP_MAX = 96;
+  const SCREEN_BOTTOM_PAD = 24;
+  const screenEl = document.querySelector('.screen');
+  const boardRowEl = document.querySelector('.board-row');
+  function updateScreenTop() {
+    if (!screenEl || !boardRowEl) return;
+    // .screen 자체는 화면 높이만큼 늘어나 있어서(flex:1), 첫/끝 자식의 위치로 내용 높이를 잼.
+    const first = screenEl.firstElementChild;
+    const last = screenEl.lastElementChild;
+    let h = last.getBoundingClientRect().bottom - first.getBoundingClientRect().top;
+    screenEl.querySelectorAll('.task-controls').forEach(el => {
+      h -= el.offsetHeight + (parseFloat(getComputedStyle(el).marginTop) || 0);
+    });
+    const free = window.innerHeight - h - SCREEN_BOTTOM_PAD;
+    const min = window.matchMedia('(max-width: 821px)').matches ? SCREEN_TOP_MIN_STACKED : SCREEN_TOP_MIN;
+    const top = Math.round(Math.min(SCREEN_TOP_MAX, Math.max(min, free / 2)));
+    if (screenEl.style.getPropertyValue('--screen-top') !== top + 'px') {
+      screenEl.style.setProperty('--screen-top', top + 'px');
+    }
+  }
+  if (screenEl && 'ResizeObserver' in window) new ResizeObserver(updateScreenTop).observe(boardRowEl);
+  window.addEventListener('resize', updateScreenTop);
+
   restoreFocusSession();
   renderAll();
   resetHistory();
+  updateScreenTop();
 })();
