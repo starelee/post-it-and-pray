@@ -3239,3 +3239,67 @@
     align-self: flex-start;
   }
 
+
+  /* ───── done 리갈패드: 모든 행을 28px 줄 간격에 맞춤 ─────
+     이전엔 날짜 묶음마다 위에 6px 여백(.archive-date-group padding)과 월 제목 높이(21px)가 28px
+     단위가 아니라서, 아래로 갈수록 글씨가 리갈패드 줄과 어긋나 취소선이 줄과 겹쳐 보였음.
+     그래서 날짜 묶음 위 여백을 없애고(날짜 구분은 왼쪽 라벨이 함), 제목/월 제목/항목 줄 높이를
+     전부 28px 단위로 고정함(검색 패드와 같은 방식: 글씨는 줄 위에 앉도록 3px 내림). */
+  #archivePanel .archive-panel-inner {
+    padding-top: 28px;
+    padding-bottom: 28px;
+  }
+
+  #archivePanel .archive-title {
+    height: 28px;
+    margin: 0;
+    line-height: 28px;
+    align-items: center;
+  }
+
+  #archivePanel .archive-title.archive-section-title-spaced {
+    margin-top: 28px; /* 섹션 사이는 빈 줄 한 칸 */
+  }
+
+  /* 제목 밑 점선: 자리를 차지하지 않게(높이 0) 줄 위에 겹쳐서 그림 */
+  #archivePanel .archive-section-divider {
+    height: 0;
+    margin: -1px 0 0;
+    border-bottom: 0;
+    border-top: 1px dashed var(--focus-box-border);
+  }
+
+  #archivePanel .archive-groups .sticky-title-toggle {
+    height: 28px;
+    margin: 0;
+    line-height: 28px;
+    align-items: center;
+  }
+
+  #archivePanel .archive-date-group {
+    padding: 0;
+    gap: 6px;
+  }
+
+  #archivePanel .archive-date-heading {
+    padding-top: 0;
+    line-height: 28px;
+  }
+
+  #archivePanel .archive-item {
+    padding: 0;
+    min-height: 28px;
+  }
+
+  #archivePanel .archive-item-text {
+    line-height: 28px;
+    position: relative;
+    top: 3px;
+  }
+
+  #archivePanel .archive-title,
+  #archivePanel .archive-groups .sticky-title-toggle,
+  #archivePanel .archive-date-heading {
+    position: relative;
+    top: 3px;
+  }
