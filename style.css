@@ -453,6 +453,11 @@
     transition: opacity 0.15s ease, color 0.15s ease, border-color 0.15s ease;
   }
 
+  /* 💾 백업 버튼 — 글자 없이 아이콘만이라 라이트 버튼보다 좁게 */
+  .backup-btn {
+    padding: 3px 8px;
+  }
+
   .theme-toggle:hover {
     opacity: 1;
     color: var(--accent);
@@ -461,13 +466,19 @@
 
   .archive-flag,
   .search-flag {
+    /* 아이콘은 깃발 위쪽에 붙임(가운데 정렬보다 귀여움) */
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    font-size: 11px;
+    line-height: 1;
     position: absolute;
     top: -22px;
     right: 18px;
     z-index: 5;
     width: 18px;
     height: 34px;
-    padding: 0;
+    padding: 4px 0 0;
     border: none;
     background: var(--urgent);
     box-shadow: 1px 2px 4px rgba(0, 0, 0, 0.2);
@@ -488,12 +499,7 @@
      가운데 정렬하고, 색은 파랑 계열로 구분. */
   .search-flag {
     right: 44px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
     background: var(--flag-search);
-    font-size: 11px;
-    line-height: 1;
   }
 
   /* On narrow (stacked) layouts the flag reads as attached to the "gotta
@@ -510,9 +516,7 @@
     .search-flag-mobile {
       display: none;
     }
-    .archive-flag-desktop {
-      display: block;
-    }
+    .archive-flag-desktop,
     .search-flag-desktop {
       display: flex;
     }
@@ -3100,4 +3104,31 @@
       transition-duration: 0.01ms !important;
       animation-duration: 0.01ms !important;
     }
+  }
+
+  /* ───── 백업 / 복구 모달 ───── */
+  .backup-card {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .backup-hint {
+    margin: 0;
+    font-family: var(--font-ui);
+    letter-spacing: var(--ui-letter-spacing);
+    font-size: 15px;
+    line-height: 1.5;
+    color: var(--ink-soft);
+  }
+
+  .backup-summary {
+    margin: 0;
+    font-family: var(--font-note);
+    font-size: 12px;
+    color: var(--ink);
+  }
+
+  .backup-restore-btn {
+    align-self: flex-start;
   }

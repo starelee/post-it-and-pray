@@ -97,3 +97,18 @@ type Subtask = {
 - 로컬: `localStorage['postit-todo-boards-v1']` — 위 `Boards` shape을 그대로 `JSON.stringify`.
 - 클라우드(로그인 시): Supabase `postit_data` 테이블, `id` = Supabase 유저 id, `data` 컬럼에 같은 `Boards` JSON. 본인 행에만 접근 가능.
 - 테마 설정(`light`/`dark`)은 별도로 `localStorage['postit-theme']`에 저장 — `boards`와 무관.
+
+## 백업 파일
+
+헤더의 💾 버튼으로 내려받는 백업 파일은 위 `boards`를 래퍼로 감싼 JSON임:
+
+```ts
+type BackupFile = {
+  app: 'post-it-and-pray';
+  version: 1;          // 파일 형식 버전. 더 큰 값은 복구 시 거절됨
+  exportedAt: string;  // ISO 8601
+  boards: Boards;      // lupin, trash 포함 전체
+};
+```
+
+복구는 `boards`를 `normalizeBoards`로 정리한 뒤 통째로 교체함. `boards`만 있는 파일(래퍼 없음)도 받아줌.
