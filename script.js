@@ -243,6 +243,7 @@
   function openSearchPanel() {
     if (isFocusLocked() || isConfirmModalOpen()) return;
     if (archivePanelEl.classList.contains('open')) closeArchivePanel();
+    staleSampleIds = null; // 열 때마다 새로 뽑음
     searchPanelEl.classList.add('open');
     renderSearchResults();
     // 패널이 접힌 상태에서 막 펼쳐지는 중이라 한 프레임 뒤에 포커스
@@ -364,6 +365,18 @@
     return groups.filter(g => g.hits.length);
   }
 
+  // 카드 제목에 붙은 그 아이콘(✿ gotta do, ⏳ waiting, 🌙 someday, 📅 pray later)과
+  // 같은 기호 — done 기록은 done 패널 제목의 📋. 항목이 어느 보드 것인지 알려줌.
+  const BOARD_ICONS = { today: '✿', waiting: '⏳', someday: '🌙', scheduled: '📅', archive: '📋', done: '📋' };
+
+  function makeBoardIcon(key) {
+    const icon = document.createElement('span');
+    icon.className = 'search-icon' + (key === 'today' ? ' search-icon-flower' : '');
+    icon.textContent = BOARD_ICONS[key] || '';
+    icon.setAttribute('aria-hidden', 'true');
+    return icon;
+  }
+
   function makeSearchChip(text) {
     const chip = document.createElement('span');
     chip.className = 'search-chip';
@@ -380,6 +393,7 @@
 
     const row = document.createElement('div');
     row.className = 'search-item-row';
+    row.appendChild(makeBoardIcon(groupKey));
     const title = document.createElement('span');
     title.className = 'search-item-text';
     appendHighlighted(title, task.text || '', tokens);
@@ -540,8 +554,17 @@
   // 한 항목은 위 섹션에만 나옴. lupin/gone은 여기서도 제외.
   // ─────────────────────────────
   const SUGGEST_LIMIT = 4;
+  let staleSampleIds = null; // '오래 묵은 것'으로 뽑은 항목 id(패드가 열려 있는 동안 고정)
   const STALE_DAYS = 14;
   const RECENT_DONE_DAYS = 3;
+
+  // 며칠째인지 정확한 숫자 대신 단계로 보여줌(19일/20일은 의미 있는 차이가 아니라서).
+  // 60일 넘으면 전부 '두 달째'.
+  function staleLabel(days) {
+    if (days >= 60) return '두 달째';
+    if (days >= 30) return '한 달째';
+    return '2주째';
+  }
 
   function suggestChecklistTags(task) {
     const subs = task.subtasks || [];
@@ -588,12 +611,23 @@
       const touched = task.updatedAt || (task.id > 1e12 ? task.id : 0);
       if (!touched) return;
       const days = Math.floor((Date.now() - touched) / 86400000);
-      if (days >= STALE_DAYS) stale.push({ task, boardId, tags: [days + '일째 그대로'], days });
+      if (days >= STALE_DAYS) stale.push({ task, boardId, tags: [staleLabel(days)], days });
     };
     boards.someday.filter(t => !t.done).forEach(t => considerStale(t, 'someday'));
     boards.waiting.forEach(t => considerStale(t, 'waiting'));
-    stale.sort((a, b) => b.days - a.days);
-    const staleTop = stale.slice(0, SUGGEST_LIMIT);
+    // 후보가 4개보다 많으면 무작위로 뽑음 — 오래된 순으로 자르면 같은 4개만 계속 보이기 때문.
+    // 패드를 열 때 한 번 뽑고(openSearchPanel에서 초기화) 열려 있는 동안은 고정해서,
+    // 메모를 저장하는 등 다시 그릴 때마다 목록이 바뀌지 않게 함. 뽑은 뒤 더는 묵은 게
+    // 아니게 된 항목은 빼고 남은 후보에서 채움.
+    const byId = new Map(stale.map(st => [st.task.id, st]));
+    if (!staleSampleIds) staleSampleIds = [];
+    staleSampleIds = staleSampleIds.filter(id => byId.has(id));
+    const pool = stale.filter(st => !staleSampleIds.includes(st.task.id));
+    while (staleSampleIds.length < SUGGEST_LIMIT && pool.length) {
+      const i = Math.floor(Math.random() * pool.length);
+      staleSampleIds.push(pool.splice(i, 1)[0].task.id);
+    }
+    const staleTop = staleSampleIds.map(id => byId.get(id)).sort((a, b) => b.days - a.days);
 
     // 3) 최근 완료 — 최근 3일(오늘 포함) 안에 끝낸 것
     const recent = collectArchiveEntries()
@@ -620,6 +654,7 @@
     li.setAttribute('role', 'button');
     const row = document.createElement('div');
     row.className = 'search-item-row';
+    row.appendChild(makeBoardIcon(item.done ? 'done' : item.boardId));
     const title = document.createElement('span');
     title.className = 'search-item-text';
     title.textContent = task.text || '';
@@ -644,7 +679,7 @@
     if (sections.length === 0) {
       const hint = document.createElement('p');
       hint.className = 'empty-hint';
-      hint.textContent = '제목, 하위 항목, 메모에서 찾아요';
+      hint.textContent = '지금 챙길 게 없어요';
       searchResultsEl.appendChild(hint);
       return;
     }
@@ -3130,8 +3165,9 @@
             : items[i === -1 || i === items.length - 1 ? 0 : i + 1];
           e.preventDefault();
           next.focus();
-        } else if (e.key === 'Enter' && !(e.target instanceof HTMLInputElement)) {
-          // 뒤쪽 화면의 단축키가 Enter를 가로채지 않게 (입력칸의 Enter는 그대로 통과)
+        } else if (e.key === 'Enter' && !(e.target instanceof HTMLInputElement) && !(e.target instanceof HTMLTextAreaElement)) {
+          // 뒤쪽 화면의 단축키가 Enter를 가로채지 않게 (입력칸/textarea의 Enter는 그대로 통과 —
+          // 메모 칸의 Shift+Enter 저장이 그 칸의 keydown까지 닿아야 함)
           e.stopPropagation();
         }
       }
@@ -3175,9 +3211,10 @@
     const card = document.createElement('div');
     card.className = 'revive-card note-card';
 
-    // 수정 중에는 어느 칸에서든 Ctrl+Enter로 저장
+    // 수정 중에는 어느 칸에서든 Shift+Enter(= Alt/Ctrl/Cmd+Enter)로 저장 — 새 항목 입력창의
+    // Shift+Enter("확정하고 다음으로")와 같은 규칙. 메모 칸의 Enter는 그냥 줄바꿈.
     card.addEventListener('keydown', (e) => {
-      if (editing && e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+      if (editing && e.key === 'Enter' && !e.isComposing && (e.shiftKey || e.altKey || e.ctrlKey || e.metaKey)) {
         e.preventDefault();
         okBtn.click();
       }

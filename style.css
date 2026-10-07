@@ -646,19 +646,46 @@
     color: var(--accent);
   }
 
-  /* ───── 검색 패드(.search-panel은 .archive-panel 스타일을 그대로 씀) ───── */
+  /* ───── 검색 패드(.search-panel은 .archive-panel 스타일을 그대로 씀) ─────
+     리갈패드의 줄(28px 간격, 각 칸의 맨 아래에 줄)에 글씨가 얹히도록 모든 행의
+     높이를 28px의 배수로 맞춤: 위 여백 한 칸 → 제목 → 검색창 → 결과 순.
+     글씨 줄 높이를 28px로 고정하고, 글자는 줄 위에 앉도록 3px 내림. */
+  .search-panel .archive-panel-inner {
+    padding-top: 28px;
+    padding-bottom: 28px;
+  }
+
+  .search-panel .archive-title {
+    height: 28px;
+    margin: 0;
+    line-height: 28px;
+  }
+
+  .search-panel .archive-title,
+  .search-input,
+  .search-group-title,
+  .search-item-text,
+  .search-snippet,
+  .search-icon,
+  .search-more,
+  .search-panel .empty-hint {
+    position: relative;
+    top: 3px;
+  }
+
   .search-input {
     display: block;
     width: 100%;
     box-sizing: border-box;
-    margin: 0 0 10px;
-    padding: 4px 0;
+    height: 28px;
+    margin: 0;
+    padding: 0;
     font-family: var(--font-task);
     font-size: 18px;
+    line-height: 28px;
     color: var(--ink);
     background: transparent;
-    border: none;
-    border-bottom: 1px dashed var(--focus-box-border);
+    border: none; /* 리갈패드의 줄이 곧 밑줄 */
     outline: none;
   }
 
@@ -667,11 +694,18 @@
   }
 
   .search-group-title {
-    margin: 12px 0 4px;
+    margin: 0;
     font-family: var(--font-hand);
     font-size: 18px;
     font-weight: 400;
+    line-height: 28px;
     color: var(--ink-soft);
+  }
+
+  /* 섹션 사이는 줄 한 칸 비움 */
+  .search-group-title:not(:first-child),
+  .search-list + .search-group-title {
+    margin-top: 28px;
   }
 
   .search-list {
@@ -681,8 +715,10 @@
   }
 
   .search-item {
-    padding: 5px 6px;
+    padding: 0;
     margin: 0 -6px;
+    padding-left: 6px;
+    padding-right: 6px;
     border-radius: 6px;
     cursor: pointer;
     outline: none;
@@ -693,18 +729,32 @@
     background: var(--focus-box-fill);
   }
 
+  /* 아이콘 · 제목 · 태그를 한 줄에. 제목이 길어 줄바꿈돼도 28px 단위로만 늘어나고,
+     아이콘/태그는 첫 줄에 붙어 있음. */
   .search-item-row {
     display: flex;
-    flex-wrap: wrap;
-    align-items: baseline;
+    align-items: flex-start;
     column-gap: 8px;
   }
 
+  .search-icon {
+    flex: 0 0 22px;
+    font-size: 14px;
+    line-height: 28px;
+    text-align: center;
+  }
+
+  .search-icon-flower {
+    color: var(--accent);
+    font-size: 18px;
+  }
+
   .search-item-text {
+    flex: 0 1 auto;
     min-width: 0;
     font-family: var(--font-task);
-    font-size: 17px;
-    line-height: 1.35;
+    font-size: 16px;
+    line-height: 28px;
     overflow-wrap: anywhere;
   }
 
@@ -715,13 +765,15 @@
   /* 날짜 칩/메모 알약(.due-badge와 같은 모양) — 눌러지지 않는 표시용 */
   .search-chip {
     flex: 0 0 auto;
+    margin-top: 5px;
     font-family: var(--font-ui);
     letter-spacing: var(--ui-letter-spacing);
     font-size: 12px;
+    line-height: 18px;
     color: var(--ink-soft);
     background: var(--focus-box-fill);
     border-radius: 10px;
-    padding: 2px 7px 1px;
+    padding: 0 7px;
     white-space: nowrap;
   }
 
@@ -731,11 +783,12 @@
     background: var(--urgent-bg);
   }
 
+  /* 하위/메모 미리보기도 한 줄 칸(28px)을 차지함 — 아이콘 폭만큼 들여씀 */
   .search-snippet {
-    margin-top: 1px;
+    padding-left: 30px;
     font-family: var(--font-note);
     font-size: 12px;
-    line-height: 1.45;
+    line-height: 28px;
     color: var(--ink-soft);
     overflow-wrap: anywhere;
   }
@@ -748,10 +801,10 @@
   }
 
   .search-more {
-    padding: 4px 0;
     font-family: var(--font-ui);
     letter-spacing: var(--ui-letter-spacing);
     font-size: 13px;
+    line-height: 28px;
     color: var(--ink-soft);
   }
 
@@ -2746,9 +2799,9 @@
   }
 
   /* 월 그룹 제목(예: "2026-09")은 포스트잇 제목과 같은 26px를 그대로
-     쓰기엔 done 패널 안에서 너무 커 보여서 살짝 줄임. */
+     쓰기엔 done 패널 안에서 너무 커 보여서 줄임(검색 패드의 섹션 제목과 같은 18px). */
   .archive-groups .sticky-title-toggle {
-    font-size: 19px;
+    font-size: 18px;
     margin-bottom: 4px;
   }
 
