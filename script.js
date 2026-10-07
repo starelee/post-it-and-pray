@@ -2664,12 +2664,18 @@
   // false를 돌려주면 닫히지 않는 점을 이용해 읽기→수정 전환을 처리함.
   async function openNoteModal(boardId, taskId, opts) {
     opts = opts || {};
-    const task = boards[boardId] && boards[boardId].find(t => t.id === taskId);
+    let task = boards[boardId] && boards[boardId].find(t => t.id === taskId);
     if (!task) return;
     const overlay = document.getElementById('confirmModal');
     const okBtn = document.getElementById('confirmOk');
     const cancelBtn = document.getElementById('confirmCancel');
     if (!overlay) return;
+
+    // 저장하면 뒤쪽 목록이 다시 그려져서 anchorEl(항목 li)이 DOM에서
+    // 사라짐 — 그러면 카드가 가운데로 튀므로, 처음 위치를 기억해 둔 가짜
+    // 앵커로 항상 같은 자리에 붙여둠.
+    const anchorRect = opts.anchorEl && opts.anchorEl.isConnected ? opts.anchorEl.getBoundingClientRect() : null;
+    const anchor = anchorRect ? { isConnected: true, getBoundingClientRect: () => anchorRect } : null;
 
     let editing = false;
     let draftTitle = '';
@@ -2754,7 +2760,7 @@
         del.addEventListener('click', () => {
           draftSubs.splice(i, 1);
           buildEdit();
-          positionConfirmCard(overlay, opts.anchorEl);
+          positionConfirmCard(overlay, anchor);
         });
         li.appendChild(input);
         li.appendChild(del);
@@ -2780,7 +2786,7 @@
         if (!v) return;
         draftSubs.push({ id: Date.now() + (subSeq++), text: v, done: false });
         buildEdit();
-        positionConfirmCard(overlay, opts.anchorEl);
+        positionConfirmCard(overlay, anchor);
         newSubInput.focus();
       };
       newSubInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') addSub(); });
@@ -2807,13 +2813,47 @@
       noteArea.setSelectionRange(noteArea.value.length, noteArea.value.length);
     }
 
+    // 수정 중 저장/취소 후엔 모달을 닫지 않고 읽기 화면으로 돌아감
+    function leaveEdit() {
+      editing = false;
+      buildView();
+      setConfirmBtnLabel(okBtn, '수정');
+      setConfirmBtnLabel(cancelBtn, '닫기');
+      positionConfirmCard(overlay, anchor);
+      okBtn.focus();
+    }
+
+    // 초안을 실제 항목에 저장. 항목이 사라졌으면 false.
+    function commitDraft() {
+      // 모달이 떠 있던 사이 상태가 바뀌었을 수 있어 id로 다시 찾음
+      const cur = boards[boardId] && boards[boardId].find(t => t.id === taskId);
+      if (!cur) return false;
+      cur.text = draftTitle.trim();
+      cur.subtasks = draftSubs
+        .map(s => ({ id: s.id, text: s.text.trim(), done: s.done }))
+        .filter(s => s.text);
+      const note = draftNote.trim().slice(0, NOTE_MAX);
+      if (note) cur.note = note;
+      else delete cur.note;
+      if (focusState && focusState.taskId === taskId) {
+        focusState.taskText = cur.text;
+        saveFocusState();
+      }
+      saveBoards();
+      render(boardId);
+      if (boardId === 'scheduled') render('today');
+      if (focusState) renderFocusPanel();
+      task = cur;
+      return true;
+    }
+
     function enterEdit() {
       editing = true;
       startDraft();
       buildEdit();
       setConfirmBtnLabel(okBtn, '저장');
       setConfirmBtnLabel(cancelBtn, '취소');
-      positionConfirmCard(overlay, opts.anchorEl);
+      positionConfirmCard(overlay, anchor);
       focusNoteArea();
     }
 
@@ -2825,13 +2865,28 @@
       buildView();
     }
 
+    // 수정 중(되돌아갈 읽기 화면이 있을 때)에는 취소/Esc/바깥 클릭도 모달을
+    // 닫지 않고 초안을 버린 채 읽기 화면으로 돌아감. showConfirm의 리스너보다
+    // 먼저 등록돼서 stopImmediatePropagation으로 닫힘을 막음.
+    function backToView(e) {
+      if (!editing || !task.note) return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      leaveEdit();
+    }
+    function onOverlayWhileEditing(e) { if (e.target === overlay) backToView(e); }
+    function onEscWhileEditing(e) { if (e.key === 'Escape') backToView(e); }
+    cancelBtn.addEventListener('click', backToView);
+    overlay.addEventListener('click', onOverlayWhileEditing);
+    document.addEventListener('keydown', onEscWhileEditing, true);
+
     if (editing) setTimeout(focusNoteArea, 60);
-    const ok = await showConfirm({
+    await showConfirm({
       title: '메모',
       content: card,
       confirmLabel: editing ? '저장' : '수정',
       cancelLabel: editing ? '취소' : '닫기',
-      anchorEl: opts.anchorEl || null,
+      anchorEl: anchor,
       beforeConfirm: () => {
         if (!editing) {
           enterEdit();
@@ -2844,30 +2899,17 @@
           titleInput.focus();
           return false;
         }
+        if (!commitDraft()) return; // 항목이 사라졌으면 그냥 닫음
+        // 메모를 비워서 저장했으면 보여줄 게 없으니 닫고, 아니면 읽기 화면으로
+        if (!task.note) return;
+        leaveEdit();
+        return false;
       }
     });
-    if (!ok || !editing) return;
-
-    // 모달이 떠 있던 사이 상태가 바뀌었을 수 있어 id로 다시 찾음
-    const cur = boards[boardId] && boards[boardId].find(t => t.id === taskId);
-    if (!cur) return;
-    cur.text = draftTitle.trim();
-    cur.subtasks = draftSubs
-      .map(s => ({ id: s.id, text: s.text.trim(), done: s.done }))
-      .filter(s => s.text);
-    const note = draftNote.trim().slice(0, NOTE_MAX);
-    if (note) cur.note = note;
-    else delete cur.note;
-    if (focusState && focusState.taskId === taskId) {
-      focusState.taskText = cur.text;
-      saveFocusState();
-    }
-    saveBoards();
-    render(boardId);
-    if (boardId === 'scheduled') render('today');
-    if (focusState) renderFocusPanel();
+    cancelBtn.removeEventListener('click', backToView);
+    overlay.removeEventListener('click', onOverlayWhileEditing);
+    document.removeEventListener('keydown', onEscWhileEditing, true);
   }
-
 
   async function toggleTask(boardId, id, opts = {}) {
     const skipConfirm = !!opts.skipConfirm;
