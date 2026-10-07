@@ -109,7 +109,6 @@
       --bg-top: #23261f;
       --bg-bot: #1a1c17;
       --paper: #554a26;
-      --modal-bg: #3a3a38;
       --paper-waiting: #55371b;
       --paper-someday: #2c3350;
       --paper-lupin: #2e2c27;
@@ -141,7 +140,6 @@
     --bg-top: #23261f;
     --bg-bot: #1a1c17;
     --paper: #554a26;
-    --modal-bg: #3a3a38;
     --paper-waiting: #55371b;
     --paper-someday: #2c3350;
     --paper-lupin: #2e2c27;
@@ -2807,6 +2805,57 @@
     position: fixed;
     width: min(340px, calc(100vw - 24px));
     transform-origin: 0 0;
+  }
+
+  /* 다크 모드에서도 모달 카드는 밝은 종이 — 어두운 배경 위에서 흰 카드가
+     강조돼 보임. 카드 안 글자/선/테이프 색은 라이트 팔레트로 되돌림. */
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .confirm-card {
+      color-scheme: light;
+      --modal-bg: #f3f3f1;
+      --ink: #4a4034;
+      --ink-soft: #8a8068;
+      --accent: #e2727e;
+      --urgent: #d43d3d;
+      --urgent-bg: rgba(212, 61, 61, 0.1);
+      --divider: #cdbd7c;
+      --input-line: #d8c98f;
+      --focus-box-border: rgba(105, 45, 30, 0.4);
+      --focus-box-fill: rgba(255, 255, 255, 0.3);
+      --focus-ink-soft: #5c5652;
+      --tape: rgba(255, 255, 255, 0.6);
+      --tape-edge: rgba(255, 255, 255, 0.25);
+      --tape-waiting: rgba(177, 216, 194, 0.82);
+      --tape-waiting-pattern: rgba(70, 125, 101, 0.15);
+      --tape-fiber-light: rgba(255, 255, 255, 0.20);
+      --tape-fiber-dark: rgba(86, 65, 48, 0.055);
+      --tape-shadow: rgba(73, 55, 35, 0.16);
+      --tape-petal: rgba(255, 255, 255, 0.30);
+      --tape-edge-light: rgba(255, 255, 255, 0.24);
+    }
+  }
+  :root[data-theme="dark"] .confirm-card {
+    color-scheme: light;
+    --modal-bg: #f3f3f1;
+    --ink: #4a4034;
+    --ink-soft: #8a8068;
+    --accent: #e2727e;
+    --urgent: #d43d3d;
+    --urgent-bg: rgba(212, 61, 61, 0.1);
+    --divider: #cdbd7c;
+    --input-line: #d8c98f;
+    --focus-box-border: rgba(105, 45, 30, 0.4);
+    --focus-box-fill: rgba(255, 255, 255, 0.3);
+    --focus-ink-soft: #5c5652;
+    --tape: rgba(255, 255, 255, 0.6);
+    --tape-edge: rgba(255, 255, 255, 0.25);
+    --tape-waiting: rgba(177, 216, 194, 0.82);
+    --tape-waiting-pattern: rgba(70, 125, 101, 0.15);
+    --tape-fiber-light: rgba(255, 255, 255, 0.20);
+    --tape-fiber-dark: rgba(86, 65, 48, 0.055);
+    --tape-shadow: rgba(73, 55, 35, 0.16);
+    --tape-petal: rgba(255, 255, 255, 0.30);
+    --tape-edge-light: rgba(255, 255, 255, 0.24);
   }
 
   .confirm-card {
