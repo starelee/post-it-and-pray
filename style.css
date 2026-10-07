@@ -3202,13 +3202,41 @@
     align-self: flex-start;
   }
 
-  /* 검색 결과로 이동했을 때 그 항목을 잠깐 강조 */
+  /* 검색 결과로 이동했을 때 그 항목을 잠깐 강조 — 카드 색(노랑/주황/파랑/크림)에
+     상관없이 보이도록 색 대신 "밝은 반투명 막 + 회색 윤곽선(+ 살짝 뜬 그림자)"로.
+     윤곽선은 글자색(--ink)에서 따와서 다크 모드에서는 밝은 선이 됨. */
+  :root {
+    --flash-fill: rgba(255, 255, 255, 0.72);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --flash-fill: rgba(255, 255, 255, 0.18);
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --flash-fill: rgba(255, 255, 255, 0.18);
+  }
+
   .search-flash {
     border-radius: 6px;
-    animation: search-flash 2s ease-out;
+    animation: search-flash 2.2s ease-out;
   }
 
   @keyframes search-flash {
-    0%, 35% { background: rgba(255, 214, 64, 0.6); }
-    100% { background: rgba(255, 214, 64, 0); }
+    0% {
+      background: transparent;
+      box-shadow: 0 0 0 0 transparent;
+    }
+    12%, 50% {
+      background: var(--flash-fill);
+      box-shadow:
+        0 0 0 2px color-mix(in srgb, var(--ink) 32%, transparent),
+        0 4px 12px color-mix(in srgb, var(--ink) 22%, transparent);
+    }
+    100% {
+      background: transparent;
+      box-shadow: 0 0 0 0 transparent;
+    }
   }
