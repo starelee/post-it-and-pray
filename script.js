@@ -365,6 +365,50 @@
     return groups.filter(g => g.hits.length);
   }
 
+  // 검색 결과를 누르면 원래 항목으로 이동 — 검색 패드를 닫고, 접힌 구역(someday/pray later/
+  // waiting의 ⋯)이나 done 패널(완료 기록, 7일 넘게 남은 "not my problem... yet") 안에 있으면
+  // 먼저 펼친 뒤 스크롤하고, 항목에 포커스를 주고 잠깐 강조함.
+  function goToTask(boardId, taskId) {
+    closeSearchPanel();
+    if (isLupinOpen()) setLupinOpen(false); // waiting 뒷면(lupin)이 보이는 중이면 앞면으로
+    let el = findTaskLi(taskId);
+    let focusEl = null;
+    let delay = 150;
+    // 보드 안에 있는 항목: 보이거나, 접힌 구역 안에 숨어 있는 경우
+    if (el && (el.offsetParent !== null || el.closest('[data-collapse-body]'))) {
+      const body = el.closest('[data-collapse-body]');
+      if (body && body.hidden) {
+        Object.keys(collapseSections).forEach(key => {
+          if (collapseSections[key].body === body) collapseSections[key].setOpen(true);
+        });
+      }
+      focusEl = el.querySelector('.task-text') || el;
+    } else {
+      // 보드에는 없는 항목 — done 패널 안에 있음
+      if (!archivePanelEl.classList.contains('open')) toggleArchivePanel();
+      el = archivePanelEl.querySelector('.archive-item[data-id="' + taskId + '"]');
+      if (!el) {
+        // 못 찾으면 이동 대신 메모 모달(읽기)로라도 보여줌
+        openNoteModal(boardId, taskId, { view: true });
+        return;
+      }
+      const monthBody = el.closest('.collapsible-body');
+      if (monthBody && monthBody.hidden && monthBody.previousElementSibling) monthBody.previousElementSibling.click();
+      focusEl = el.querySelector('.upcoming-item-text') || el;
+      if (focusEl === el) el.tabIndex = -1;
+      delay = 420; // 패드가 펼쳐지는 애니메이션이 끝난 뒤 스크롤해야 위치가 맞음
+    }
+    setTimeout(() => {
+      if (!el.isConnected) return;
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      try { focusEl.focus({ preventScroll: true }); } catch (e) { /* 포커스 불가면 강조만 */ }
+      el.classList.remove('search-flash');
+      void el.offsetWidth; // 연속으로 눌러도 애니메이션이 다시 돌도록
+      el.classList.add('search-flash');
+      setTimeout(() => el.classList.remove('search-flash'), 2000);
+    }, delay);
+  }
+
   // 카드 제목에 붙은 그 아이콘(✿ gotta do, ⏳ waiting, 🌙 someday, 📅 pray later)과
   // 같은 기호 — done 기록은 done 패널 제목의 📋. 항목이 어느 보드 것인지 알려줌.
   const BOARD_ICONS = { today: '✿', waiting: '⏳', someday: '🌙', scheduled: '📅', archive: '📋', done: '📋' };
@@ -417,7 +461,7 @@
     if (hit.match.sub) addSnippet('하위: ', hit.match.sub.text);
     if (hit.match.note) addSnippet('메모: ', makeSearchSnippet(hit.match.note, tokens));
 
-    const open = () => openNoteModal(hit.boardId, task.id, { anchorEl: li, view: true });
+    const open = () => goToTask(hit.boardId, task.id);
     li.addEventListener('click', open);
     li.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); }
@@ -666,7 +710,7 @@
     });
     if (task.note) row.appendChild(makeSearchChip('메모'));
     li.appendChild(row);
-    const open = () => openNoteModal(item.boardId, task.id, { anchorEl: li, view: true });
+    const open = () => goToTask(item.boardId, task.id);
     li.addEventListener('click', open);
     li.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); }
