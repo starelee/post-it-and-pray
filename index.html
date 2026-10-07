@@ -55,9 +55,19 @@
         </div>
       </div>
 
+      <div class="archive-panel search-panel" id="searchPanel">
+        <div class="archive-panel-inner">
+          <button class="archive-close-btn" id="searchCloseBtn" type="button" aria-label="닫기">✕</button>
+          <h2 class="archive-title">search 🔍</h2>
+          <input class="search-input" id="searchInput" type="text" placeholder="제목, 하위 항목, 메모에서 찾기..." autocomplete="off" maxlength="100">
+          <div class="search-results" id="searchResults"></div>
+        </div>
+      </div>
+
       <div class="board-row">
       <div class="sticky" data-board="today" id="todaySticky" style="--rot: -1.4deg;">
         <button class="archive-flag archive-flag-mobile" type="button" aria-label="다 한 일 보기"></button>
+        <button class="search-flag search-flag-mobile" type="button" aria-label="검색" title="검색 ( / 또는 Ctrl+K )">🔍</button>
         <div class="tape"></div>
 
         <div data-today-list>
@@ -94,6 +104,7 @@
       <div class="side-col">
         <div class="sticky" data-board="waiting" id="waitingSticky" style="--rot: 1.2deg; --paper: var(--paper-waiting);">
           <button class="archive-flag archive-flag-desktop" type="button" aria-label="다 한 일 보기"></button>
+          <button class="search-flag search-flag-desktop" type="button" aria-label="검색" title="검색 ( / 또는 Ctrl+K )">🔍</button>
           <div data-lupin-front>
             <div class="tape"></div>
             <h2 class="sticky-title">waiting... <span class="flower">⏳</span>

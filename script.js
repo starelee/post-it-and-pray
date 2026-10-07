@@ -192,6 +192,7 @@
     const open = !archivePanelEl.classList.contains('open');
     archivePanelEl.classList.toggle('open', open);
     if (open) {
+      closeSearchPanel(); // 두 리갈패드는 같은 자리를 덮으니 한쪽을 열면 다른 쪽은 닫음
       renderArchive();
       renderUpcoming();
     } else {
@@ -220,6 +221,232 @@
     e.preventDefault();
     closeArchivePanel();
   });
+
+  // ─────────────────────────────
+  // 검색 — done 리갈패드와 같은 모양의 패드. 열려 있는 항목(gotta do/waiting/
+  // someday/pray later)과 done 기록의 제목·하위 항목·메모에서 찾음.
+  // lupin(월급루팡)과 gone(삭제 기록)은 일부러 검색 대상에서 뺌.
+  // 읽기 전용이라 데이터는 건드리지 않고, 결과를 누르면 메모 모달(읽기 모드)이 뜸.
+  // ─────────────────────────────
+  const searchPanelEl = document.getElementById('searchPanel');
+  const searchInputEl = document.getElementById('searchInput');
+  const searchResultsEl = document.getElementById('searchResults');
+  const searchFlagBtns = document.querySelectorAll('.search-flag');
+  const searchCloseBtn = document.getElementById('searchCloseBtn');
+  const SEARCH_GROUP_LIMIT = 20;
+
+  function isConfirmModalOpen() {
+    const modal = document.getElementById('confirmModal');
+    return !!modal && !modal.hidden;
+  }
+
+  function openSearchPanel() {
+    if (isFocusLocked() || isConfirmModalOpen()) return;
+    if (archivePanelEl.classList.contains('open')) closeArchivePanel();
+    searchPanelEl.classList.add('open');
+    renderSearchResults();
+    // 패널이 접힌 상태에서 막 펼쳐지는 중이라 한 프레임 뒤에 포커스
+    requestAnimationFrame(() => {
+      searchInputEl.focus({ preventScroll: true });
+      searchInputEl.select();
+    });
+  }
+
+  function closeSearchPanel() {
+    if (!searchPanelEl.classList.contains('open')) return;
+    searchPanelEl.classList.remove('open');
+    // 다시 열었을 때 지난 검색어/결과가 남아 있으면 헷갈리니 초기화
+    searchInputEl.value = '';
+    searchInputEl.blur();
+    clearEl(searchResultsEl);
+  }
+
+  searchFlagBtns.forEach(btn => btn.addEventListener('click', () => {
+    if (searchPanelEl.classList.contains('open')) closeSearchPanel();
+    else openSearchPanel();
+  }));
+  if (searchCloseBtn) searchCloseBtn.addEventListener('click', closeSearchPanel);
+  searchInputEl.addEventListener('input', renderSearchResults);
+  searchInputEl.addEventListener('keydown', (e) => {
+    // Enter — 첫 결과를 바로 열기
+    if (e.key === 'Enter' && !e.isComposing) {
+      const first = searchResultsEl.querySelector('.search-item');
+      if (first) { e.preventDefault(); first.click(); }
+    }
+  });
+
+  // Esc — 메모 모달이 떠 있으면 그쪽이 먼저(캡처 단계에서 처리) 닫히고,
+  // 모달이 없을 때만 검색 패드를 닫음. 입력칸에 포커스가 있어도 닫힘.
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape' || e.defaultPrevented) return;
+    if (!searchPanelEl.classList.contains('open') || isConfirmModalOpen()) return;
+    e.preventDefault();
+    closeSearchPanel();
+  });
+
+  // Ctrl+K / Cmd+K — 입력창에 포커스가 있어도 열림(브라우저 기본 동작은 막음).
+  // 물리 키(e.code) 기준이라 한글 자판에서도 동작.
+  document.addEventListener('keydown', (e) => {
+    if (!(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey || e.code !== 'KeyK') return;
+    e.preventDefault();
+    openSearchPanel();
+  });
+
+  function escapeRegExp(str) {
+    return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  }
+
+  function searchTokens(query) {
+    return query.toLowerCase().split(/\s+/).filter(Boolean);
+  }
+
+  // 검색어를 전부 포함하면(제목·하위 항목·메모 어디에 흩어져 있어도) 결과.
+  // 어디서 걸렸는지(하위 항목/메모)도 함께 돌려줘서 한 줄 미리보기에 씀.
+  function matchSearchTask(task, tokens) {
+    const subs = task.subtasks || [];
+    const hay = [task.text || ''].concat(subs.map(s => s.text || ''), task.note || '').join('\n').toLowerCase();
+    if (!tokens.every(t => hay.includes(t))) return null;
+    const hasAny = (txt) => { const l = (txt || '').toLowerCase(); return tokens.some(t => l.includes(t)); };
+    return {
+      sub: subs.find(s => hasAny(s.text)) || null,
+      note: hasAny(task.note) ? task.note : null
+    };
+  }
+
+  function appendHighlighted(el, text, tokens) {
+    const re = new RegExp('(' + tokens.slice().sort((a, b) => b.length - a.length).map(escapeRegExp).join('|') + ')', 'gi');
+    text.split(re).forEach((part, i) => {
+      if (!part) return;
+      if (i % 2 === 1) {
+        const mark = document.createElement('mark');
+        mark.className = 'search-mark';
+        mark.textContent = part;
+        el.appendChild(mark);
+      } else {
+        el.appendChild(document.createTextNode(part));
+      }
+    });
+  }
+
+  // 메모처럼 긴 글은 걸린 곳 주변만 잘라서 보여줌
+  function makeSearchSnippet(text, tokens) {
+    const flat = text.replace(/\s+/g, ' ');
+    const lower = flat.toLowerCase();
+    let idx = -1;
+    tokens.forEach(t => {
+      const i = lower.indexOf(t);
+      if (i !== -1 && (idx === -1 || i < idx)) idx = i;
+    });
+    const start = Math.max(0, idx - 12);
+    const end = start + 60;
+    return (start > 0 ? '…' : '') + flat.slice(start, end) + (end < flat.length ? '…' : '');
+  }
+
+  function collectSearchGroups(tokens) {
+    const wrap = (list, boardId) => list.map(task => ({ task, boardId }));
+    const doneEntries = collectArchiveEntries().sort((a, b) => {
+      if (a.task.doneAt !== b.task.doneAt) return (b.task.doneAt || '').localeCompare(a.task.doneAt || '');
+      return b.task.id - a.task.id;
+    }).map(e => ({ task: e.task, boardId: e.source }));
+    // 오늘 체크한 항목은 아직 today/scheduled 배열에 있어도 done 쪽에서만 보여줌(중복 방지)
+    const groups = [
+      { key: 'today', label: 'gotta do', entries: wrap(boards.today.filter(t => !t.done), 'today') },
+      { key: 'waiting', label: 'waiting', entries: wrap(boards.waiting, 'waiting') },
+      { key: 'someday', label: 'someday', entries: wrap(boards.someday.filter(t => !t.done), 'someday') },
+      { key: 'scheduled', label: 'pray later', entries: wrap(boards.scheduled.filter(t => !t.done), 'scheduled') },
+      { key: 'done', label: 'done', entries: doneEntries }
+    ];
+    groups.forEach(g => {
+      g.hits = g.entries
+        .map(e => ({ task: e.task, boardId: e.boardId, match: matchSearchTask(e.task, tokens) }))
+        .filter(h => h.match);
+    });
+    return groups.filter(g => g.hits.length);
+  }
+
+  function makeSearchChip(text) {
+    const chip = document.createElement('span');
+    chip.className = 'search-chip';
+    chip.textContent = text;
+    return chip;
+  }
+
+  function renderSearchItem(groupKey, hit, tokens) {
+    const task = hit.task;
+    const li = document.createElement('li');
+    li.className = 'search-item' + (groupKey === 'done' ? ' search-item-done' : '');
+    li.tabIndex = 0;
+    li.setAttribute('role', 'button');
+
+    const row = document.createElement('div');
+    row.className = 'search-item-row';
+    const title = document.createElement('span');
+    title.className = 'search-item-text';
+    appendHighlighted(title, task.text || '', tokens);
+    row.appendChild(title);
+    const dateKey = dateFieldOf(hit.boardId);
+    if (groupKey === 'done') {
+      if (task.doneAt) row.appendChild(makeSearchChip(task.doneAt.slice(5).replace('-', '/')));
+    } else if (task[dateKey]) {
+      row.appendChild(makeSearchChip(formatDueDateRelative(task[dateKey])));
+    }
+    if (task.note) row.appendChild(makeSearchChip('메모'));
+    li.appendChild(row);
+
+    const addSnippet = (label, text) => {
+      const line = document.createElement('div');
+      line.className = 'search-snippet';
+      line.appendChild(document.createTextNode(label));
+      appendHighlighted(line, text, tokens);
+      li.appendChild(line);
+    };
+    if (hit.match.sub) addSnippet('하위: ', hit.match.sub.text);
+    if (hit.match.note) addSnippet('메모: ', makeSearchSnippet(hit.match.note, tokens));
+
+    const open = () => openNoteModal(hit.boardId, task.id, { anchorEl: li, view: true });
+    li.addEventListener('click', open);
+    li.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); }
+    });
+    return li;
+  }
+
+  function renderSearchResults() {
+    clearEl(searchResultsEl);
+    const addHint = (text) => {
+      const hint = document.createElement('p');
+      hint.className = 'empty-hint';
+      hint.textContent = text;
+      searchResultsEl.appendChild(hint);
+    };
+    const query = searchInputEl.value.trim();
+    if (!query) {
+      addHint('제목, 하위 항목, 메모에서 찾아요');
+      return;
+    }
+    const tokens = searchTokens(query);
+    const groups = collectSearchGroups(tokens);
+    if (groups.length === 0) {
+      addHint('찾는 게 없어요');
+      return;
+    }
+    groups.forEach(group => {
+      const heading = document.createElement('h3');
+      heading.className = 'search-group-title';
+      heading.textContent = group.label + ' (' + group.hits.length + ')';
+      searchResultsEl.appendChild(heading);
+      const list = document.createElement('ul');
+      list.className = 'search-list';
+      group.hits.slice(0, SEARCH_GROUP_LIMIT).forEach(hit => list.appendChild(renderSearchItem(group.key, hit, tokens)));
+      if (group.hits.length > SEARCH_GROUP_LIMIT) {
+        const more = document.createElement('li');
+        more.className = 'search-more';
+        more.textContent = '…외 ' + (group.hits.length - SEARCH_GROUP_LIMIT) + '개 — 검색어를 더 구체적으로 써보세요';
+        list.appendChild(more);
+      }
+      searchResultsEl.appendChild(list);
+    });
+  }
 
   // "not my problem... yet" 자리가 Ctrl+Z(휴지통)로 통째로 바뀌는 lupin
   // 모드 방식 — 목록 아래에 덧붙이지 않고 같은 자리를 갈아끼움. lupin처럼
@@ -1007,6 +1234,7 @@
   if (logoEl) {
     logoEl.addEventListener('click', () => {
       archivePanelEl.classList.remove('open');
+      closeSearchPanel();
       setTrashViewOpen(false);
       if (isLupinOpen()) setLupinOpen(false);
       if (collapseSections.someday) collapseSections.someday.setOpen(false);
@@ -2843,6 +3071,7 @@
       render(boardId);
       if (boardId === 'scheduled') render('today');
       if (focusState) renderFocusPanel();
+      if (searchPanelEl.classList.contains('open')) renderSearchResults();
       task = cur;
       return true;
     }
@@ -2857,7 +3086,7 @@
       focusNoteArea();
     }
 
-    if (opts.startEditing || !task.note) {
+    if (opts.startEditing || (!task.note && !opts.view)) {
       editing = true;
       startDraft();
       buildEdit();
@@ -2869,7 +3098,7 @@
     // 닫지 않고 초안을 버린 채 읽기 화면으로 돌아감. showConfirm의 리스너보다
     // 먼저 등록돼서 stopImmediatePropagation으로 닫힘을 막음.
     function backToView(e) {
-      if (!editing || !task.note) return;
+      if (!editing || !(task.note || opts.view)) return;
       e.preventDefault();
       e.stopImmediatePropagation();
       leaveEdit();
@@ -2901,7 +3130,8 @@
         }
         if (!commitDraft()) return; // 항목이 사라졌으면 그냥 닫음
         // 메모를 비워서 저장했으면 보여줄 게 없으니 닫고, 아니면 읽기 화면으로
-        if (!task.note) return;
+        // (검색 결과에서 연 모달은 메모가 없어도 읽기 화면이 있음)
+        if (!task.note && !opts.view) return;
         leaveEdit();
         return false;
       }
@@ -4843,6 +5073,13 @@
         e.preventDefault();
         enterFocusPickTask();
       }
+      return;
+    }
+
+    // /: 검색 패드 열기 (Ctrl+K도 같음 — 그건 위에서 따로 처리)
+    if (e.code === 'Slash' && !e.shiftKey) {
+      e.preventDefault();
+      openSearchPanel();
       return;
     }
 
