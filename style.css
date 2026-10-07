@@ -2025,8 +2025,8 @@
   }
 
   /* 보드 이동 — 도착 자리가 눈에 보일 때의 장난기 있는 흔들림. 항목 전체(하위 항목·아이콘 줄
-     포함)가 가운데를 축으로 살짝 커졌다가 점점 잦아들며 흔들리고, 옅은 막이 같이 떴다 사라져서
-     눈에 더 잘 띔(이전엔 줄 하나가 왼쪽 끝을 축으로 ±3도만 돌아서 글자가 거의 안 움직였음). */
+     포함)가 가운데를 축으로 살짝 커졌다가 점점 잦아들며 흔들림(검색 결과 이동과 "손댈 항목으로 이동"도
+     같은 흔들림을 씀 — 반투명 막 같은 다른 강조는 없음)(이전엔 줄 하나가 왼쪽 끝을 축으로 ±3도만 돌아서 글자가 거의 안 움직였음). */
   @keyframes move-arrive-wiggle {
     0%   { transform: scale(1) rotate(0); }
     15%  { transform: scale(var(--wiggle-scale)) rotate(calc(var(--wiggle-deg) * -1)); }
@@ -2036,17 +2036,10 @@
     100% { transform: scale(1) rotate(0); }
   }
 
-  @keyframes move-veil {
-    0%, 25% { background: var(--flash-fill); }
-    100%    { background: transparent; }
-  }
-
   .move-arrive-wiggle {
     border-radius: 6px;
     transform-origin: center;
-    animation:
-      move-arrive-wiggle var(--wiggle-dur) var(--ease-ui) both,
-      move-veil 0.6s var(--ease-ui) both;
+    animation: move-arrive-wiggle var(--wiggle-dur) var(--ease-ui) both;
   }
 
   /* 보드 이동 — 출발 자리가 사라지는 연출. 투명해지면서 높이도 접혀서 아래 항목이 점프하지
@@ -3235,41 +3228,3 @@
     align-self: flex-start;
   }
 
-  /* 검색 결과로 이동하거나 손댈 항목으로 옮겼을 때 그 항목을 잠깐 강조 — 카드 색(노랑/주황/파랑/크림)에
-     상관없이 보이도록 색 대신 "밝은 반투명 막 + 회색 윤곽선(+ 살짝 뜬 그림자)"로.
-     윤곽선은 글자색(--ink)에서 따와서 다크 모드에서는 밝은 선이 됨. */
-  :root {
-    --flash-fill: rgba(255, 255, 255, 0.72);
-  }
-
-  @media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) {
-      --flash-fill: rgba(255, 255, 255, 0.18);
-    }
-  }
-
-  :root[data-theme="dark"] {
-    --flash-fill: rgba(255, 255, 255, 0.18);
-  }
-
-  .attention-flash {
-    border-radius: 6px;
-    animation: attention-flash 1.4s var(--ease-ui);
-  }
-
-  @keyframes attention-flash {
-    0% {
-      background: transparent;
-      box-shadow: 0 0 0 0 transparent;
-    }
-    12%, 50% {
-      background: var(--flash-fill);
-      box-shadow:
-        0 0 0 2px color-mix(in srgb, var(--ink) 32%, transparent),
-        0 4px 12px color-mix(in srgb, var(--ink) 22%, transparent);
-    }
-    100% {
-      background: transparent;
-      box-shadow: 0 0 0 0 transparent;
-    }
-  }

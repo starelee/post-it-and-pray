@@ -406,12 +406,19 @@
     setTimeout(() => {
       if (!el.isConnected) return;
       el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      try { focusEl.focus({ preventScroll: true }); } catch (e) { /* 포커스 불가면 강조만 */ }
-      el.classList.remove('attention-flash');
-      void el.offsetWidth; // 연속으로 눌러도 애니메이션이 다시 돌도록
-      el.classList.add('attention-flash');
-      setTimeout(() => el.classList.remove('attention-flash'), 1500);
+      try { focusEl.focus({ preventScroll: true }); } catch (e) { /* 포커스 불가면 흔들림만 */ }
+      // 스크롤이 끝난 뒤에 흔들어야 눈에 들어옴 — 보드 이동의 도착 흔들림과 같은 효과
+      setTimeout(() => wiggleElement(el), 350);
     }, delay);
+  }
+
+  // 항목을 한 번 흔듦(.move-arrive-wiggle). 연달아 불러도 처음부터 다시 돌도록 클래스를 뗐다 붙임.
+  function wiggleElement(el) {
+    if (!el.isConnected) return;
+    el.classList.remove('move-arrive-wiggle');
+    void el.offsetWidth;
+    el.classList.add('move-arrive-wiggle');
+    setTimeout(() => el.classList.remove('move-arrive-wiggle'), 900);
   }
 
   // 카드 제목에 붙은 그 아이콘(✿ gotta do, ⏳ waiting, 🌙 someday, 📅 pray later)과
