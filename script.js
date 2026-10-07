@@ -293,6 +293,9 @@
     return { today: seedToday(), waiting: [], someday: [] };
   }
 
+  // 메모(task.note) 최대 글자 수
+  const NOTE_MAX = 200;
+
   function normalizeTasks(list) {
     return list.map(t => {
       const out = {
@@ -306,6 +309,7 @@
       };
       if (typeof t.dueDate === 'string' && t.dueDate) out.dueDate = t.dueDate;
       if (typeof t.replyDate === 'string' && t.replyDate) out.replyDate = t.replyDate;
+      if (typeof t.note === 'string' && t.note.trim()) out.note = t.note.slice(0, NOTE_MAX);
       if (typeof t.from === 'string' && t.from) out.from = t.from;
       if (typeof t.deletedAt === 'string' && t.deletedAt) out.deletedAt = t.deletedAt;
       if (typeof t.updatedAt === 'number' && isFinite(t.updatedAt)) out.updatedAt = t.updatedAt;
@@ -1401,6 +1405,27 @@
       row.appendChild(badge);
     }
 
+    // 메모가 붙어 있으면 날짜/진행도 알약과 같은 모양의 "메모" 알약 —
+    // 누르면 상위/하위 항목과 메모를 보여주는 모달이 뜸.
+    if (task.note) {
+      const noteBadge = document.createElement('span');
+      noteBadge.className = 'note-badge';
+      noteBadge.textContent = '메모';
+      noteBadge.setAttribute('role', 'button');
+      noteBadge.tabIndex = 0;
+      noteBadge.setAttribute('aria-label', '메모 보기');
+      const openNote = () => {
+        if (commitPendingEditThenRetry(li, task.id, '.note-badge')) return;
+        openNoteModal(boardId, task.id, { anchorEl: li });
+      };
+      noteBadge.addEventListener('mousedown', (e) => e.preventDefault());
+      noteBadge.addEventListener('click', openNote);
+      noteBadge.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openNote(); }
+      });
+      row.appendChild(noteBadge);
+    }
+
     // 데스크톱은 hover로 아이콘 줄이 펼쳐지지만, 터치 기기는 hover를
     // 안정적으로 감지 못해서(호버 흉내→지연된 클릭 등) 그 방식에 기대면
     // 누르자마자 다시 접히는 문제가 있었음 — 늘 떠 있는 버튼 대신, 이
@@ -1459,8 +1484,19 @@
     addToggle.setAttribute('aria-label', '하위 항목 추가');
     addToggle.textContent = '➕️';
 
+    const noteBtn = document.createElement('button');
+    noteBtn.className = 'note-btn';
+    noteBtn.type = 'button';
+    noteBtn.setAttribute('aria-label', task.note ? '메모 수정' : '메모 추가');
+    noteBtn.textContent = '📝';
+    noteBtn.addEventListener('click', () => {
+      if (commitPendingEditThenRetry(li, task.id, '.note-btn')) return;
+      openNoteModal(boardId, task.id, { anchorEl: li, startEditing: true });
+    });
+
     controls.appendChild(urgentBtn);
     controls.appendChild(addToggle);
+    controls.appendChild(noteBtn);
 
     if (opts.showFocusBtn) {
       const focusBtn = document.createElement('button');
@@ -2324,6 +2360,7 @@
       urgent: !!archivedTask.urgent,
       subtasks: subtaskTexts.map((t, i) => ({ id: Date.now() + i, text: t, done: false }))
     };
+    if (archivedTask.note) clone.note = archivedTask.note;
     // 날짜를 지정했으면 그 날짜로 예정(scheduled), 안 지정했으면 today로
     // 바로 되살림 — 되살리기 카드의 날짜는 선택 사항.
     if (opts.dueDate) {
@@ -2620,6 +2657,217 @@
       if (focusEl && typeof focusEl.select === 'function') focusEl.select();
     });
   }
+
+  // 항목 메모 모달. 읽기 모드는 상위 항목 + 하위 항목 + 메모를 보여주고,
+  // "수정"을 누르면 같은 모달 안에서 셋 다 입력칸으로 바뀜(저장/취소).
+  // 기존 확인 모달(showConfirm)을 그대로 쓰고, 확인 버튼의 beforeConfirm이
+  // false를 돌려주면 닫히지 않는 점을 이용해 읽기→수정 전환을 처리함.
+  async function openNoteModal(boardId, taskId, opts) {
+    opts = opts || {};
+    const task = boards[boardId] && boards[boardId].find(t => t.id === taskId);
+    if (!task) return;
+    const overlay = document.getElementById('confirmModal');
+    const okBtn = document.getElementById('confirmOk');
+    const cancelBtn = document.getElementById('confirmCancel');
+    if (!overlay) return;
+
+    let editing = false;
+    let draftTitle = '';
+    let draftSubs = [];
+    let draftNote = '';
+    let subSeq = 0;
+
+    const card = document.createElement('div');
+    card.className = 'revive-card note-card';
+
+    // 수정 중에는 어느 칸에서든 Ctrl+Enter로 저장
+    card.addEventListener('keydown', (e) => {
+      if (editing && e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        okBtn.click();
+      }
+    });
+
+    const startDraft = () => {
+      draftTitle = task.text;
+      draftSubs = (task.subtasks || []).map(s => ({ id: s.id, text: s.text, done: !!s.done }));
+      draftNote = task.note || '';
+    };
+
+    let titleInput = null;
+    let noteArea = null;
+    let newSubInput = null;
+
+    function buildView() {
+      clearEl(card);
+      const title = document.createElement('p');
+      title.className = 'note-view-title';
+      title.textContent = task.text;
+      card.appendChild(title);
+      if (task.subtasks && task.subtasks.length) {
+        const list = document.createElement('ul');
+        list.className = 'subtask-list';
+        task.subtasks.forEach(sub => {
+          const li = document.createElement('li');
+          li.className = 'subtask-item' + (sub.done ? ' done' : '');
+          const chip = document.createElement('span');
+          chip.className = 'subtask-chip';
+          chip.textContent = '[' + sub.text + ']';
+          li.appendChild(chip);
+          list.appendChild(li);
+        });
+        card.appendChild(list);
+      }
+      const body = document.createElement('p');
+      body.className = 'note-view-body';
+      body.textContent = task.note || '';
+      card.appendChild(body);
+    }
+
+    function buildEdit() {
+      clearEl(card);
+      titleInput = document.createElement('input');
+      titleInput.className = 'revive-text-input';
+      titleInput.type = 'text';
+      titleInput.maxLength = 100;
+      titleInput.value = draftTitle;
+      titleInput.addEventListener('input', () => { draftTitle = titleInput.value; });
+      card.appendChild(titleInput);
+
+      const list = document.createElement('ul');
+      list.className = 'subtask-list';
+      list.hidden = draftSubs.length === 0;
+      draftSubs.forEach((sub, i) => {
+        const li = document.createElement('li');
+        li.className = 'subtask-item' + (sub.done ? ' done' : '');
+        const input = document.createElement('input');
+        input.className = 'note-sub-input';
+        input.type = 'text';
+        input.maxLength = 100;
+        input.value = sub.text;
+        input.addEventListener('input', () => { sub.text = input.value; });
+        const del = document.createElement('button');
+        del.type = 'button';
+        del.className = 'subtask-delete-btn';
+        del.setAttribute('aria-label', '삭제');
+        del.textContent = '×';
+        del.addEventListener('click', () => {
+          draftSubs.splice(i, 1);
+          buildEdit();
+          positionConfirmCard(overlay, opts.anchorEl);
+        });
+        li.appendChild(input);
+        li.appendChild(del);
+        list.appendChild(li);
+      });
+      card.appendChild(list);
+
+      const addRow = document.createElement('div');
+      addRow.className = 'add-subtask-row';
+      const plus = document.createElement('button');
+      plus.type = 'button';
+      plus.className = 'plus';
+      plus.setAttribute('aria-label', '하위 항목 등록');
+      plus.textContent = '+';
+      newSubInput = document.createElement('input');
+      newSubInput.className = 'new-subtask-input';
+      newSubInput.type = 'text';
+      newSubInput.placeholder = '하위 항목 추가...';
+      newSubInput.autocomplete = 'off';
+      newSubInput.maxLength = 100;
+      const addSub = () => {
+        const v = newSubInput.value.trim();
+        if (!v) return;
+        draftSubs.push({ id: Date.now() + (subSeq++), text: v, done: false });
+        buildEdit();
+        positionConfirmCard(overlay, opts.anchorEl);
+        newSubInput.focus();
+      };
+      newSubInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') addSub(); });
+      plus.addEventListener('click', addSub);
+      addRow.appendChild(plus);
+      addRow.appendChild(newSubInput);
+      card.appendChild(addRow);
+
+      noteArea = document.createElement('textarea');
+      noteArea.className = 'note-textarea';
+      noteArea.rows = 4;
+      noteArea.maxLength = NOTE_MAX;
+      noteArea.placeholder = '메모...';
+      noteArea.value = draftNote;
+      noteArea.addEventListener('input', () => { draftNote = noteArea.value; });
+      card.appendChild(noteArea);
+    }
+
+    // 글 전체가 선택되지 않게(showConfirm의 focusEl은 select()를 부름)
+    // 따로 포커스하고 커서를 맨 끝에 둠.
+    function focusNoteArea() {
+      if (!noteArea) return;
+      noteArea.focus();
+      noteArea.setSelectionRange(noteArea.value.length, noteArea.value.length);
+    }
+
+    function enterEdit() {
+      editing = true;
+      startDraft();
+      buildEdit();
+      setConfirmBtnLabel(okBtn, '저장');
+      setConfirmBtnLabel(cancelBtn, '취소');
+      positionConfirmCard(overlay, opts.anchorEl);
+      focusNoteArea();
+    }
+
+    if (opts.startEditing || !task.note) {
+      editing = true;
+      startDraft();
+      buildEdit();
+    } else {
+      buildView();
+    }
+
+    if (editing) setTimeout(focusNoteArea, 60);
+    const ok = await showConfirm({
+      title: '메모',
+      content: card,
+      confirmLabel: editing ? '저장' : '수정',
+      cancelLabel: editing ? '취소' : '닫기',
+      anchorEl: opts.anchorEl || null,
+      beforeConfirm: () => {
+        if (!editing) {
+          enterEdit();
+          return false;
+        }
+        // 입력해두고 +를 안 누른 하위 항목도 같이 저장
+        const pending = newSubInput && newSubInput.value.trim();
+        if (pending) draftSubs.push({ id: Date.now() + (subSeq++), text: pending, done: false });
+        if (!draftTitle.trim()) {
+          titleInput.focus();
+          return false;
+        }
+      }
+    });
+    if (!ok || !editing) return;
+
+    // 모달이 떠 있던 사이 상태가 바뀌었을 수 있어 id로 다시 찾음
+    const cur = boards[boardId] && boards[boardId].find(t => t.id === taskId);
+    if (!cur) return;
+    cur.text = draftTitle.trim();
+    cur.subtasks = draftSubs
+      .map(s => ({ id: s.id, text: s.text.trim(), done: s.done }))
+      .filter(s => s.text);
+    const note = draftNote.trim().slice(0, NOTE_MAX);
+    if (note) cur.note = note;
+    else delete cur.note;
+    if (focusState && focusState.taskId === taskId) {
+      focusState.taskText = cur.text;
+      saveFocusState();
+    }
+    saveBoards();
+    render(boardId);
+    if (boardId === 'scheduled') render('today');
+    if (focusState) renderFocusPanel();
+  }
+
 
   async function toggleTask(boardId, id, opts = {}) {
     const skipConfirm = !!opts.skipConfirm;
@@ -3710,6 +3958,26 @@
     box.className = 'focus-box focus-task-box' + (flat ? ' focus-flat' : '');
     box.appendChild(makeFocusPickedTaskLabel());
     appendFocusSubtasks(box, focusState.taskBoardId, focusState.taskId);
+    // 메모는 알약 대신 박스 안에 바로 보여줌 — 카운트다운 중엔 읽기 전용이고,
+    // 시간 고르는 단계에선 누르면 메모 수정 모달이 열림(제목 수정과 같은 방식).
+    const focusTask = boards[focusState.taskBoardId] && boards[focusState.taskBoardId].find(t => t.id === focusState.taskId);
+    if (focusTask && focusTask.note) {
+      const noteEl = document.createElement('p');
+      noteEl.className = 'focus-note';
+      noteEl.textContent = focusTask.note;
+      if (!isFocusLocked()) {
+        noteEl.classList.add('focus-note-editable');
+        noteEl.tabIndex = 0;
+        noteEl.setAttribute('role', 'button');
+        noteEl.setAttribute('aria-label', '메모 수정');
+        const edit = () => openNoteModal(focusState.taskBoardId, focusState.taskId, { anchorEl: box, startEditing: true });
+        noteEl.addEventListener('click', edit);
+        noteEl.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); edit(); }
+        });
+      }
+      box.appendChild(noteEl);
+    }
     if (showReselect) {
       const reselectBtn = document.createElement('button');
       reselectBtn.type = 'button';
