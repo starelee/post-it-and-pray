@@ -294,7 +294,7 @@
   }
 
   // 메모(task.note) 최대 글자 수
-  const NOTE_MAX = 200;
+  const NOTE_MAX = 500;
 
   function normalizeTasks(list) {
     return list.map(t => {
