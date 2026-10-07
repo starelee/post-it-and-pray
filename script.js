@@ -243,6 +243,7 @@
   function openSearchPanel() {
     if (isFocusLocked() || isConfirmModalOpen()) return;
     if (archivePanelEl.classList.contains('open')) closeArchivePanel();
+    staleSampleIds = null; // 열 때마다 새로 뽑음
     searchPanelEl.classList.add('open');
     renderSearchResults();
     // 패널이 접힌 상태에서 막 펼쳐지는 중이라 한 프레임 뒤에 포커스
@@ -553,6 +554,7 @@
   // 한 항목은 위 섹션에만 나옴. lupin/gone은 여기서도 제외.
   // ─────────────────────────────
   const SUGGEST_LIMIT = 4;
+  let staleSampleIds = null; // '오래 묵은 것'으로 뽑은 항목 id(패드가 열려 있는 동안 고정)
   const STALE_DAYS = 14;
   const RECENT_DONE_DAYS = 3;
 
@@ -613,8 +615,19 @@
     };
     boards.someday.filter(t => !t.done).forEach(t => considerStale(t, 'someday'));
     boards.waiting.forEach(t => considerStale(t, 'waiting'));
-    stale.sort((a, b) => b.days - a.days);
-    const staleTop = stale.slice(0, SUGGEST_LIMIT);
+    // 후보가 4개보다 많으면 무작위로 뽑음 — 오래된 순으로 자르면 같은 4개만 계속 보이기 때문.
+    // 패드를 열 때 한 번 뽑고(openSearchPanel에서 초기화) 열려 있는 동안은 고정해서,
+    // 메모를 저장하는 등 다시 그릴 때마다 목록이 바뀌지 않게 함. 뽑은 뒤 더는 묵은 게
+    // 아니게 된 항목은 빼고 남은 후보에서 채움.
+    const byId = new Map(stale.map(st => [st.task.id, st]));
+    if (!staleSampleIds) staleSampleIds = [];
+    staleSampleIds = staleSampleIds.filter(id => byId.has(id));
+    const pool = stale.filter(st => !staleSampleIds.includes(st.task.id));
+    while (staleSampleIds.length < SUGGEST_LIMIT && pool.length) {
+      const i = Math.floor(Math.random() * pool.length);
+      staleSampleIds.push(pool.splice(i, 1)[0].task.id);
+    }
+    const staleTop = staleSampleIds.map(id => byId.get(id)).sort((a, b) => b.days - a.days);
 
     // 3) 최근 완료 — 최근 3일(오늘 포함) 안에 끝낸 것
     const recent = collectArchiveEntries()
