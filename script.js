@@ -556,6 +556,14 @@
   const STALE_DAYS = 14;
   const RECENT_DONE_DAYS = 3;
 
+  // 며칠째인지 정확한 숫자 대신 단계로 보여줌(19일/20일은 의미 있는 차이가 아니라서).
+  // 60일 넘으면 전부 '두 달째'.
+  function staleLabel(days) {
+    if (days >= 60) return '두 달째';
+    if (days >= 30) return '한 달째';
+    return '2주째';
+  }
+
   function suggestChecklistTags(task) {
     const subs = task.subtasks || [];
     const open = subs.filter(s => !s.done).length;
@@ -601,7 +609,7 @@
       const touched = task.updatedAt || (task.id > 1e12 ? task.id : 0);
       if (!touched) return;
       const days = Math.floor((Date.now() - touched) / 86400000);
-      if (days >= STALE_DAYS) stale.push({ task, boardId, tags: [days + '일째 그대로'], days });
+      if (days >= STALE_DAYS) stale.push({ task, boardId, tags: [staleLabel(days)], days });
     };
     boards.someday.filter(t => !t.done).forEach(t => considerStale(t, 'someday'));
     boards.waiting.forEach(t => considerStale(t, 'waiting'));
