@@ -1563,6 +1563,19 @@
     if (listEl) collapseSections[listEl.dataset.tasklist] = { body, setOpen };
   });
 
+  // 글자를 입력하는 칸(제목 수정, 하위 항목 추가/수정, 새 항목 입력 등)에 포커스가 있는 동안
+  // body에 is-editing을 달아서, CSS가 다른 항목의 호버 펼침(아이콘 줄, someday 하위 항목)을 막게 함.
+  // 보드 카드(.sticky) 안의 입력칸만 해당 — 검색창, 모달 안 입력칸, 날짜 입력칸은 제외.
+  function refreshEditingState() {
+    const a = document.activeElement;
+    const typing = !!a && !!a.closest('.sticky') &&
+      (a.tagName === 'TEXTAREA' || (a.tagName === 'INPUT' && (a.type === 'text' || a.type === 'search')));
+    document.body.classList.toggle('is-editing', typing);
+  }
+  document.addEventListener('focusin', refreshEditingState);
+  // focusout 직후에는 activeElement가 아직 body라서 한 틱 뒤에 다시 판단(입력칸 → 입력칸 이동 때 깜빡임 방지)
+  document.addEventListener('focusout', () => setTimeout(refreshEditingState, 0));
+
   // 로고 클릭 — 열려있던 오버레이/펼침 상태를 전부 기본값으로: 리갈패드
   // 닫기, waiting이 lupin 뒷면이면 앞면으로, someday/scheduled 펼침
   // 섹션은 다시 접고, 스크롤도 맨 위로. focus 타이머가 잠긴 상태에선
