@@ -655,7 +655,16 @@
     padding-bottom: 28px;
   }
 
+  /* 제목(search 🔍)과 입력칸을 한 줄(28px)에 */
+  .search-head {
+    display: flex;
+    align-items: center;
+    column-gap: 10px;
+    height: 28px;
+  }
+
   .search-panel .archive-title {
+    flex: 0 0 auto;
     height: 28px;
     margin: 0;
     line-height: 28px;
@@ -675,7 +684,8 @@
 
   .search-input {
     display: block;
-    width: 100%;
+    flex: 1 1 auto;
+    min-width: 0;
     box-sizing: border-box;
     height: 28px;
     margin: 0;
@@ -3190,4 +3200,15 @@
 
   .backup-restore-btn {
     align-self: flex-start;
+  }
+
+  /* 검색 결과로 이동했을 때 그 항목을 잠깐 강조 */
+  .search-flash {
+    border-radius: 6px;
+    animation: search-flash 2s ease-out;
+  }
+
+  @keyframes search-flash {
+    0%, 35% { background: rgba(255, 214, 64, 0.6); }
+    100% { background: rgba(255, 214, 64, 0); }
   }
