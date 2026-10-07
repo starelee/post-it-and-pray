@@ -374,13 +374,11 @@
   }
 
   // 항목 위치로 이동해서 보여줌(검색 결과 이동과, 손댈 항목으로 옮겼을 때 공용).
-  // opts.focus === false면 포커스는 주지 않고 스크롤과 흔들림만 함 — 항목에 포커스가 있으면
-  // :focus-within 때문에 아이콘 줄이 계속 펼쳐져 있어서, 보드 이동 뒤에는 쓰지 않음.
-  function revealTask(boardId, taskId, opts) {
-    const withFocus = !(opts && opts.focus === false);
+  // 포커스는 주지 않음 — 항목에 포커스가 있으면 :focus-within 때문에 아이콘 줄이 계속 펼쳐져 있고,
+  // 이 앱의 항목은 포커스만으로는 수정이 시작되지도 않음. 포커스는 사용자가 클릭/Tab으로 직접 정함.
+  function revealTask(boardId, taskId) {
     if (isLupinOpen()) setLupinOpen(false); // waiting 뒷면(lupin)이 보이는 중이면 앞면으로
     let el = findTaskLi(taskId);
-    let focusEl = null;
     let delay = 150;
     // 보드 안에 있는 항목: 보이거나, 접힌 구역 안에 숨어 있는 경우
     if (el && (el.offsetParent !== null || el.closest('[data-collapse-body]'))) {
@@ -390,7 +388,6 @@
           if (collapseSections[key].body === body) collapseSections[key].setOpen(true);
         });
       }
-      focusEl = el.querySelector('.task-text') || el;
     } else {
       // 보드에는 없는 항목 — done 패널 안에 있음
       if (!archivePanelEl.classList.contains('open')) toggleArchivePanel();
@@ -402,16 +399,11 @@
       }
       const monthBody = el.closest('.collapsible-body');
       if (monthBody && monthBody.hidden && monthBody.previousElementSibling) monthBody.previousElementSibling.click();
-      focusEl = el.querySelector('.upcoming-item-text') || el;
-      if (focusEl === el) el.tabIndex = -1;
       delay = 420; // 패드가 펼쳐지는 애니메이션이 끝난 뒤 스크롤해야 위치가 맞음
     }
     setTimeout(() => {
       if (!el.isConnected) return;
       el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      if (withFocus) {
-        try { focusEl.focus({ preventScroll: true }); } catch (e) { /* 포커스 불가면 흔들림만 */ }
-      }
       // 스크롤이 끝난 뒤에 흔들어야 눈에 들어옴 — 보드 이동의 도착 흔들림과 같은 효과
       setTimeout(() => wiggleElement(el), 350);
     }, delay);
@@ -3665,7 +3657,7 @@
       if (visible && !edit) moveHighlight = { id, mode: 'wiggle' };
       renderFn();
       if (edit) {
-        revealTask(toBoardId, id, { focus: false });
+        revealTask(toBoardId, id);
       } else if (visible) {
         // 보일 거라고 봤는데 실제로 안 보이면(화면 밖 등) 알림으로 대신 알림
         const li = findTaskLi(id);
