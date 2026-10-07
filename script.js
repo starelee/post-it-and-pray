@@ -374,10 +374,11 @@
   }
 
   // 항목 위치로 이동해서 보여줌(검색 결과 이동과, 손댈 항목으로 옮겼을 때 공용).
+  // 포커스는 주지 않음 — 항목에 포커스가 있으면 :focus-within 때문에 아이콘 줄이 계속 펼쳐져 있고,
+  // 이 앱의 항목은 포커스만으로는 수정이 시작되지도 않음. 포커스는 사용자가 클릭/Tab으로 직접 정함.
   function revealTask(boardId, taskId) {
     if (isLupinOpen()) setLupinOpen(false); // waiting 뒷면(lupin)이 보이는 중이면 앞면으로
     let el = findTaskLi(taskId);
-    let focusEl = null;
     let delay = 150;
     // 보드 안에 있는 항목: 보이거나, 접힌 구역 안에 숨어 있는 경우
     if (el && (el.offsetParent !== null || el.closest('[data-collapse-body]'))) {
@@ -387,7 +388,6 @@
           if (collapseSections[key].body === body) collapseSections[key].setOpen(true);
         });
       }
-      focusEl = el.querySelector('.task-text') || el;
     } else {
       // 보드에는 없는 항목 — done 패널 안에 있음
       if (!archivePanelEl.classList.contains('open')) toggleArchivePanel();
@@ -399,19 +399,23 @@
       }
       const monthBody = el.closest('.collapsible-body');
       if (monthBody && monthBody.hidden && monthBody.previousElementSibling) monthBody.previousElementSibling.click();
-      focusEl = el.querySelector('.upcoming-item-text') || el;
-      if (focusEl === el) el.tabIndex = -1;
       delay = 420; // 패드가 펼쳐지는 애니메이션이 끝난 뒤 스크롤해야 위치가 맞음
     }
     setTimeout(() => {
       if (!el.isConnected) return;
       el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      try { focusEl.focus({ preventScroll: true }); } catch (e) { /* 포커스 불가면 강조만 */ }
-      el.classList.remove('attention-flash');
-      void el.offsetWidth; // 연속으로 눌러도 애니메이션이 다시 돌도록
-      el.classList.add('attention-flash');
-      setTimeout(() => el.classList.remove('attention-flash'), 1500);
+      // 스크롤이 끝난 뒤에 흔들어야 눈에 들어옴 — 보드 이동의 도착 흔들림과 같은 효과
+      setTimeout(() => wiggleElement(el), 350);
     }, delay);
+  }
+
+  // 항목을 한 번 흔듦(.move-arrive-wiggle). 연달아 불러도 처음부터 다시 돌도록 클래스를 뗐다 붙임.
+  function wiggleElement(el) {
+    if (!el.isConnected) return;
+    el.classList.remove('move-arrive-wiggle');
+    void el.offsetWidth;
+    el.classList.add('move-arrive-wiggle');
+    setTimeout(() => el.classList.remove('move-arrive-wiggle'), 900);
   }
 
   // 카드 제목에 붙은 그 아이콘(✿ gotta do, ⏳ waiting, 🌙 someday, 📅 pray later)과
@@ -1558,6 +1562,19 @@
     const listEl = body.querySelector('[data-tasklist]');
     if (listEl) collapseSections[listEl.dataset.tasklist] = { body, setOpen };
   });
+
+  // 글자를 입력하는 칸(제목 수정, 하위 항목 추가/수정, 새 항목 입력 등)에 포커스가 있는 동안
+  // body에 is-editing을 달아서, CSS가 다른 항목의 호버 펼침(아이콘 줄, someday 하위 항목)을 막게 함.
+  // 보드 카드(.sticky) 안의 입력칸만 해당 — 검색창, 모달 안 입력칸, 날짜 입력칸은 제외.
+  function refreshEditingState() {
+    const a = document.activeElement;
+    const typing = !!a && !!a.closest('.sticky') &&
+      (a.tagName === 'TEXTAREA' || (a.tagName === 'INPUT' && (a.type === 'text' || a.type === 'search')));
+    document.body.classList.toggle('is-editing', typing);
+  }
+  document.addEventListener('focusin', refreshEditingState);
+  // focusout 직후에는 activeElement가 아직 body라서 한 틱 뒤에 다시 판단(입력칸 → 입력칸 이동 때 깜빡임 방지)
+  document.addEventListener('focusout', () => setTimeout(refreshEditingState, 0));
 
   // 로고 클릭 — 열려있던 오버레이/펼침 상태를 전부 기본값으로: 리갈패드
   // 닫기, waiting이 lupin 뒷면이면 앞면으로, someday/scheduled 펼침

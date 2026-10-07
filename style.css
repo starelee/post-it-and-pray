@@ -692,6 +692,13 @@
     top: 3px;
   }
 
+  /* "찾는 게 없어요" 같은 안내문도 섹션 제목처럼 줄 한 칸 띄우고 28px 줄에 맞춤 */
+  .search-panel .empty-hint {
+    margin: 28px 0 0;
+    padding: 0;
+    line-height: 28px;
+  }
+
   .search-input {
     display: block;
     flex: 1 1 auto;
@@ -714,18 +721,12 @@
   }
 
   .search-group-title {
-    margin: 0;
+    margin: 28px 0 0; /* 검색 제목 줄과 첫 섹션 사이, 섹션과 섹션 사이 모두 줄 한 칸 비움 */
     font-family: var(--font-hand);
     font-size: 18px;
     font-weight: 400;
     line-height: 28px;
     color: var(--ink-soft);
-  }
-
-  /* 섹션 사이는 줄 한 칸 비움 */
-  .search-group-title:not(:first-child),
-  .search-list + .search-group-title {
-    margin-top: 28px;
   }
 
   .search-list {
@@ -2025,8 +2026,8 @@
   }
 
   /* 보드 이동 — 도착 자리가 눈에 보일 때의 장난기 있는 흔들림. 항목 전체(하위 항목·아이콘 줄
-     포함)가 가운데를 축으로 살짝 커졌다가 점점 잦아들며 흔들리고, 옅은 막이 같이 떴다 사라져서
-     눈에 더 잘 띔(이전엔 줄 하나가 왼쪽 끝을 축으로 ±3도만 돌아서 글자가 거의 안 움직였음). */
+     포함)가 가운데를 축으로 살짝 커졌다가 점점 잦아들며 흔들림(검색 결과 이동과 "손댈 항목으로 이동"도
+     같은 흔들림을 씀 — 반투명 막 같은 다른 강조는 없음)(이전엔 줄 하나가 왼쪽 끝을 축으로 ±3도만 돌아서 글자가 거의 안 움직였음). */
   @keyframes move-arrive-wiggle {
     0%   { transform: scale(1) rotate(0); }
     15%  { transform: scale(var(--wiggle-scale)) rotate(calc(var(--wiggle-deg) * -1)); }
@@ -2036,17 +2037,10 @@
     100% { transform: scale(1) rotate(0); }
   }
 
-  @keyframes move-veil {
-    0%, 25% { background: var(--flash-fill); }
-    100%    { background: transparent; }
-  }
-
   .move-arrive-wiggle {
     border-radius: 6px;
     transform-origin: center;
-    animation:
-      move-arrive-wiggle var(--wiggle-dur) var(--ease-ui) both,
-      move-veil 0.6s var(--ease-ui) both;
+    animation: move-arrive-wiggle var(--wiggle-dur) var(--ease-ui) both;
   }
 
   /* 보드 이동 — 출발 자리가 사라지는 연출. 투명해지면서 높이도 접혀서 아래 항목이 점프하지
@@ -2254,6 +2248,15 @@
     transition-delay: var(--expand-delay);
   }
 
+  /* 글자를 입력하는 중(body.is-editing)에는 고치는 항목의 아이콘 줄만 열려 있고, 다른 항목은 마우스를
+     올려도 안 열림 — 열릴 때마다 그 항목 높이가 21px씩 늘어서, 치는 동안 마우스가 목록 위를 스치면
+     아래 항목이 출렁였음. 날짜 행이 열려 고정된 항목(.row-pinned)과 모바일 롱프레스(.controls-open)는 예외. */
+  body.is-editing .task-item:not(:focus-within):not(.row-pinned):not(.controls-open):hover .task-controls {
+    max-height: 0;
+    opacity: 0;
+    margin-top: 0;
+  }
+
   .delete-btn {
     flex: 0 0 auto;
     margin-left: auto;
@@ -2451,6 +2454,7 @@
   .task-list[data-tasklist="waiting"] .task-item:not(.done-open) > .subtask-collapse:not(:has(.subtask-item:not(.done))),
   .task-list[data-tasklist="waitingLater"] .task-item:not(.done-open) > .subtask-collapse:not(:has(.subtask-item:not(.done))),
   .task-list[data-tasklist="someday"] .task-item:not(:hover):not(:focus-within):not(.controls-open) > .subtask-collapse,
+  body.is-editing .task-list[data-tasklist="someday"] .task-item:not(:focus-within):not(.controls-open) > .subtask-collapse,
   .task-list[data-tasklist="today"] .task-item.done:not(.done-open) > .subtask-collapse {
     grid-template-rows: 0fr;
     opacity: 0;
@@ -3235,41 +3239,67 @@
     align-self: flex-start;
   }
 
-  /* 검색 결과로 이동하거나 손댈 항목으로 옮겼을 때 그 항목을 잠깐 강조 — 카드 색(노랑/주황/파랑/크림)에
-     상관없이 보이도록 색 대신 "밝은 반투명 막 + 회색 윤곽선(+ 살짝 뜬 그림자)"로.
-     윤곽선은 글자색(--ink)에서 따와서 다크 모드에서는 밝은 선이 됨. */
-  :root {
-    --flash-fill: rgba(255, 255, 255, 0.72);
+
+  /* ───── done 리갈패드: 모든 행을 28px 줄 간격에 맞춤 ─────
+     이전엔 날짜 묶음마다 위에 6px 여백(.archive-date-group padding)과 월 제목 높이(21px)가 28px
+     단위가 아니라서, 아래로 갈수록 글씨가 리갈패드 줄과 어긋나 취소선이 줄과 겹쳐 보였음.
+     그래서 날짜 묶음 위 여백을 없애고(날짜 구분은 왼쪽 라벨이 함), 제목/월 제목/항목 줄 높이를
+     전부 28px 단위로 고정함(검색 패드와 같은 방식: 글씨는 줄 위에 앉도록 3px 내림). */
+  #archivePanel .archive-panel-inner {
+    padding-top: 28px;
+    padding-bottom: 28px;
   }
 
-  @media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) {
-      --flash-fill: rgba(255, 255, 255, 0.18);
-    }
+  #archivePanel .archive-title {
+    height: 28px;
+    margin: 0;
+    line-height: 28px;
+    align-items: center;
   }
 
-  :root[data-theme="dark"] {
-    --flash-fill: rgba(255, 255, 255, 0.18);
+  #archivePanel .archive-title.archive-section-title-spaced {
+    margin-top: 28px; /* 섹션 사이는 빈 줄 한 칸 */
   }
 
-  .attention-flash {
-    border-radius: 6px;
-    animation: attention-flash 1.4s var(--ease-ui);
+  /* 제목 밑 점선: 자리를 차지하지 않게(높이 0) 줄 위에 겹쳐서 그림 */
+  #archivePanel .archive-section-divider {
+    height: 0;
+    margin: -1px 0 0;
+    border-bottom: 0;
+    border-top: 1px dashed var(--focus-box-border);
   }
 
-  @keyframes attention-flash {
-    0% {
-      background: transparent;
-      box-shadow: 0 0 0 0 transparent;
-    }
-    12%, 50% {
-      background: var(--flash-fill);
-      box-shadow:
-        0 0 0 2px color-mix(in srgb, var(--ink) 32%, transparent),
-        0 4px 12px color-mix(in srgb, var(--ink) 22%, transparent);
-    }
-    100% {
-      background: transparent;
-      box-shadow: 0 0 0 0 transparent;
-    }
+  #archivePanel .archive-groups .sticky-title-toggle {
+    height: 28px;
+    margin: 0;
+    line-height: 28px;
+    align-items: center;
+  }
+
+  #archivePanel .archive-date-group {
+    padding: 0;
+    gap: 6px;
+  }
+
+  #archivePanel .archive-date-heading {
+    padding-top: 0;
+    line-height: 28px;
+  }
+
+  #archivePanel .archive-item {
+    padding: 0;
+    min-height: 28px;
+  }
+
+  #archivePanel .archive-item-text {
+    line-height: 28px;
+    position: relative;
+    top: 3px;
+  }
+
+  #archivePanel .archive-title,
+  #archivePanel .archive-groups .sticky-title-toggle,
+  #archivePanel .archive-date-heading {
+    position: relative;
+    top: 3px;
   }
