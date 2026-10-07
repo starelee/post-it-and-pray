@@ -364,6 +364,18 @@
     return groups.filter(g => g.hits.length);
   }
 
+  // 카드 제목에 붙은 그 아이콘(✿ gotta do, ⏳ waiting, 🌙 someday, 📅 pray later)과
+  // 같은 기호 — done 기록은 done 패널 제목의 📋. 항목이 어느 보드 것인지 알려줌.
+  const BOARD_ICONS = { today: '✿', waiting: '⏳', someday: '🌙', scheduled: '📅', archive: '📋', done: '📋' };
+
+  function makeBoardIcon(key) {
+    const icon = document.createElement('span');
+    icon.className = 'search-icon' + (key === 'today' ? ' search-icon-flower' : '');
+    icon.textContent = BOARD_ICONS[key] || '';
+    icon.setAttribute('aria-hidden', 'true');
+    return icon;
+  }
+
   function makeSearchChip(text) {
     const chip = document.createElement('span');
     chip.className = 'search-chip';
@@ -380,6 +392,7 @@
 
     const row = document.createElement('div');
     row.className = 'search-item-row';
+    row.appendChild(makeBoardIcon(groupKey));
     const title = document.createElement('span');
     title.className = 'search-item-text';
     appendHighlighted(title, task.text || '', tokens);
@@ -620,6 +633,7 @@
     li.setAttribute('role', 'button');
     const row = document.createElement('div');
     row.className = 'search-item-row';
+    row.appendChild(makeBoardIcon(item.done ? 'done' : item.boardId));
     const title = document.createElement('span');
     title.className = 'search-item-text';
     title.textContent = task.text || '';
@@ -644,7 +658,7 @@
     if (sections.length === 0) {
       const hint = document.createElement('p');
       hint.className = 'empty-hint';
-      hint.textContent = '제목, 하위 항목, 메모에서 찾아요';
+      hint.textContent = '지금 챙길 게 없어요';
       searchResultsEl.appendChild(hint);
       return;
     }
@@ -3130,8 +3144,9 @@
             : items[i === -1 || i === items.length - 1 ? 0 : i + 1];
           e.preventDefault();
           next.focus();
-        } else if (e.key === 'Enter' && !(e.target instanceof HTMLInputElement)) {
-          // 뒤쪽 화면의 단축키가 Enter를 가로채지 않게 (입력칸의 Enter는 그대로 통과)
+        } else if (e.key === 'Enter' && !(e.target instanceof HTMLInputElement) && !(e.target instanceof HTMLTextAreaElement)) {
+          // 뒤쪽 화면의 단축키가 Enter를 가로채지 않게 (입력칸/textarea의 Enter는 그대로 통과 —
+          // 메모 칸의 Shift+Enter 저장이 그 칸의 keydown까지 닿아야 함)
           e.stopPropagation();
         }
       }
@@ -3175,9 +3190,10 @@
     const card = document.createElement('div');
     card.className = 'revive-card note-card';
 
-    // 수정 중에는 어느 칸에서든 Ctrl+Enter로 저장
+    // 수정 중에는 어느 칸에서든 Shift+Enter(= Alt/Ctrl/Cmd+Enter)로 저장 — 새 항목 입력창의
+    // Shift+Enter("확정하고 다음으로")와 같은 규칙. 메모 칸의 Enter는 그냥 줄바꿈.
     card.addEventListener('keydown', (e) => {
-      if (editing && e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+      if (editing && e.key === 'Enter' && !e.isComposing && (e.shiftKey || e.altKey || e.ctrlKey || e.metaKey)) {
         e.preventDefault();
         okBtn.click();
       }
