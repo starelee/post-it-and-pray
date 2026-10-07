@@ -2415,7 +2415,7 @@
   .focus-note {
     margin: 8px 0 0;
     font-family: var(--font-task);
-    font-size: 17px;
+    font-size: 15px;
     line-height: 1.4;
     color: var(--ink);
     white-space: pre-wrap;
