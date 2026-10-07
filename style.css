@@ -2410,15 +2410,14 @@
     outline: none;
   }
 
-  /* focus 화면의 할 일 박스 안 메모 — 하위 항목 아래에 점선 구분선과 함께 */
+  /* focus 화면의 할 일 박스 안 메모 — 하위 항목 바로 아래, 타이머 띠의
+     점선 위에 둠(자체 구분선 없음). 분홍 배경에서도 잘 읽히게 본문 색. */
   .focus-note {
     margin: 8px 0 0;
-    padding-top: 6px;
-    border-top: 1px dashed var(--focus-box-border);
     font-family: var(--font-task);
-    font-size: 15px;
+    font-size: 17px;
     line-height: 1.4;
-    color: var(--ink-soft);
+    color: var(--ink);
     white-space: pre-wrap;
     overflow-wrap: anywhere;
   }
