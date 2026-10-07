@@ -51,6 +51,8 @@
     /* 콘콘체가 글자가 꽉 차 보여서 UI 글자에만 자간을 약 1px(≈110%) 벌림 */
     --ui-letter-spacing: 0.08em;
     --font-hand: 'NostalgicMyoeunHeullim', 'Nanum Pen Script', cursive;
+    /* 메모 전용 — 손글씨체 대신 평범한 고딕체로 "메모 느낌"을 냄 */
+    --font-note: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', sans-serif;
     --font-task: 'NostalgicMyoeunHeullim', 'OngleipKonkon', 'Gaegu', cursive, sans-serif;
 
     /* 호버로 펼쳐지고 접히는 것들의 공통 타이밍 — 마우스를 올리자마자 아이콘이
@@ -2414,8 +2416,8 @@
      점선 위에 둠(자체 구분선 없음). 위 여백은 박스의 gap을 그대로 씀(상위/하위 항목 간격과 동일). 분홍 배경에서도 잘 읽히게 본문 색. */
   .focus-note {
     margin: 0;
-    font-family: var(--font-task);
-    font-size: 15px;
+    font-family: var(--font-note);
+    font-size: 13px;
     line-height: 1.4;
     color: var(--ink);
     white-space: pre-wrap;
@@ -2458,8 +2460,8 @@
     margin: 10px 0 0;
     padding-top: 8px;
     border-top: 1px dashed var(--focus-box-border);
-    font-family: var(--font-task);
-    font-size: 17px;
+    font-family: var(--font-note);
+    font-size: 13px;
     line-height: 1.45;
     white-space: pre-wrap;
     overflow-wrap: anywhere;
@@ -2489,8 +2491,8 @@
     box-sizing: border-box;
     margin-top: 8px;
     padding: 6px 8px;
-    font-family: var(--font-task);
-    font-size: 16px;
+    font-family: var(--font-note);
+    font-size: 13px;
     line-height: 1.4;
     color: var(--ink);
     background: transparent;
