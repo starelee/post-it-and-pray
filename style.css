@@ -310,7 +310,7 @@
 
   @media (max-width: 480px) {
     .screen {
-      padding: 20px 10px 16px;
+      padding: 20px 10px 16px; /* 윗 여백 20px은 script.js SCREEN_TOP_MIN_STACKED와 같은 값 */
     }
   }
 

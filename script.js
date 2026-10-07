@@ -5606,6 +5606,7 @@
   // 가깝게 내려오되 SCREEN_TOP_MAX까지만(그 이상은 스크롤만 늘림), 화면을 거의 채우면 SCREEN_TOP_MIN.
   // 호버로 열린 아이콘 줄(.task-controls) 높이는 빼고 재서, 마우스를 올리고 내릴 때는 위치가 안 바뀜.
   const SCREEN_TOP_MIN = 32;
+  const SCREEN_TOP_MIN_STACKED = 20; // 카드가 세로로 쌓이는 폭(821px 이하)에서는 위 여백을 더 줄임
   const SCREEN_TOP_MAX = 96;
   const SCREEN_BOTTOM_PAD = 24;
   const screenEl = document.querySelector('.screen');
@@ -5620,7 +5621,8 @@
       h -= el.offsetHeight + (parseFloat(getComputedStyle(el).marginTop) || 0);
     });
     const free = window.innerHeight - h - SCREEN_BOTTOM_PAD;
-    const top = Math.round(Math.min(SCREEN_TOP_MAX, Math.max(SCREEN_TOP_MIN, free / 2)));
+    const min = window.matchMedia('(max-width: 821px)').matches ? SCREEN_TOP_MIN_STACKED : SCREEN_TOP_MIN;
+    const top = Math.round(Math.min(SCREEN_TOP_MAX, Math.max(min, free / 2)));
     if (screenEl.style.getPropertyValue('--screen-top') !== top + 'px') {
       screenEl.style.setProperty('--screen-top', top + 'px');
     }
