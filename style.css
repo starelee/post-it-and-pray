@@ -2799,9 +2799,9 @@
   }
 
   /* 월 그룹 제목(예: "2026-09")은 포스트잇 제목과 같은 26px를 그대로
-     쓰기엔 done 패널 안에서 너무 커 보여서 살짝 줄임. */
+     쓰기엔 done 패널 안에서 너무 커 보여서 줄임(검색 패드의 섹션 제목과 같은 18px). */
   .archive-groups .sticky-title-toggle {
-    font-size: 19px;
+    font-size: 18px;
     margin-bottom: 4px;
   }
 
