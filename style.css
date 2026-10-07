@@ -62,7 +62,17 @@
     --collapse-delay: 0.25s;
     --collapse-dur: 0.32s;
     /* 빠르게 출발해서 끝에서 천천히 안착하는 ease-out 계열 곡선 */
-    --collapse-ease: cubic-bezier(0.32, 0.72, 0, 1);
+    /* 모션 곡선은 의미별로 두 가지만 씀(시간이 일정하게 흐르는 linear와, 흔들림/뒤집기처럼
+       표현을 위해 직접 만든 곡선 몇 개는 예외):
+       --ease-ui         : 호버·색·테두리 같은 작은 상태 전환, 취소선/체크, 패널 — 기본 ease
+       --ease-emphasized : 펼침·나타남·안착 — 빠르게 출발해서 끝에서 천천히 안착 */
+    --ease-ui: ease;
+    --ease-emphasized: cubic-bezier(0.32, 0.72, 0, 1);
+    --collapse-ease: var(--ease-emphasized);
+    /* 보드 이동 도착 흔들림 — 눈에 더 잘 띄게 키우거나 줄이고 싶으면 여기 숫자만 바꾸면 됨 */
+    --wiggle-deg: 5deg;
+    --wiggle-scale: 1.04;
+    --wiggle-dur: 0.7s;
     /* 네이티브 폼 컨트롤(특히 iOS의 date input)이 다크 모드에서도 항상
        자기 자체는 밝은 배경으로 그려서, 우리 쪽 글자색(--ink, 다크에서는
        밝은 크림색)이 흰 배경 위에 흰 글자처럼 거의 안 보이던 문제 —
@@ -408,7 +418,7 @@
     padding: 3px 10px;
     cursor: pointer;
     opacity: 0.85;
-    transition: opacity 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+    transition: opacity 0.15s var(--ease-ui), color 0.15s var(--ease-ui), border-color 0.15s var(--ease-ui);
   }
 
   .auth-btn:hover {
@@ -450,7 +460,7 @@
     color: var(--ink-soft);
     cursor: pointer;
     opacity: 0.85;
-    transition: opacity 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+    transition: opacity 0.15s var(--ease-ui), color 0.15s var(--ease-ui), border-color 0.15s var(--ease-ui);
   }
 
   /* 💾 백업 버튼 — 글자 없이 아이콘만이라 라이트 버튼보다 좁게 */
@@ -486,7 +496,7 @@
     opacity: 0.9;
     transform-origin: center bottom;
     transform: rotate(-4deg);
-    transition: opacity 0.15s ease, transform 0.15s ease;
+    transition: opacity 0.15s var(--ease-ui), transform 0.15s var(--ease-ui);
   }
 
   .archive-flag:hover,
@@ -547,7 +557,7 @@
       0 18px 30px -12px var(--paper-shadow),
       0 3px 6px var(--paper-contact);
     transform: translateX(-50%) translateY(-10px);
-    transition: max-height 0.35s ease, opacity 0.25s ease, transform 0.35s ease;
+    transition: max-height 0.35s var(--ease-ui), opacity 0.25s var(--ease-ui), transform 0.35s var(--ease-ui);
   }
 
   .archive-panel.open {
@@ -615,7 +625,7 @@
     padding: 2px 4px;
     opacity: 0.75;
     white-space: nowrap;
-    transition: opacity 0.15s ease, color 0.15s ease;
+    transition: opacity 0.15s var(--ease-ui), color 0.15s var(--ease-ui);
   }
 
   .trash-toggle-btn:hover {
@@ -638,7 +648,7 @@
     color: var(--ink-soft);
     padding: 4px;
     opacity: 0.7;
-    transition: opacity 0.15s ease, color 0.15s ease;
+    transition: opacity 0.15s var(--ease-ui), color 0.15s var(--ease-ui);
   }
 
   .archive-close-btn:hover {
@@ -1024,7 +1034,7 @@
     color: var(--ink-soft);
     padding: 2px 4px;
     opacity: 0.75;
-    transition: opacity 0.15s ease, color 0.15s ease;
+    transition: opacity 0.15s var(--ease-ui), color 0.15s var(--ease-ui);
   }
 
   .archive-revive-btn:hover {
@@ -1051,7 +1061,7 @@
     color: var(--ink);
     padding: 0;
     opacity: 0.75;
-    transition: opacity 0.15s ease, transform 0.15s ease;
+    transition: opacity 0.15s var(--ease-ui), transform 0.15s var(--ease-ui);
   }
 
   .back-arrow {
@@ -1090,7 +1100,7 @@
       inset 1px 0 var(--paper-edge-light),
       inset -1px 0 rgba(80,60,20,0.025);
     transform: rotate(var(--rot, -1.4deg));
-    transition: transform 0.25s ease, box-shadow 0.25s ease;
+    transition: transform 0.25s var(--ease-ui), box-shadow 0.25s var(--ease-ui);
   }
 
   @media (max-width: 480px) {
@@ -1345,7 +1355,7 @@
     line-height: 1;
     padding: 0;
     color: var(--ink-soft);
-    transition: color 0.15s ease, transform 0.15s ease;
+    transition: color 0.15s var(--ease-ui), transform 0.15s var(--ease-ui);
   }
 
   .lupin-flip-btn:hover,
@@ -1370,7 +1380,7 @@
     line-height: 1;
     padding: 0;
     color: var(--ink-soft);
-    transition: color 0.15s ease, transform 0.15s ease;
+    transition: color 0.15s var(--ease-ui), transform 0.15s var(--ease-ui);
   }
 
   .focus-enter-btn:hover,
@@ -1398,7 +1408,7 @@
     line-height: 1;
     padding: 2px 3px;
     opacity: 0.6;
-    transition: opacity 0.15s ease, transform 0.15s ease;
+    transition: opacity 0.15s var(--ease-ui), transform 0.15s var(--ease-ui);
   }
 
   .focus-btn:hover {
@@ -1422,7 +1432,7 @@
     font-size: 16px;
     color: var(--ink);
     padding: 8px 4px;
-    transition: color 0.15s ease, padding-left 0.15s ease;
+    transition: color 0.15s var(--ease-ui), padding-left 0.15s var(--ease-ui);
   }
 
   .focus-task-pick-btn:hover,
@@ -1547,7 +1557,7 @@
     font-size: 16px;
     color: var(--focus-ink-soft);
     padding: 2px;
-    transition: color 0.15s ease, transform 0.15s ease;
+    transition: color 0.15s var(--ease-ui), transform 0.15s var(--ease-ui);
   }
 
   .focus-duration-btn:hover,
@@ -1589,7 +1599,7 @@
     color: var(--focus-ink-soft);
     padding: 2px 4px;
     opacity: 0.75;
-    transition: opacity 0.15s ease, color 0.15s ease;
+    transition: opacity 0.15s var(--ease-ui), color 0.15s var(--ease-ui);
   }
 
   .focus-reselect-btn:hover,
@@ -1651,7 +1661,7 @@
     border-bottom: 1px dashed transparent;
     outline: none;
     padding: 4px 0;
-    transition: border-color 0.15s ease;
+    transition: border-color 0.15s var(--ease-ui);
   }
 
   .focus-quick-add-input:focus {
@@ -1696,7 +1706,7 @@
      좁은 구간에서 확 뒤집어서, 천천히 번지는 배경과 따로 노는 느낌이 남). */
   .focus-countdown-box.focus-dissolve {
     --focus-ink-t: clamp(0%, calc((var(--focus-t) - 29%) * 8), 100%);
-    transition: --focus-t 3s ease-out;
+    transition: --focus-t 3s var(--ease-ui);
   }
 
   /* 마지막 1분 숫자만 좌우로 떨림 — 세기는 --focus-shake(0~1, 1 = 3px)로
@@ -1751,7 +1761,7 @@
     text-align: center;
     color: var(--ink);
     padding: 18px 0 4px;
-    transition: opacity 0.2s ease;
+    transition: opacity 0.2s var(--ease-ui);
   }
 
   .focus-countdown-box.focus-paused .focus-countdown-number {
@@ -1865,7 +1875,7 @@
     font-size: 15px;
     color: var(--focus-ink-soft);
     padding: 4px 6px;
-    transition: color 0.15s ease, transform 0.15s ease;
+    transition: color 0.15s var(--ease-ui), transform 0.15s var(--ease-ui);
   }
 
   .focus-footer-btn:hover,
@@ -1906,7 +1916,7 @@
     filter: blur(4px);
     opacity: 0.5;
     pointer-events: none;
-    transition: filter 0.25s ease, opacity 0.25s ease;
+    transition: filter 0.25s var(--ease-ui), opacity 0.25s var(--ease-ui);
   }
 
   .sticky-title .flower {
@@ -1925,7 +1935,7 @@
     .sticky:hover .flower {
       display: inline-block;
       transform-origin: 50% 70%;
-      animation: sticker-icon-pop 0.38s ease-out;
+      animation: sticker-icon-pop 0.38s var(--ease-emphasized);
     }
   }
 
@@ -1973,7 +1983,7 @@
     padding: 2px 3px;
     opacity: 0.4;
     filter: grayscale(1);
-    transition: opacity 0.15s ease, filter 0.15s ease, transform 0.15s ease;
+    transition: opacity 0.15s var(--ease-ui), filter 0.15s var(--ease-ui), transform 0.15s var(--ease-ui);
   }
 
   .urgent-btn:hover {
@@ -2014,19 +2024,42 @@
     transform-origin: center left;
   }
 
-  /* waiting/someday/pray later -> gotta do, 그리고 gotta do -> waiting 로
-     넘어간 항목이 잘 도착했음을 알리는 가벼운 흔들림. */
+  /* 보드 이동 — 도착 자리가 눈에 보일 때의 장난기 있는 흔들림. 항목 전체(하위 항목·아이콘 줄
+     포함)가 가운데를 축으로 살짝 커졌다가 점점 잦아들며 흔들리고, 옅은 막이 같이 떴다 사라져서
+     눈에 더 잘 띔(이전엔 줄 하나가 왼쪽 끝을 축으로 ±3도만 돌아서 글자가 거의 안 움직였음). */
   @keyframes move-arrive-wiggle {
-    0%, 100% { transform: rotate(0); }
-    20% { transform: rotate(-3deg); }
-    40% { transform: rotate(2.5deg); }
-    60% { transform: rotate(-2deg); }
-    80% { transform: rotate(1deg); }
+    0%   { transform: scale(1) rotate(0); }
+    15%  { transform: scale(var(--wiggle-scale)) rotate(calc(var(--wiggle-deg) * -1)); }
+    35%  { transform: scale(calc(1 + (var(--wiggle-scale) - 1) * 0.7)) rotate(calc(var(--wiggle-deg) * 0.8)); }
+    55%  { transform: scale(calc(1 + (var(--wiggle-scale) - 1) * 0.3)) rotate(calc(var(--wiggle-deg) * -0.5)); }
+    75%  { transform: scale(1) rotate(calc(var(--wiggle-deg) * 0.25)); }
+    100% { transform: scale(1) rotate(0); }
   }
 
-  .move-arrive-wiggle .task-row {
-    animation: move-arrive-wiggle 0.45s ease-in-out both;
-    transform-origin: center left;
+  @keyframes move-veil {
+    0%, 25% { background: var(--flash-fill); }
+    100%    { background: transparent; }
+  }
+
+  .move-arrive-wiggle {
+    border-radius: 6px;
+    transform-origin: center;
+    animation:
+      move-arrive-wiggle var(--wiggle-dur) var(--ease-ui) both,
+      move-veil 0.6s var(--ease-ui) both;
+  }
+
+  /* 보드 이동 — 출발 자리가 사라지는 연출. 투명해지면서 높이도 접혀서 아래 항목이 점프하지
+     않고 미끄러져 올라옴(길이는 JS가 --move-out-dur로 넘김: 보일 땐 0.2초, 안 보일 땐 0.4초). */
+  @keyframes move-out {
+    from { max-height: var(--move-h); opacity: 1; }
+    to   { max-height: 0; opacity: 0; padding-top: 0; padding-bottom: 0; margin-top: 0; margin-bottom: 0; }
+  }
+
+  .task-item.move-out {
+    overflow: hidden;
+    pointer-events: none;
+    animation: move-out var(--move-out-dur, 200ms) var(--collapse-ease) forwards;
   }
 
   /* gotta do -> someday/pray later 로 넘어간 항목 — 나중에 할 일이라 강조는
@@ -2038,7 +2071,7 @@
   }
 
   .move-arrive-fade {
-    animation: move-arrive-fade 0.35s ease-out both;
+    animation: move-arrive-fade 0.35s var(--ease-emphasized) both;
   }
 
   /* 포커스 모드에서 "완료로 표시"를 누르면 gotta do로 돌아온 항목이 체크
@@ -2086,13 +2119,13 @@
 
   .celebrate-flash::before {
     left: 22px;
-    animation: celebrate-burst-left 0.95s ease-out both;
+    animation: celebrate-burst-left 0.95s var(--ease-emphasized) both;
   }
 
   .celebrate-flash::after {
     content: '🎊';
     left: 22px;
-    animation: celebrate-burst-right 0.95s ease-out both;
+    animation: celebrate-burst-right 0.95s var(--ease-emphasized) both;
   }
 
   .checkbox {
@@ -2110,7 +2143,7 @@
     justify-content: center;
     -webkit-appearance: none;
     appearance: none;
-    transition: border-color 0.2s ease, transform 0.15s ease;
+    transition: border-color 0.2s var(--ease-ui), transform 0.15s var(--ease-ui);
   }
 
   .checkbox:hover {
@@ -2136,7 +2169,7 @@
     stroke-linejoin: round;
     stroke-dasharray: 20;
     stroke-dashoffset: 20;
-    transition: stroke-dashoffset 0.28s ease;
+    transition: stroke-dashoffset 0.28s var(--ease-ui);
   }
 
   .task-item.done .checkbox {
@@ -2154,7 +2187,7 @@
     line-height: 1.3;
     flex: 1;
     word-break: break-word;
-    transition: color 0.3s ease 0.05s;
+    transition: color 0.3s var(--ease-ui) 0.05s;
     cursor: text;
   }
 
@@ -2186,7 +2219,7 @@
     height: 2px;
     background: var(--accent);
     transform: translateY(-50%) rotate(-1deg);
-    transition: width 0.32s ease;
+    transition: width 0.32s var(--ease-ui);
     pointer-events: none;
   }
 
@@ -2229,7 +2262,7 @@
     line-height: 1;
     padding: 2px 3px;
     opacity: 0.7;
-    transition: opacity 0.15s ease, transform 0.15s ease;
+    transition: opacity 0.15s var(--ease-ui), transform 0.15s var(--ease-ui);
   }
 
   .delete-btn:hover {
@@ -2243,7 +2276,7 @@
     line-height: 1;
     padding: 2px 3px;
     opacity: 0.6;
-    transition: opacity 0.15s ease, transform 0.15s ease;
+    transition: opacity 0.15s var(--ease-ui), transform 0.15s var(--ease-ui);
   }
 
   .move-btn:hover {
@@ -2305,7 +2338,7 @@
   /* 눌러서 완료 항목을 펼치고 접을 수 있는 알약만 클릭 가능 표시 */
   .subtask-progress.subtask-progress-toggle {
     cursor: pointer;
-    transition: color 0.15s ease;
+    transition: color 0.15s var(--ease-ui);
   }
 
   /* 제목과 알약 사이: .task-row의 gap(8px)을 3px로 줄여 제목이 쓸 수 있는
@@ -2469,7 +2502,7 @@
     width: 0;
     padding: 1px 0;
     overflow: hidden;
-    transition: opacity 0.15s ease, color 0.15s ease, width 0.15s ease, padding 0.15s ease;
+    transition: opacity 0.15s var(--ease-ui), color 0.15s var(--ease-ui), width 0.15s var(--ease-ui), padding 0.15s var(--ease-ui);
   }
 
   .subtask-item:hover .subtask-edit-btn,
@@ -2497,7 +2530,7 @@
     line-height: 1;
     padding: 2px 3px;
     opacity: 0.6;
-    transition: opacity 0.15s ease, color 0.15s ease;
+    transition: opacity 0.15s var(--ease-ui), color 0.15s var(--ease-ui);
   }
 
   .add-subtask-toggle:hover {
@@ -2558,7 +2591,7 @@
     line-height: 1;
     padding: 2px 3px;
     opacity: 0.6;
-    transition: opacity 0.15s ease, transform 0.15s ease;
+    transition: opacity 0.15s var(--ease-ui), transform 0.15s var(--ease-ui);
   }
 
   .date-btn:hover {
@@ -2577,7 +2610,7 @@
     padding: 2px 7px 1px;
     white-space: nowrap;
     cursor: pointer;
-    transition: color 0.15s ease;
+    transition: color 0.15s var(--ease-ui);
   }
 
   .due-badge:hover {
@@ -2598,7 +2631,7 @@
     padding: 2px 7px 1px;
     white-space: nowrap;
     cursor: pointer;
-    transition: color 0.15s ease;
+    transition: color 0.15s var(--ease-ui);
   }
 
   .note-badge:hover,
@@ -2638,7 +2671,7 @@
     line-height: 1;
     padding: 2px 3px;
     opacity: 0.6;
-    transition: opacity 0.15s ease, transform 0.15s ease;
+    transition: opacity 0.15s var(--ease-ui), transform 0.15s var(--ease-ui);
   }
 
   .note-btn:hover {
@@ -2820,7 +2853,7 @@
     font-size: 14px;
     color: var(--ink-soft);
     display: inline-block;
-    transition: transform 0.15s ease;
+    transition: transform 0.15s var(--ease-ui);
   }
 
   .toggle-arrow-open {
@@ -2882,7 +2915,7 @@
     margin-top: 12px;
     border-top: 1px dashed var(--input-line);
     padding-top: 12px;
-    transition: background 0.15s ease, border-radius 0.15s ease;
+    transition: background 0.15s var(--ease-ui), border-radius 0.15s var(--ease-ui);
   }
 
   .add-row.draft-urgent {
@@ -2943,7 +2976,7 @@
     padding: 0;
     font-family: inherit;
     line-height: 1;
-    transition: color 0.15s ease, transform 0.15s ease;
+    transition: color 0.15s var(--ease-ui), transform 0.15s var(--ease-ui);
   }
 
   .plus:hover,
@@ -2981,7 +3014,7 @@
     -webkit-backdrop-filter: blur(4px);
     backdrop-filter: blur(4px);
     opacity: 0;
-    transition: opacity 0.25s ease;
+    transition: opacity 0.25s var(--ease-ui);
   }
 
   .confirm-overlay[hidden] {
@@ -3118,7 +3151,7 @@
     background: none;
     color: var(--ink-soft);
     cursor: pointer;
-    transition: opacity 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+    transition: opacity 0.15s var(--ease-ui), color 0.15s var(--ease-ui), border-color 0.15s var(--ease-ui);
   }
 
   .confirm-btn small {
@@ -3160,7 +3193,7 @@
     box-shadow: 0 6px 16px var(--paper-shadow);
     opacity: 0;
     pointer-events: none;
-    transition: opacity 0.2s ease, transform 0.25s var(--collapse-ease);
+    transition: opacity 0.2s var(--ease-ui), transform 0.25s var(--collapse-ease);
   }
 
   .toast.show {
@@ -3202,13 +3235,41 @@
     align-self: flex-start;
   }
 
-  /* 검색 결과로 이동했을 때 그 항목을 잠깐 강조 */
-  .search-flash {
-    border-radius: 6px;
-    animation: search-flash 2s ease-out;
+  /* 검색 결과로 이동하거나 손댈 항목으로 옮겼을 때 그 항목을 잠깐 강조 — 카드 색(노랑/주황/파랑/크림)에
+     상관없이 보이도록 색 대신 "밝은 반투명 막 + 회색 윤곽선(+ 살짝 뜬 그림자)"로.
+     윤곽선은 글자색(--ink)에서 따와서 다크 모드에서는 밝은 선이 됨. */
+  :root {
+    --flash-fill: rgba(255, 255, 255, 0.72);
   }
 
-  @keyframes search-flash {
-    0%, 35% { background: rgba(255, 214, 64, 0.6); }
-    100% { background: rgba(255, 214, 64, 0); }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --flash-fill: rgba(255, 255, 255, 0.18);
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --flash-fill: rgba(255, 255, 255, 0.18);
+  }
+
+  .attention-flash {
+    border-radius: 6px;
+    animation: attention-flash 1.4s var(--ease-ui);
+  }
+
+  @keyframes attention-flash {
+    0% {
+      background: transparent;
+      box-shadow: 0 0 0 0 transparent;
+    }
+    12%, 50% {
+      background: var(--flash-fill);
+      box-shadow:
+        0 0 0 2px color-mix(in srgb, var(--ink) 32%, transparent),
+        0 4px 12px color-mix(in srgb, var(--ink) 22%, transparent);
+    }
+    100% {
+      background: transparent;
+      box-shadow: 0 0 0 0 transparent;
+    }
   }
