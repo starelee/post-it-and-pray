@@ -411,6 +411,126 @@
     return li;
   }
 
+  // ─────────────────────────────
+  // 백업 / 복구 — 전체 데이터(boards)를 JSON 파일로 내려받고, 그 파일로 되돌림.
+  // 파일 모양: { app, version, exportedAt, boards }. boards는 localStorage/클라우드에
+  // 저장되는 것과 같은 shape(월급루팡·삭제 기록 포함)이라 완전한 백업이 됨.
+  // 복구는 "통째로 바꾸기"만 — saveBoards()를 거치므로 Ctrl+Z로 되돌릴 수 있고,
+  // 로그인 상태면 평소 저장처럼 클라우드에도 반영됨.
+  // ─────────────────────────────
+  const BACKUP_APP = 'post-it-and-pray';
+  const BACKUP_VERSION = 1;
+  const backupBtn = document.getElementById('backupBtn');
+  if (backupBtn) backupBtn.addEventListener('click', openBackupModal);
+
+  function downloadBackup() {
+    const payload = { app: BACKUP_APP, version: BACKUP_VERSION, exportedAt: new Date().toISOString(), boards };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'postit-backup-' + todayStr() + '.json';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    showToast('백업 파일을 내려받았어요');
+  }
+
+  // 백업 파일 내용을 검사해 정리된 boards를 돌려줌. 앱이 쓰는 필드만 남기는
+  // normalizeBoards를 거치므로 알 수 없는 값은 걸러짐. 형식이 아니면 reason.
+  function parseBackup(text) {
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch (e) {
+      return { reason: 'JSON 파일이 아니에요' };
+    }
+    if (!data || typeof data !== 'object' || Array.isArray(data)) return { reason: '이 앱의 백업 파일이 아니에요' };
+    if (data.app && data.app !== BACKUP_APP) return { reason: '이 앱의 백업 파일이 아니에요' };
+    if (typeof data.version === 'number' && data.version > BACKUP_VERSION) return { reason: '더 새로운 버전의 백업 파일이에요' };
+    // 래퍼({app, boards}) 없이 boards 객체만 있는 파일도 받아줌
+    const raw = data.boards && typeof data.boards === 'object' ? data.boards : data;
+    const known = BOARD_IDS.concat(['archive', 'lupin', 'trash']);
+    if (!known.some(id => Array.isArray(raw[id]))) return { reason: '이 앱의 백업 파일이 아니에요' };
+    return { boards: normalizeBoards(raw) };
+  }
+
+  function summarizeBoards(b) {
+    return 'gotta do ' + b.today.length + ' · waiting ' + b.waiting.length + ' · someday ' + b.someday.length +
+      ' · pray later ' + b.scheduled.length + ' · done ' + b.archive.length;
+  }
+
+  async function restoreFromFile(file) {
+    let text;
+    try {
+      text = await file.text();
+    } catch (e) {
+      showToast('파일을 읽지 못했어요');
+      return;
+    }
+    const parsed = parseBackup(text);
+    if (!parsed.boards) {
+      showToast(parsed.reason);
+      return;
+    }
+    const ok = await showConfirm({
+      title: '이 백업으로 복구할까요?',
+      message: summarizeBoards(parsed.boards) + '\n\n지금 데이터는 이 파일의 내용으로 바뀌어요.\n(Ctrl+Z로 되돌릴 수 있어요)',
+      confirmLabel: '복구',
+      cancelLabel: '취소'
+    });
+    if (!ok) return;
+    boards = parsed.boards;
+    saveBoards(); // 되돌리기 기록 + localStorage + (로그인 시) 클라우드
+    closeArchivePanel();
+    closeSearchPanel();
+    renderAll();
+    showToast('복구했어요 (Ctrl+Z로 되돌릴 수 있어요)');
+  }
+
+  async function openBackupModal() {
+    if (isFocusLocked() || isConfirmModalOpen()) return;
+    const okBtn = document.getElementById('confirmOk');
+    const cancelBtn = document.getElementById('confirmCancel');
+
+    const card = document.createElement('div');
+    card.className = 'backup-card';
+    const hint = document.createElement('p');
+    hint.className = 'backup-hint';
+    hint.textContent = '지금까지 쌓인 모든 데이터를 파일(JSON)로 저장하거나, 저장해 둔 파일로 되돌려요. 숨겨 둔 보드와 삭제 기록까지 전부 들어가요.';
+    const summary = document.createElement('p');
+    summary.className = 'backup-summary';
+    summary.textContent = '지금 데이터: ' + summarizeBoards(boards);
+    const restoreBtn = document.createElement('button');
+    restoreBtn.type = 'button';
+    restoreBtn.className = 'confirm-btn backup-restore-btn';
+    restoreBtn.textContent = '복구하기 (파일 고르기)';
+    const fileInput = document.createElement('input');
+    fileInput.type = 'file';
+    fileInput.accept = 'application/json,.json';
+    fileInput.hidden = true;
+    let pickedFile = null;
+    restoreBtn.addEventListener('click', () => fileInput.click());
+    fileInput.addEventListener('change', () => {
+      pickedFile = fileInput.files && fileInput.files[0];
+      if (pickedFile) cancelBtn.click(); // 이 모달을 닫고 아래에서 복구 확인 모달로 넘어감
+    });
+    card.appendChild(hint);
+    card.appendChild(summary);
+    card.appendChild(restoreBtn);
+    card.appendChild(fileInput);
+
+    const exportRequested = await showConfirm({
+      title: '백업 / 복구',
+      content: card,
+      confirmLabel: '내보내기',
+      cancelLabel: '닫기'
+    });
+    if (exportRequested) downloadBackup();
+    else if (pickedFile) await restoreFromFile(pickedFile);
+  }
+
   function renderSearchResults() {
     clearEl(searchResultsEl);
     const addHint = (text) => {

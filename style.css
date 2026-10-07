@@ -453,6 +453,11 @@
     transition: opacity 0.15s ease, color 0.15s ease, border-color 0.15s ease;
   }
 
+  /* 💾 백업 버튼 — 글자 없이 아이콘만이라 라이트 버튼보다 좁게 */
+  .backup-btn {
+    padding: 3px 8px;
+  }
+
   .theme-toggle:hover {
     opacity: 1;
     color: var(--accent);
@@ -3099,4 +3104,31 @@
       transition-duration: 0.01ms !important;
       animation-duration: 0.01ms !important;
     }
+  }
+
+  /* ───── 백업 / 복구 모달 ───── */
+  .backup-card {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .backup-hint {
+    margin: 0;
+    font-family: var(--font-ui);
+    letter-spacing: var(--ui-letter-spacing);
+    font-size: 15px;
+    line-height: 1.5;
+    color: var(--ink-soft);
+  }
+
+  .backup-summary {
+    margin: 0;
+    font-family: var(--font-note);
+    font-size: 12px;
+    color: var(--ink);
+  }
+
+  .backup-restore-btn {
+    align-self: flex-start;
   }
