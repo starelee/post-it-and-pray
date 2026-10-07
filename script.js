@@ -1919,6 +1919,7 @@
       // 커밋하고, 그 사이 또 change가 오면(다음 자리 입력) 타이머를 리셋해서
       // 최종 값만 커밋되게 함.
       let commitTimer = null;
+      let pickerOpenedAt = 0; // 달력을 연 시각(가짜 change 구분용)
       const commitDate = (value) => {
         clearTimeout(commitTimer);
         commitTimer = null;
@@ -1938,6 +1939,16 @@
         // — 저장된 task.dueDate로 표시값도 같이 되돌려놓음(진짜 지우기는
         // "날짜 지우기" 버튼이 따로 처리).
         if (!dateInput.value) {
+          // 달력의 "삭제"(크롬)처럼 칸 전체를 진짜로 비웠으면 "날짜 지우기"와
+          // 똑같이 처리. 구분 기준: ① 년/월/일 중 일부만 지운 입력 중이면
+          // badInput이 true라 제외, ② 달력을 연 직후(700ms 이내)에 오는 빈
+          // change는 위에서 말한 모바일의 가짜 이벤트라 제외.
+          const justOpened = Date.now() - pickerOpenedAt < 700;
+          if (task[dateKey] && !dateInput.validity.badInput && !justOpened) {
+            clearTimeout(commitTimer);
+            setDueDate(boardId, task.id, '');
+            return;
+          }
           if (task[dateKey]) dateInput.value = task[dateKey];
           return;
         }
@@ -2024,6 +2035,7 @@
           // 피커가 뜨면) 아직 리플로우 전이라 iOS가 이 줄이 실제로 펼쳐진
           // 상태를 못 보고 다시 접어버리는 것으로 보임 — 한 프레임 뒤로
           // 미뤄서 레이아웃이 자리잡은 다음에 포커스를 줌.
+          pickerOpenedAt = Date.now();
           requestAnimationFrame(() => focusAndShowPicker(dateInput));
         }
       };
