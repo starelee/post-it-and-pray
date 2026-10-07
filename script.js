@@ -531,6 +531,135 @@
     else if (pickedFile) await restoreFromFile(pickedFile);
   }
 
+  // ─────────────────────────────
+  // 검색어가 없을 때의 제안 — 세 섹션, 각각 최대 4개(넘는 건 그냥 안 보여줌).
+  //  · 챙길 것: 기한/회신 예정일이 오늘이거나 지남, 하위 항목이 거의 끝남.
+  //    이유를 태그로 달아 한 줄로 합침(지난 것 → 오늘 → 마무리만 남은 것 순).
+  //  · 오래 묵은 것: someday/waiting 중 2주 넘게 손 안 댄 것.
+  //  · 최근 완료: 최근 3일 안에 끝낸 것.
+  // 한 항목은 위 섹션에만 나옴. lupin/gone은 여기서도 제외.
+  // ─────────────────────────────
+  const SUGGEST_LIMIT = 4;
+  const STALE_DAYS = 14;
+  const RECENT_DONE_DAYS = 3;
+
+  function suggestChecklistTags(task) {
+    const subs = task.subtasks || [];
+    const open = subs.filter(s => !s.done).length;
+    if (subs.length >= 1 && open === 0) return ['하위 다 끝남'];
+    if (subs.length >= 2 && open === 1) return ['하위 1개 남음'];
+    return [];
+  }
+
+  function collectSuggestions() {
+    const today = todayStr();
+    const seen = new Set();
+
+    // 1) 챙길 것
+    const watch = [];
+    const consider = (task, boardId) => {
+      const tags = [];
+      let overdue = 0;
+      let isToday = false;
+      const dateKey = boardId === 'waiting' ? 'replyDate' : 'dueDate';
+      const label = boardId === 'waiting' ? '회신' : '마감';
+      if (task[dateKey]) {
+        const past = -daysUntilDue(task[dateKey]);
+        if (past > 0) { tags.push(label + ' ' + past + '일 지남'); overdue = past; }
+        else if (past === 0) { tags.push('오늘 ' + label); isToday = true; }
+      }
+      suggestChecklistTags(task).forEach(t => tags.push(t));
+      if (!tags.length) return;
+      watch.push({ task, boardId, tags, rank: overdue ? 0 : (isToday ? 1 : 2), overdue });
+    };
+    boards.today.filter(t => !t.done).forEach(t => consider(t, 'today'));
+    boards.waiting.forEach(t => consider(t, 'waiting'));
+    boards.someday.filter(t => !t.done).forEach(t => consider(t, 'someday'));
+    boards.scheduled.filter(t => !t.done).forEach(t => consider(t, 'scheduled'));
+    watch.sort((a, b) => a.rank - b.rank || b.overdue - a.overdue || b.tags.length - a.tags.length);
+    const watchTop = watch.slice(0, SUGGEST_LIMIT);
+    watch.forEach(w => seen.add(w.task.id)); // 4개를 넘겨 안 보이는 것도 다른 섹션에 중복해 올리지 않음
+
+    // 2) 오래 묵은 것 — 마지막으로 손댄 시각(없으면 만든 시각=id)이 2주 넘은 someday/waiting
+    const stale = [];
+    const considerStale = (task, boardId) => {
+      if (seen.has(task.id)) return;
+      if (boardId === 'waiting' && task.replyDate && task.replyDate > today) return; // 일부러 미뤄 둔 것
+      const touched = task.updatedAt || (task.id > 1e12 ? task.id : 0);
+      if (!touched) return;
+      const days = Math.floor((Date.now() - touched) / 86400000);
+      if (days >= STALE_DAYS) stale.push({ task, boardId, tags: [days + '일째 그대로'], days });
+    };
+    boards.someday.filter(t => !t.done).forEach(t => considerStale(t, 'someday'));
+    boards.waiting.forEach(t => considerStale(t, 'waiting'));
+    stale.sort((a, b) => b.days - a.days);
+    const staleTop = stale.slice(0, SUGGEST_LIMIT);
+
+    // 3) 최근 완료 — 최근 3일(오늘 포함) 안에 끝낸 것
+    const recent = collectArchiveEntries()
+      .filter(e => e.task.doneAt && -daysUntilDue(e.task.doneAt) < RECENT_DONE_DAYS)
+      .sort((a, b) => {
+        if (a.task.doneAt !== b.task.doneAt) return b.task.doneAt.localeCompare(a.task.doneAt);
+        return b.task.id - a.task.id;
+      })
+      .slice(0, SUGGEST_LIMIT)
+      .map(e => ({ task: e.task, boardId: e.source, tags: [e.task.doneAt.slice(5).replace('-', '/')], done: true }));
+
+    return [
+      { label: '챙길 것', items: watchTop },
+      { label: '오래 묵은 것', items: staleTop },
+      { label: '최근 완료', items: recent }
+    ].filter(sec => sec.items.length);
+  }
+
+  function renderSuggestionItem(item) {
+    const task = item.task;
+    const li = document.createElement('li');
+    li.className = 'search-item' + (item.done ? ' search-item-done' : '');
+    li.tabIndex = 0;
+    li.setAttribute('role', 'button');
+    const row = document.createElement('div');
+    row.className = 'search-item-row';
+    const title = document.createElement('span');
+    title.className = 'search-item-text';
+    title.textContent = task.text || '';
+    row.appendChild(title);
+    item.tags.forEach(tag => {
+      const chip = makeSearchChip(tag);
+      if (/지남/.test(tag)) chip.classList.add('search-chip-alert');
+      row.appendChild(chip);
+    });
+    if (task.note) row.appendChild(makeSearchChip('메모'));
+    li.appendChild(row);
+    const open = () => openNoteModal(item.boardId, task.id, { anchorEl: li, view: true });
+    li.addEventListener('click', open);
+    li.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); }
+    });
+    return li;
+  }
+
+  function renderSearchSuggestions() {
+    const sections = collectSuggestions();
+    if (sections.length === 0) {
+      const hint = document.createElement('p');
+      hint.className = 'empty-hint';
+      hint.textContent = '제목, 하위 항목, 메모에서 찾아요';
+      searchResultsEl.appendChild(hint);
+      return;
+    }
+    sections.forEach(sec => {
+      const heading = document.createElement('h3');
+      heading.className = 'search-group-title';
+      heading.textContent = sec.label;
+      searchResultsEl.appendChild(heading);
+      const list = document.createElement('ul');
+      list.className = 'search-list';
+      sec.items.forEach(item => list.appendChild(renderSuggestionItem(item)));
+      searchResultsEl.appendChild(list);
+    });
+  }
+
   function renderSearchResults() {
     clearEl(searchResultsEl);
     const addHint = (text) => {
@@ -541,7 +670,7 @@
     };
     const query = searchInputEl.value.trim();
     if (!query) {
-      addHint('제목, 하위 항목, 메모에서 찾아요');
+      renderSearchSuggestions();
       return;
     }
     const tokens = searchTokens(query);
@@ -1919,6 +2048,7 @@
       // 커밋하고, 그 사이 또 change가 오면(다음 자리 입력) 타이머를 리셋해서
       // 최종 값만 커밋되게 함.
       let commitTimer = null;
+      let pickerOpenedAt = 0; // 달력을 연 시각(가짜 change 구분용)
       const commitDate = (value) => {
         clearTimeout(commitTimer);
         commitTimer = null;
@@ -1938,6 +2068,16 @@
         // — 저장된 task.dueDate로 표시값도 같이 되돌려놓음(진짜 지우기는
         // "날짜 지우기" 버튼이 따로 처리).
         if (!dateInput.value) {
+          // 달력의 "삭제"(크롬)처럼 칸 전체를 진짜로 비웠으면 "날짜 지우기"와
+          // 똑같이 처리. 구분 기준: ① 년/월/일 중 일부만 지운 입력 중이면
+          // badInput이 true라 제외, ② 달력을 연 직후(700ms 이내)에 오는 빈
+          // change는 위에서 말한 모바일의 가짜 이벤트라 제외.
+          const justOpened = Date.now() - pickerOpenedAt < 700;
+          if (task[dateKey] && !dateInput.validity.badInput && !justOpened) {
+            clearTimeout(commitTimer);
+            setDueDate(boardId, task.id, '');
+            return;
+          }
           if (task[dateKey]) dateInput.value = task[dateKey];
           return;
         }
@@ -2024,6 +2164,7 @@
           // 피커가 뜨면) 아직 리플로우 전이라 iOS가 이 줄이 실제로 펼쳐진
           // 상태를 못 보고 다시 접어버리는 것으로 보임 — 한 프레임 뒤로
           // 미뤄서 레이아웃이 자리잡은 다음에 포커스를 줌.
+          pickerOpenedAt = Date.now();
           requestAnimationFrame(() => focusAndShowPicker(dateInput));
         }
       };

@@ -725,6 +725,12 @@
     white-space: nowrap;
   }
 
+  /* "N일 지남" 같은 기한 지난 태그는 강조색으로 */
+  .search-chip-alert {
+    color: var(--urgent);
+    background: var(--urgent-bg);
+  }
+
   .search-snippet {
     margin-top: 1px;
     font-family: var(--font-note);
