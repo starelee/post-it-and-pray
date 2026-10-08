@@ -27,10 +27,29 @@
   const COLLAPSE_AUTO_CLOSE_RETRY_MS = 60 * 1000;     // 그 안에서 고치는 중이면 이만큼 뒤에 다시 확인
   const TRASH_VIEW_TIMEOUT_MS = 3 * 60 * 1000;        // 휴지통 보기 → 원래대로
   const LUPIN_AWAY_CLOSE_MS = 3 * 60 * 1000;          // 월급루팡 모드, 창을 떠나 자리를 비운 뒤 자동 복귀
+  // ── 진동 (navigator.vibrate — 안드로이드 크롬 등. iOS 사파리는 지원하지 않아 조용히 무시됨)
+  const HAPTIC_TAP = 8;               // 버튼/항목 탭
+  const HAPTIC_TOAST = 12;            // 하단 알림이 뜰 때
+  const HAPTIC_MOVE = [12, 50, 18];   // 보드 이동으로 도착할 때(톡-톡, 도착 흔들림과 같은 느낌)
+  const HAPTIC_THROTTLE_MS = 80;      // 이 안에 연달아 불리면 무시(탭+알림이 한꺼번에 울리지 않게)
   // ── 동기화
   const CLOUD_PUSH_DEBOUNCE = 800;    // 저장이 몰릴 때 한 번에 묶어서 클라우드로 올리기까지
   // hover가 없는 기기(손가락)인지 — 이벤트 시점에 확인(기기/모드가 바뀔 수 있어서).
   const isTouchOnly = () => !!(window.matchMedia && window.matchMedia('(hover: none)').matches);
+  // 손가락 기기에서 살짝 진동. 동작 줄이기 설정이면 안 함.
+  let lastHapticAt = 0;
+  function haptic(pattern) {
+    if (!navigator.vibrate || !isTouchOnly()) return;
+    if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const now = Date.now();
+    if (now - lastHapticAt < HAPTIC_THROTTLE_MS) return;
+    lastHapticAt = now;
+    try { navigator.vibrate(pattern); } catch (e) { /* 지원 안 하면 무시 */ }
+  }
+  // 버튼/항목을 탭할 때마다 톡. 캡처 단계라 다른 핸들러가 항목을 다시 그려도 빠지지 않음.
+  document.addEventListener('click', (e) => {
+    if (e.target.closest && e.target.closest('button, .task-row, .task-text, .checkbox')) haptic(HAPTIC_TAP);
+  }, true);
   // 터치 기기에서 탭으로 아이콘 줄을 열어둔 항목들(.controls-open)을 모두 닫음.
   function closeOpenControls() {
     document.querySelectorAll('.task-item.controls-open').forEach(el => el.classList.remove('controls-open'));
@@ -1366,6 +1385,7 @@
     toastEl.classList.remove('show');
     void toastEl.offsetWidth;
     toastEl.classList.add('show');
+    haptic(HAPTIC_TOAST);
     clearTimeout(toastTimer);
     toastTimer = setTimeout(() => toastEl.classList.remove('show'), TOAST_MS);
   }
@@ -3634,6 +3654,7 @@
     setTimeout(() => {
       if (visible && !edit) moveHighlight = { id, mode: 'wiggle' };
       renderFn();
+      haptic(HAPTIC_MOVE);
       if (edit) {
         revealTask(toBoardId, id);
       } else if (visible) {
