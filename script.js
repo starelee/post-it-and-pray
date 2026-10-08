@@ -3455,7 +3455,25 @@
       leaveEdit();
     }
     function onOverlayWhileEditing(e) { if (e.target === overlay) backToView(e); }
-    function onEscWhileEditing(e) { if (e.key === 'Escape') backToView(e); }
+    // 쓰던 내용이 있으면 Esc로는 버리지 않음(실수로 날리는 걸 막음) — 취소 버튼/저장으로만.
+    function draftDirty() {
+      if (!editing) return false;
+      if (newSubInput && newSubInput.value.trim()) return true;
+      const subs = task.subtasks || [];
+      return draftTitle !== task.text
+        || draftNote !== (task.note || '')
+        || draftSubs.length !== subs.length
+        || draftSubs.some((s, i) => s.text !== subs[i].text);
+    }
+    function onEscWhileEditing(e) {
+      if (e.key !== 'Escape') return;
+      if (draftDirty()) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        return;
+      }
+      backToView(e);
+    }
     cancelBtn.addEventListener('click', backToView);
     overlay.addEventListener('click', onOverlayWhileEditing);
     document.addEventListener('keydown', onEscWhileEditing, true);
