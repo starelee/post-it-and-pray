@@ -2733,48 +2733,23 @@
     overflow-wrap: anywhere;
   }
 
-  /* 하위 항목이 상위 항목과 한눈에 구분되게 — 들여쓰고 앞에 └ 표시를 붙이고,
-     상위보다 작고 옅은 글씨(--ink-soft, 보드의 하위 항목 칩과 같은 톤)로 맞춤.
-     읽기/수정 화면, +하위 항목 추가 줄 모두 같은 들여쓰기. */
-  .note-card .subtask-list {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 3px;
-    padding-left: 10px;
-  }
-
-  .note-card .subtask-item {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-  }
-
-  .note-card .subtask-item::before {
-    content: '└';
-    flex: 0 0 auto;
-    font-family: var(--font-task);
-    font-size: 13px;
-    line-height: 1;
-    color: var(--ink-soft);
-    opacity: 0.6;
-  }
-
-  .note-card .add-subtask-row {
-    padding-left: 10px;
-    gap: 4px;
-  }
-
+  /* 하위 항목은 Gotta do 보드와 같은 모양 — [텍스트] 칩이 가로로 나열되고(.subtask-list /
+     .subtask-chip 기본 규칙 그대로), 수정할 땐 보드의 .subtask-edit-input처럼 글자 폭만큼의
+     밑줄 입력칸. 삭제 ×는 보드처럼 호버/포커스 때만 나타남. */
   .note-sub-input {
-    flex: 1;
-    min-width: 0;
+    flex: 0 1 auto;
+    field-sizing: content;
+    min-width: 3em;
+    max-width: 100%;
     font-family: var(--font-task);
     font-size: 14px;
+    line-height: 1.3;
     color: var(--ink-soft);
     background: transparent;
     border: none;
-    border-bottom: 1px dashed var(--focus-box-border);
+    border-bottom: 1px dashed var(--accent);
     outline: none;
-    padding: 0;
+    padding: 1px 2px;
   }
 
   .note-textarea {
