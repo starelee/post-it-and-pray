@@ -22,8 +22,10 @@
   const DATE_COMMIT_WAIT_MS = 400;    // 날짜 입력은 키패드로 두 자리를 치는 중에 확정되지 않게 이만큼 기다림
   const REOPEN_VS_CLOSE_MS = 600;     // p/s 단축키: 이 안에 다시 누르면 입력창 포커스, 그 뒤면 닫기
   // 터치 기기: 편집 진입과 아이콘 줄 펼침은 길게 눌러서만 함.
-  const LONG_PRESS_MS = 500;          // 이 시간 이상 누르고 있으면 롱프레스
-  const PRESS_FEEDBACK_MS = 150;      // 누르기 시작하고 이 시간 뒤부터 "눌리는 중" 표시
+  // 탭(보통 0.2초 이내)과 OS의 글자 선택/길게 누르기 메뉴(iOS·안드로이드 모두 0.5초쯤) 사이에 끼움 —
+  // 0.5초에 맞추면 둘이 겹쳐서 OS 쪽이 먼저 뜨기도 함.
+  const LONG_PRESS_MS = 400;          // 이 시간 이상 누르고 있으면 롱프레스
+  const PRESS_FEEDBACK_MS = 120;      // 누르기 시작하고 이 시간 뒤부터 "눌리는 중" 표시
   const LONG_PRESS_VIBRATE_MS = 12;
   // ── 자동 접힘 / 복귀 (잊어버리고 길게 늘어져 있는 걸 막으려는 같은 취지)
   const DONE_OPEN_MS = 30 * 1000;     // waiting 완료 하위 항목을 펼쳐둔 채로 두는 시간
@@ -1536,6 +1538,15 @@
     // 스크롤 이벤트만 오는 경우가 있어서 둘 다 대기 중인 롱프레스를 취소함.
     el.addEventListener('touchcancel', cancelPending);
     window.addEventListener('scroll', cancelPending, { passive: true, capture: true });
+
+    // 안드로이드는 길게 누르면 contextmenu(글자 선택/복사 메뉴)를 띄움 — 롱프레스 대상 줄에서는 막음.
+    // (마우스 우클릭 메뉴는 그대로 두려고 터치로 시작한 경우에만.)
+    let touching = false;
+    el.addEventListener('touchstart', () => { touching = true; }, { passive: true });
+    el.addEventListener('touchend', () => { setTimeout(() => { touching = false; }, 400); });
+    el.addEventListener('contextmenu', (e) => {
+      if (touching && !e.target.closest('input')) e.preventDefault();
+    });
 
     // 캡처 단계에서 먼저 가로채서, 방금 롱프레스로 처리된 그 손가락이
     // 뗄 때 뒤이어 오는 click이 task-text 편집 진입 같은 원래 동작을

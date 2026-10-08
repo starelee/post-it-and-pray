@@ -3333,6 +3333,12 @@
       user-select: none;
     }
 
+    /* 편집 입력창은 되살림 — iOS는 user-select:none인 입력창에 글자를 못 치는 경우가 있음. */
+    .task-item .task-row .task-edit-input {
+      -webkit-user-select: text;
+      user-select: text;
+    }
+
     .task-item.long-pressing {
       transform: scale(0.985);
       opacity: 0.8;
