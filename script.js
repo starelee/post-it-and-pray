@@ -35,6 +35,16 @@
   const CLOUD_PUSH_DEBOUNCE = 800;    // 저장이 몰릴 때 한 번에 묶어서 클라우드로 올리기까지
   // hover가 없는 기기(손가락)인지 — 이벤트 시점에 확인(기기/모드가 바뀔 수 있어서).
   const isTouchOnly = () => !!(window.matchMedia && window.matchMedia('(hover: none)').matches);
+  // 롱프레스로 아이콘 줄을 열어둔 항목들(.controls-open)을 모두 닫음.
+  function closeOpenControls() {
+    document.querySelectorAll('.task-item.controls-open').forEach(el => el.classList.remove('controls-open'));
+  }
+  // 열려 있는 항목 바깥을 탭하면 닫음(그 항목 안의 탭 — 글자, 아이콘 — 은 그대로 동작).
+  document.addEventListener('touchstart', (e) => {
+    if (!document.querySelector('.task-item.controls-open')) return;
+    if (e.target.closest && e.target.closest('.task-item.controls-open')) return;
+    closeOpenControls();
+  }, { passive: true });
   // 타이머 종이색이 빨갛게 변하기 시작하는 남은 시간(초).
   const FOCUS_URGENT_SEC = 60;
   const FOCUS_SHAKE_SEC = 10;
@@ -1470,8 +1480,6 @@
   // 자리에서 이어지는 click(예: task-text의 편집 진입)을 눌러서 롱프레스와
   // 탭이 동시에 발동하지 않게 함.
   // opts.feedbackEl: 누르는 동안 .long-pressing을 붙일 요소(눌리는 중임을 보여줌).
-  // opts.runOnRelease: 길게 누른 걸 인식한 뒤 손가락을 뗄 때 실행함 — 입력창 focus()가 키보드를
-  // 띄우려면(iOS) 터치 이벤트 처리 중(사용자 제스처)에 불려야 해서, 타이머 안에서 바로 하지 않음.
   function attachLongPress(el, onLongPress, excludeSelector, opts = {}) {
     const MOVE_TOLERANCE = 10;
     let timer = null;
@@ -1479,7 +1487,7 @@
     let startX = 0;
     let startY = 0;
     let firedLongPress = false;
-    const { feedbackEl, runOnRelease } = opts;
+    const { feedbackEl } = opts;
 
     const clearFeedback = () => {
       clearTimeout(feedbackTimer);
@@ -1501,7 +1509,7 @@
         firedLongPress = true;
         clearFeedback();
         if (navigator.vibrate) navigator.vibrate(LONG_PRESS_VIBRATE_MS);
-        if (!runOnRelease) onLongPress();
+        onLongPress();
       }, LONG_PRESS_MS);
     }, { passive: true });
 
@@ -1523,13 +1531,10 @@
       }
       clearFeedback();
     };
-    el.addEventListener('touchend', () => {
-      cancelPending();
-      if (runOnRelease && firedLongPress) onLongPress();
-    });
+    el.addEventListener('touchend', cancelPending);
     // 브라우저가 스크롤을 넘겨받으면 touchmove 대신 touchcancel이 오거나
     // 스크롤 이벤트만 오는 경우가 있어서 둘 다 대기 중인 롱프레스를 취소함.
-    el.addEventListener('touchcancel', () => { firedLongPress = false; cancelPending(); });
+    el.addEventListener('touchcancel', cancelPending);
     window.addEventListener('scroll', cancelPending, { passive: true, capture: true });
 
     // 캡처 단계에서 먼저 가로채서, 방금 롱프레스로 처리된 그 손가락이
@@ -1980,10 +1985,10 @@
     if (!isTouchOnly()) text.tabIndex = 0;
     text.setAttribute('role', 'button');
     text.setAttribute('aria-label', '내용 수정');
-    // 터치 기기에서는 탭이 아니라 롱프레스로만 편집에 들어감(아래 attachLongPress) —
-    // 스크롤하다 스친 탭에 키보드가 뜨는 걸 막음.
+    // 터치 기기: 롱프레스로 아이콘 줄을 먼저 열고(아래 attachLongPress), 열려 있는 항목의 글자를
+    // 한 번 더 탭해야 편집에 들어감 — 스크롤하다 스친 탭에 키보드가 뜨는 걸 막음.
     text.addEventListener('click', () => {
-      if (isTouchOnly()) return;
+      if (isTouchOnly() && !li.classList.contains('controls-open')) return;
       startEditTask(boardId, task.id);
     });
 
@@ -2048,13 +2053,19 @@
       row.appendChild(noteBadge);
     }
 
-    // 데스크톱은 hover로 아이콘 줄이 펼쳐지고 클릭으로 편집에 들어가지만, 터치 기기는 hover를
-    // 안정적으로 감지 못해서(호버 흉내→지연된 클릭 등) 이 줄을 길게 누르면 편집에 들어가고,
-    // 편집 중인 항목은 :focus-within으로 아이콘 줄이 같이 열림(포커스가 빠지면 같이 닫힘).
-    // 체크박스와 버튼, 이미 편집 중인 입력창은 원래 동작이 있으니 롱프레스 대상에서 제외.
+    // 데스크톱은 hover로 아이콘 줄이 펼쳐지지만 터치 기기는 hover를 안정적으로 감지 못해서(호버 흉내→
+    // 지연된 클릭 등), 이 줄을 길게 누르면 호버처럼 "이 항목만" 아이콘 줄을 열고 닫음. 한 번에 한
+    // 항목만 열려 있고, 다른 곳을 탭하면 닫힘(아래 문서 단위 리스너). 체크박스와 버튼, 편집 중인
+    // 입력창은 원래 동작이 있으니 롱프레스 대상에서 제외.
     attachLongPress(row, () => {
-      if (!li._activeEditCommit) startEditTask(boardId, task.id);
-    }, '.checkbox, button, input', { feedbackEl: li, runOnRelease: true });
+      const commit = li._activeEditCommit;
+      if (commit) commit();
+      const targetLi = commit ? findTaskLi(task.id) : li;
+      if (!targetLi) return;
+      const opening = !targetLi.classList.contains('controls-open');
+      closeOpenControls();
+      if (opening) targetLi.classList.add('controls-open');
+    }, '.checkbox, button, input', { feedbackEl: li });
 
     li.appendChild(row);
 
