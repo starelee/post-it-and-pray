@@ -21,20 +21,46 @@
   const DOUBLE_CLICK_WAIT_MS = 400;   // 칩 클릭을 이만큼 미뤄 더블클릭(편집)과 구분 — 실제 더블클릭 간격이 300~500ms라 250ms는 놓침
   const DATE_COMMIT_WAIT_MS = 400;    // 날짜 입력은 키패드로 두 자리를 치는 중에 확정되지 않게 이만큼 기다림
   const REOPEN_VS_CLOSE_MS = 600;     // p/s 단축키: 이 안에 다시 누르면 입력창 포커스, 그 뒤면 닫기
-  // 터치 기기: 편집 진입과 아이콘 줄 펼침은 길게 눌러서만 함.
-  const LONG_PRESS_MS = 500;          // 이 시간 이상 누르고 있으면 롱프레스
-  const PRESS_FEEDBACK_MS = 150;      // 누르기 시작하고 이 시간 뒤부터 "눌리는 중" 표시
-  const LONG_PRESS_VIBRATE_MS = 12;
   // ── 자동 접힘 / 복귀 (잊어버리고 길게 늘어져 있는 걸 막으려는 같은 취지)
   const DONE_OPEN_MS = 30 * 1000;     // waiting 완료 하위 항목을 펼쳐둔 채로 두는 시간
   const COLLAPSE_AUTO_CLOSE_MS = 15 * 60 * 1000;      // pray later / someday 펼침
   const COLLAPSE_AUTO_CLOSE_RETRY_MS = 60 * 1000;     // 그 안에서 고치는 중이면 이만큼 뒤에 다시 확인
   const TRASH_VIEW_TIMEOUT_MS = 3 * 60 * 1000;        // 휴지통 보기 → 원래대로
   const LUPIN_AWAY_CLOSE_MS = 3 * 60 * 1000;          // 월급루팡 모드, 창을 떠나 자리를 비운 뒤 자동 복귀
+  // ── 진동 (navigator.vibrate — 안드로이드 크롬 등. iOS 사파리는 지원하지 않아 조용히 무시됨)
+  const HAPTIC_TAP = 8;               // 버튼/항목 탭
+  const HAPTIC_TOAST = 12;            // 하단 알림이 뜰 때
+  const HAPTIC_MOVE = [12, 50, 18];   // 보드 이동으로 도착할 때(톡-톡, 도착 흔들림과 같은 느낌)
+  const HAPTIC_THROTTLE_MS = 80;      // 이 안에 연달아 불리면 무시(탭+알림이 한꺼번에 울리지 않게)
   // ── 동기화
   const CLOUD_PUSH_DEBOUNCE = 800;    // 저장이 몰릴 때 한 번에 묶어서 클라우드로 올리기까지
   // hover가 없는 기기(손가락)인지 — 이벤트 시점에 확인(기기/모드가 바뀔 수 있어서).
   const isTouchOnly = () => !!(window.matchMedia && window.matchMedia('(hover: none)').matches);
+  // 손가락 기기에서 살짝 진동. 동작 줄이기 설정이면 안 함.
+  let lastHapticAt = 0;
+  function haptic(pattern) {
+    if (!navigator.vibrate || !isTouchOnly()) return;
+    if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const now = Date.now();
+    if (now - lastHapticAt < HAPTIC_THROTTLE_MS) return;
+    lastHapticAt = now;
+    try { navigator.vibrate(pattern); } catch (e) { /* 지원 안 하면 무시 */ }
+  }
+  // 버튼/항목을 탭할 때마다 톡. 캡처 단계라 다른 핸들러가 항목을 다시 그려도 빠지지 않음.
+  document.addEventListener('click', (e) => {
+    if (e.target.closest && e.target.closest('button, .task-row, .task-text, .checkbox')) haptic(HAPTIC_TAP);
+  }, true);
+  // 터치 기기에서 탭으로 아이콘 줄을 열어둔 항목들(.controls-open)을 모두 닫음.
+  function closeOpenControls() {
+    document.querySelectorAll('.task-item.controls-open').forEach(el => el.classList.remove('controls-open'));
+  }
+  // 열려 있는 항목 바깥을 탭하면 닫음(그 항목 안의 탭 — 글자, 아이콘 — 은 그대로 동작). touchstart가 아니라
+  // click이라 스크롤을 시작한 손가락은 닫지 않음.
+  document.addEventListener('click', (e) => {
+    if (!document.querySelector('.task-item.controls-open')) return;
+    if (e.target.closest && e.target.closest('.task-item.controls-open')) return;
+    closeOpenControls();
+  });
   // 타이머 종이색이 빨갛게 변하기 시작하는 남은 시간(초).
   const FOCUS_URGENT_SEC = 60;
   const FOCUS_SHAKE_SEC = 10;
@@ -1359,6 +1385,7 @@
     toastEl.classList.remove('show');
     void toastEl.offsetWidth;
     toastEl.classList.add('show');
+    haptic(HAPTIC_TOAST);
     clearTimeout(toastTimer);
     toastTimer = setTimeout(() => toastEl.classList.remove('show'), TOAST_MS);
   }
@@ -1459,88 +1486,6 @@
     const freshEl = freshLi && freshLi.querySelector(selector);
     if (freshEl) freshEl.click();
     return true;
-  }
-
-  // 터치 기기에서 아이콘 줄을 펼치는 전용 "⋯" 버튼이 늘 떠 있어서 지저분해
-  // 보인다는 피드백 — 길게 눌러서 펼치는 걸로 바꿈. 스와이프도 고려했지만
-  // 이 화면은 세로 스크롤이 있어서 가로 스와이프와 겹쳐 오작동하기 쉽고,
-  // 지금까지 겪은 터치 타이밍 문제들을 생각하면 롱프레스가 훨씬 안정적임.
-  // excludeSelector에 걸리는 타겟(체크박스처럼 원래도 탭 한 번으로 확실한
-  // 동작이 있는 요소)에서 시작한 터치는 아예 무시함. 길게 누른 뒤엔 그
-  // 자리에서 이어지는 click(예: task-text의 편집 진입)을 눌러서 롱프레스와
-  // 탭이 동시에 발동하지 않게 함.
-  // opts.feedbackEl: 누르는 동안 .long-pressing을 붙일 요소(눌리는 중임을 보여줌).
-  // opts.runOnRelease: 길게 누른 걸 인식한 뒤 손가락을 뗄 때 실행함 — 입력창 focus()가 키보드를
-  // 띄우려면(iOS) 터치 이벤트 처리 중(사용자 제스처)에 불려야 해서, 타이머 안에서 바로 하지 않음.
-  function attachLongPress(el, onLongPress, excludeSelector, opts = {}) {
-    const MOVE_TOLERANCE = 10;
-    let timer = null;
-    let feedbackTimer = null;
-    let startX = 0;
-    let startY = 0;
-    let firedLongPress = false;
-    const { feedbackEl, runOnRelease } = opts;
-
-    const clearFeedback = () => {
-      clearTimeout(feedbackTimer);
-      feedbackTimer = null;
-      if (feedbackEl) feedbackEl.classList.remove('long-pressing');
-    };
-
-    el.addEventListener('touchstart', (e) => {
-      if (e.touches.length !== 1) return;
-      if (excludeSelector && e.target.closest(excludeSelector)) return;
-      firedLongPress = false;
-      startX = e.touches[0].clientX;
-      startY = e.touches[0].clientY;
-      if (feedbackEl) {
-        feedbackTimer = setTimeout(() => feedbackEl.classList.add('long-pressing'), PRESS_FEEDBACK_MS);
-      }
-      timer = setTimeout(() => {
-        timer = null;
-        firedLongPress = true;
-        clearFeedback();
-        if (navigator.vibrate) navigator.vibrate(LONG_PRESS_VIBRATE_MS);
-        if (!runOnRelease) onLongPress();
-      }, LONG_PRESS_MS);
-    }, { passive: true });
-
-    el.addEventListener('touchmove', (e) => {
-      if (!timer) return;
-      const dx = Math.abs(e.touches[0].clientX - startX);
-      const dy = Math.abs(e.touches[0].clientY - startY);
-      if (dx > MOVE_TOLERANCE || dy > MOVE_TOLERANCE) {
-        clearTimeout(timer);
-        timer = null;
-        clearFeedback();
-      }
-    }, { passive: true });
-
-    const cancelPending = () => {
-      if (timer) {
-        clearTimeout(timer);
-        timer = null;
-      }
-      clearFeedback();
-    };
-    el.addEventListener('touchend', () => {
-      cancelPending();
-      if (runOnRelease && firedLongPress) onLongPress();
-    });
-    // 브라우저가 스크롤을 넘겨받으면 touchmove 대신 touchcancel이 오거나
-    // 스크롤 이벤트만 오는 경우가 있어서 둘 다 대기 중인 롱프레스를 취소함.
-    el.addEventListener('touchcancel', () => { firedLongPress = false; cancelPending(); });
-    window.addEventListener('scroll', cancelPending, { passive: true, capture: true });
-
-    // 캡처 단계에서 먼저 가로채서, 방금 롱프레스로 처리된 그 손가락이
-    // 뗄 때 뒤이어 오는 click이 task-text 편집 진입 같은 원래 동작을
-    // 같이 터뜨리지 않게 막음.
-    el.addEventListener('click', (e) => {
-      if (!firedLongPress) return;
-      firedLongPress = false;
-      e.preventDefault();
-      e.stopPropagation();
-    }, true);
   }
 
   // Wires a collapse toggle button to a body element (used for the
@@ -1980,8 +1925,7 @@
     if (!isTouchOnly()) text.tabIndex = 0;
     text.setAttribute('role', 'button');
     text.setAttribute('aria-label', '내용 수정');
-    // 터치 기기에서는 탭이 아니라 롱프레스로만 편집에 들어감(아래 attachLongPress) —
-    // 스크롤하다 스친 탭에 키보드가 뜨는 걸 막음.
+    // 데스크톱은 클릭 한 번으로 편집(아이콘 줄은 호버). 터치 기기는 단계를 둠 — 아래 row 클릭 참고.
     text.addEventListener('click', () => {
       if (isTouchOnly()) return;
       startEditTask(boardId, task.id);
@@ -2048,13 +1992,21 @@
       row.appendChild(noteBadge);
     }
 
-    // 데스크톱은 hover로 아이콘 줄이 펼쳐지고 클릭으로 편집에 들어가지만, 터치 기기는 hover를
-    // 안정적으로 감지 못해서(호버 흉내→지연된 클릭 등) 이 줄을 길게 누르면 편집에 들어가고,
-    // 편집 중인 항목은 :focus-within으로 아이콘 줄이 같이 열림(포커스가 빠지면 같이 닫힘).
-    // 체크박스와 버튼, 이미 편집 중인 입력창은 원래 동작이 있으니 롱프레스 대상에서 제외.
-    attachLongPress(row, () => {
-      if (!li._activeEditCommit) startEditTask(boardId, task.id);
-    }, '.checkbox, button, input', { feedbackEl: li, runOnRelease: true });
+    // 터치 기기는 hover가 없고 :hover 흉내/포커스 타이밍이 불안정해서(호버 흉내→지연된 클릭 등)
+    // 탭을 두 단계로 나눔 — ① 닫혀 있는 항목을 탭하면 그 항목의 아이콘 줄만 열림(한 번에 한
+    // 항목, 다른 곳을 탭하면 닫힘), ② 열려 있는 항목의 글자를 한 번 더 탭하면 편집에 들어감.
+    // 체크박스와 버튼, 편집 중인 입력창, (완료/전체) 진행도는 원래 동작이 있으니 대상에서 제외.
+    // 열림 상태는 .controls-open 클래스(항목이 다시 그려지면 닫힘).
+    row.addEventListener('click', (e) => {
+      if (!isTouchOnly()) return;
+      if (e.target.closest('.checkbox, button, input, .subtask-progress')) return;
+      if (!li.classList.contains('controls-open')) {
+        closeOpenControls();
+        li.classList.add('controls-open');
+      } else if (e.target.closest('.task-text')) {
+        startEditTask(boardId, task.id);
+      }
+    });
 
     li.appendChild(row);
 
@@ -3702,6 +3654,7 @@
     setTimeout(() => {
       if (visible && !edit) moveHighlight = { id, mode: 'wiggle' };
       renderFn();
+      haptic(HAPTIC_MOVE);
       if (edit) {
         revealTask(toBoardId, id);
       } else if (visible) {
@@ -4247,7 +4200,6 @@
     // 초안 버튼(draft-controls)을 길게 눌러서 펼치고 접음. 입력창 자체는
     // 제외해서(텍스트 선택/붙여넣기 같은 원래 동작을 안 건드림) "+" 버튼
     // 이나 빈 자리를 길게 누르면 됨.
-    attachLongPress(addRow, () => addRowWrap.classList.toggle('controls-open'), 'input');
 
     input.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') {
