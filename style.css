@@ -114,6 +114,15 @@
     --focus-ink-soft: #5c5652;
   }
 
+  /* 지연은 "마우스가 실수로 스친 것"을 걸러내려고 두는 것 — 손가락 탭은 일부러 하는 동작이고 호버에서
+     벗어났다 돌아올 일도 없어서, 터치 기기에서는 열림/닫힘 모두 기다리지 않음(0초). */
+  @media (hover: none) {
+    :root {
+      --expand-delay: 0s;
+      --collapse-delay: 0s;
+    }
+  }
+
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
       color-scheme: dark;
@@ -2247,16 +2256,20 @@
     transition: max-height var(--collapse-dur) var(--collapse-ease) var(--collapse-delay), opacity var(--collapse-dur) var(--collapse-ease) var(--collapse-delay), margin-top var(--collapse-dur) var(--collapse-ease) var(--collapse-delay);
   }
 
-  .task-item:focus-within .task-controls,
-  .task-item.row-pinned .task-controls {
+  /* 아이콘 줄이 열린 모양 — 열리는 이유(트리거)가 달라도 모양은 여기 한 곳에서만 정함.
+     편집 중(:focus-within), 날짜 행이 열려 고정(.row-pinned), 터치에서 탭으로 연 항목(.controls-open —
+     터치는 :hover를 안정적으로 감지 못해서(호버 흉내→지연된 클릭 등) 탭이 직접 이 클래스를 붙임,
+     JS: renderItem의 row 클릭).
+     열기 전 기다림(지연)은 트리거가 아니라 기기가 정함 — 위 :root의 --expand-delay(마우스 0.15초, 터치 0초). */
+  .task-item:is(:focus-within, .row-pinned, .controls-open) .task-controls {
     max-height: 26px;
     opacity: 1;
     margin-top: 4px;
     transition-delay: var(--expand-delay);
   }
 
-  /* 손가락 기기는 탭하면 :hover가 남아서 탭만 해도 아이콘 줄이 열렸음 — 마우스 기기에서만 호버로 열고,
-     터치 기기는 탭으로 연 항목(.controls-open)이나 편집 중(:focus-within)일 때만 열림. */
+  /* 호버로도 같은 모양으로 열림 — 손가락 기기는 탭하면 :hover가 남아서 탭만 해도 열렸으므로 마우스
+     기기에서만. (선택자 한 줄만 다르고 모양은 위와 같음 — 바꿀 땐 두 곳을 같이.) */
   @media (hover: hover) {
     .task-item:hover .task-controls {
       max-height: 26px;
@@ -2967,22 +2980,6 @@
     opacity: 1;
     margin-top: 6px;
     transition-delay: var(--expand-delay);
-  }
-
-  /* 터치 기기는 :hover를 안정적으로 감지하지 못함 — iOS/Android 브라우저마다
-     탭을 "호버 흉내"로 먼저 처리했다가 뒤늦게 진짜 클릭을 보내거나, 네이티브
-     날짜 피커가 뜨는 순간 focus-within을 잠깐 놓치는 등 타이밍이 제각각이라,
-     호버로만 펼쳐지던 날짜/긴급/+(하위 항목 추가) 버튼이 누르자마자 다시
-     접혀버리는 문제가 반복됐음. 그래서 터치 기기는 탭이 직접 이 클래스를 붙임 —
-     닫힌 항목을 탭하면 "그 항목만" 펼쳐지고(JS: renderItem의 row 클릭), 열린 항목의
-     글자를 한 번 더 탭하면 편집. (늘 떠 있는 "⋯" 버튼은 지저분하고, 스와이프는 세로
-     스크롤과 겹치고, 롱프레스는 OS 글자 선택과 시간이 겹쳐서 모두 접음.) */
-  .task-item.controls-open .task-controls {
-    max-height: 26px;
-    opacity: 1;
-    margin-top: 4px;
-    /* 일부러 탭해서 연 거라 기다릴 필요 없음 */
-    transition-delay: 0s;
   }
 
   .plus {
