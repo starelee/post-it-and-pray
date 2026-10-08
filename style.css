@@ -2733,9 +2733,34 @@
     overflow-wrap: anywhere;
   }
 
+  /* 하위 항목이 상위 항목과 한눈에 구분되게 — 들여쓰고 앞에 └ 표시를 붙이고,
+     상위보다 작고 옅은 글씨(--ink-soft, 보드의 하위 항목 칩과 같은 톤)로 맞춤.
+     읽기/수정 화면, +하위 항목 추가 줄 모두 같은 들여쓰기. */
+  .note-card .subtask-list {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 3px;
+    padding-left: 10px;
+  }
+
   .note-card .subtask-item {
     display: flex;
     align-items: center;
+    gap: 4px;
+  }
+
+  .note-card .subtask-item::before {
+    content: '└';
+    flex: 0 0 auto;
+    font-family: var(--font-task);
+    font-size: 13px;
+    line-height: 1;
+    color: var(--ink-soft);
+    opacity: 0.6;
+  }
+
+  .note-card .add-subtask-row {
+    padding-left: 10px;
     gap: 4px;
   }
 
@@ -2743,8 +2768,8 @@
     flex: 1;
     min-width: 0;
     font-family: var(--font-task);
-    font-size: 15px;
-    color: var(--ink);
+    font-size: 14px;
+    color: var(--ink-soft);
     background: transparent;
     border: none;
     border-bottom: 1px dashed var(--focus-box-border);
