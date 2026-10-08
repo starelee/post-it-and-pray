@@ -21,12 +21,6 @@
   const DOUBLE_CLICK_WAIT_MS = 400;   // 칩 클릭을 이만큼 미뤄 더블클릭(편집)과 구분 — 실제 더블클릭 간격이 300~500ms라 250ms는 놓침
   const DATE_COMMIT_WAIT_MS = 400;    // 날짜 입력은 키패드로 두 자리를 치는 중에 확정되지 않게 이만큼 기다림
   const REOPEN_VS_CLOSE_MS = 600;     // p/s 단축키: 이 안에 다시 누르면 입력창 포커스, 그 뒤면 닫기
-  // 터치 기기: 편집 진입과 아이콘 줄 펼침은 길게 눌러서만 함.
-  // 탭(보통 0.2초 이내)과 OS의 글자 선택/길게 누르기 메뉴(iOS·안드로이드 모두 0.5초쯤) 사이에 끼움 —
-  // 0.5초에 맞추면 둘이 겹쳐서 OS 쪽이 먼저 뜨기도 함.
-  const LONG_PRESS_MS = 400;          // 이 시간 이상 누르고 있으면 롱프레스
-  const PRESS_FEEDBACK_MS = 120;      // 누르기 시작하고 이 시간 뒤부터 "눌리는 중" 표시
-  const LONG_PRESS_VIBRATE_MS = 12;
   // ── 자동 접힘 / 복귀 (잊어버리고 길게 늘어져 있는 걸 막으려는 같은 취지)
   const DONE_OPEN_MS = 30 * 1000;     // waiting 완료 하위 항목을 펼쳐둔 채로 두는 시간
   const COLLAPSE_AUTO_CLOSE_MS = 15 * 60 * 1000;      // pray later / someday 펼침
@@ -37,16 +31,17 @@
   const CLOUD_PUSH_DEBOUNCE = 800;    // 저장이 몰릴 때 한 번에 묶어서 클라우드로 올리기까지
   // hover가 없는 기기(손가락)인지 — 이벤트 시점에 확인(기기/모드가 바뀔 수 있어서).
   const isTouchOnly = () => !!(window.matchMedia && window.matchMedia('(hover: none)').matches);
-  // 롱프레스로 아이콘 줄을 열어둔 항목들(.controls-open)을 모두 닫음.
+  // 터치 기기에서 탭으로 아이콘 줄을 열어둔 항목들(.controls-open)을 모두 닫음.
   function closeOpenControls() {
     document.querySelectorAll('.task-item.controls-open').forEach(el => el.classList.remove('controls-open'));
   }
-  // 열려 있는 항목 바깥을 탭하면 닫음(그 항목 안의 탭 — 글자, 아이콘 — 은 그대로 동작).
-  document.addEventListener('touchstart', (e) => {
+  // 열려 있는 항목 바깥을 탭하면 닫음(그 항목 안의 탭 — 글자, 아이콘 — 은 그대로 동작). touchstart가 아니라
+  // click이라 스크롤을 시작한 손가락은 닫지 않음.
+  document.addEventListener('click', (e) => {
     if (!document.querySelector('.task-item.controls-open')) return;
     if (e.target.closest && e.target.closest('.task-item.controls-open')) return;
     closeOpenControls();
-  }, { passive: true });
+  });
   // 타이머 종이색이 빨갛게 변하기 시작하는 남은 시간(초).
   const FOCUS_URGENT_SEC = 60;
   const FOCUS_SHAKE_SEC = 10;
@@ -1473,92 +1468,6 @@
     return true;
   }
 
-  // 터치 기기에서 아이콘 줄을 펼치는 전용 "⋯" 버튼이 늘 떠 있어서 지저분해
-  // 보인다는 피드백 — 길게 눌러서 펼치는 걸로 바꿈. 스와이프도 고려했지만
-  // 이 화면은 세로 스크롤이 있어서 가로 스와이프와 겹쳐 오작동하기 쉽고,
-  // 지금까지 겪은 터치 타이밍 문제들을 생각하면 롱프레스가 훨씬 안정적임.
-  // excludeSelector에 걸리는 타겟(체크박스처럼 원래도 탭 한 번으로 확실한
-  // 동작이 있는 요소)에서 시작한 터치는 아예 무시함. 길게 누른 뒤엔 그
-  // 자리에서 이어지는 click(예: task-text의 편집 진입)을 눌러서 롱프레스와
-  // 탭이 동시에 발동하지 않게 함.
-  // opts.feedbackEl: 누르는 동안 .long-pressing을 붙일 요소(눌리는 중임을 보여줌).
-  function attachLongPress(el, onLongPress, excludeSelector, opts = {}) {
-    const MOVE_TOLERANCE = 10;
-    let timer = null;
-    let feedbackTimer = null;
-    let startX = 0;
-    let startY = 0;
-    let firedLongPress = false;
-    const { feedbackEl } = opts;
-
-    const clearFeedback = () => {
-      clearTimeout(feedbackTimer);
-      feedbackTimer = null;
-      if (feedbackEl) feedbackEl.classList.remove('long-pressing');
-    };
-
-    el.addEventListener('touchstart', (e) => {
-      if (e.touches.length !== 1) return;
-      if (excludeSelector && e.target.closest(excludeSelector)) return;
-      firedLongPress = false;
-      startX = e.touches[0].clientX;
-      startY = e.touches[0].clientY;
-      if (feedbackEl) {
-        feedbackTimer = setTimeout(() => feedbackEl.classList.add('long-pressing'), PRESS_FEEDBACK_MS);
-      }
-      timer = setTimeout(() => {
-        timer = null;
-        firedLongPress = true;
-        clearFeedback();
-        if (navigator.vibrate) navigator.vibrate(LONG_PRESS_VIBRATE_MS);
-        onLongPress();
-      }, LONG_PRESS_MS);
-    }, { passive: true });
-
-    el.addEventListener('touchmove', (e) => {
-      if (!timer) return;
-      const dx = Math.abs(e.touches[0].clientX - startX);
-      const dy = Math.abs(e.touches[0].clientY - startY);
-      if (dx > MOVE_TOLERANCE || dy > MOVE_TOLERANCE) {
-        clearTimeout(timer);
-        timer = null;
-        clearFeedback();
-      }
-    }, { passive: true });
-
-    const cancelPending = () => {
-      if (timer) {
-        clearTimeout(timer);
-        timer = null;
-      }
-      clearFeedback();
-    };
-    el.addEventListener('touchend', cancelPending);
-    // 브라우저가 스크롤을 넘겨받으면 touchmove 대신 touchcancel이 오거나
-    // 스크롤 이벤트만 오는 경우가 있어서 둘 다 대기 중인 롱프레스를 취소함.
-    el.addEventListener('touchcancel', cancelPending);
-    window.addEventListener('scroll', cancelPending, { passive: true, capture: true });
-
-    // 안드로이드는 길게 누르면 contextmenu(글자 선택/복사 메뉴)를 띄움 — 롱프레스 대상 줄에서는 막음.
-    // (마우스 우클릭 메뉴는 그대로 두려고 터치로 시작한 경우에만.)
-    let touching = false;
-    el.addEventListener('touchstart', () => { touching = true; }, { passive: true });
-    el.addEventListener('touchend', () => { setTimeout(() => { touching = false; }, 400); });
-    el.addEventListener('contextmenu', (e) => {
-      if (touching && !e.target.closest('input')) e.preventDefault();
-    });
-
-    // 캡처 단계에서 먼저 가로채서, 방금 롱프레스로 처리된 그 손가락이
-    // 뗄 때 뒤이어 오는 click이 task-text 편집 진입 같은 원래 동작을
-    // 같이 터뜨리지 않게 막음.
-    el.addEventListener('click', (e) => {
-      if (!firedLongPress) return;
-      firedLongPress = false;
-      e.preventDefault();
-      e.stopPropagation();
-    }, true);
-  }
-
   // Wires a collapse toggle button to a body element (used for the
   // scheduled/someday sections present in the static HTML, and reused for
   // the archive panel's dynamically-created month groups, which need to
@@ -1996,10 +1905,9 @@
     if (!isTouchOnly()) text.tabIndex = 0;
     text.setAttribute('role', 'button');
     text.setAttribute('aria-label', '내용 수정');
-    // 터치 기기: 롱프레스로 아이콘 줄을 먼저 열고(아래 attachLongPress), 열려 있는 항목의 글자를
-    // 한 번 더 탭해야 편집에 들어감 — 스크롤하다 스친 탭에 키보드가 뜨는 걸 막음.
+    // 데스크톱은 클릭 한 번으로 편집(아이콘 줄은 호버). 터치 기기는 단계를 둠 — 아래 row 클릭 참고.
     text.addEventListener('click', () => {
-      if (isTouchOnly() && !li.classList.contains('controls-open')) return;
+      if (isTouchOnly()) return;
       startEditTask(boardId, task.id);
     });
 
@@ -2064,19 +1972,21 @@
       row.appendChild(noteBadge);
     }
 
-    // 데스크톱은 hover로 아이콘 줄이 펼쳐지지만 터치 기기는 hover를 안정적으로 감지 못해서(호버 흉내→
-    // 지연된 클릭 등), 이 줄을 길게 누르면 호버처럼 "이 항목만" 아이콘 줄을 열고 닫음. 한 번에 한
-    // 항목만 열려 있고, 다른 곳을 탭하면 닫힘(아래 문서 단위 리스너). 체크박스와 버튼, 편집 중인
-    // 입력창은 원래 동작이 있으니 롱프레스 대상에서 제외.
-    attachLongPress(row, () => {
-      const commit = li._activeEditCommit;
-      if (commit) commit();
-      const targetLi = commit ? findTaskLi(task.id) : li;
-      if (!targetLi) return;
-      const opening = !targetLi.classList.contains('controls-open');
-      closeOpenControls();
-      if (opening) targetLi.classList.add('controls-open');
-    }, '.checkbox, button, input', { feedbackEl: li });
+    // 터치 기기는 hover가 없고 :hover 흉내/포커스 타이밍이 불안정해서(호버 흉내→지연된 클릭 등)
+    // 탭을 두 단계로 나눔 — ① 닫혀 있는 항목을 탭하면 그 항목의 아이콘 줄만 열림(한 번에 한
+    // 항목, 다른 곳을 탭하면 닫힘), ② 열려 있는 항목의 글자를 한 번 더 탭하면 편집에 들어감.
+    // 체크박스와 버튼, 편집 중인 입력창, (완료/전체) 진행도는 원래 동작이 있으니 대상에서 제외.
+    // 열림 상태는 .controls-open 클래스(항목이 다시 그려지면 닫힘).
+    row.addEventListener('click', (e) => {
+      if (!isTouchOnly()) return;
+      if (e.target.closest('.checkbox, button, input, .subtask-progress')) return;
+      if (!li.classList.contains('controls-open')) {
+        closeOpenControls();
+        li.classList.add('controls-open');
+      } else if (e.target.closest('.task-text')) {
+        startEditTask(boardId, task.id);
+      }
+    });
 
     li.appendChild(row);
 
@@ -4269,7 +4179,6 @@
     // 초안 버튼(draft-controls)을 길게 눌러서 펼치고 접음. 입력창 자체는
     // 제외해서(텍스트 선택/붙여넣기 같은 원래 동작을 안 건드림) "+" 버튼
     // 이나 빈 자리를 길게 누르면 됨.
-    attachLongPress(addRow, () => addRowWrap.classList.toggle('controls-open'), 'input');
 
     input.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') {

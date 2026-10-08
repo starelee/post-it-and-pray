@@ -1965,8 +1965,6 @@
   .task-item {
     padding: 5px 0;
     position: relative;
-    /* 터치 기기에서 길게 누르는 중(.long-pressing)의 눌림 표시용 */
-    transition: transform 0.15s var(--ease-ui), opacity 0.15s var(--ease-ui);
   }
 
   .task-row {
@@ -2258,7 +2256,7 @@
   }
 
   /* 손가락 기기는 탭하면 :hover가 남아서 탭만 해도 아이콘 줄이 열렸음 — 마우스 기기에서만 호버로 열고,
-     터치 기기는 롱프레스(.controls-open)나 편집 중(:focus-within)일 때만 열림. */
+     터치 기기는 탭으로 연 항목(.controls-open)이나 편집 중(:focus-within)일 때만 열림. */
   @media (hover: hover) {
     .task-item:hover .task-controls {
       max-height: 26px;
@@ -2270,7 +2268,7 @@
 
   /* 글자를 입력하는 중(body.is-editing)에는 고치는 항목의 아이콘 줄만 열려 있고, 다른 항목은 마우스를
      올려도 안 열림 — 열릴 때마다 그 항목 높이가 21px씩 늘어서, 치는 동안 마우스가 목록 위를 스치면
-     아래 항목이 출렁였음. 날짜 행이 열려 고정된 항목(.row-pinned)과 모바일 롱프레스(.controls-open)는 예외. */
+     아래 항목이 출렁였음. 날짜 행이 열려 고정된 항목(.row-pinned)과 모바일 탭으로 연 항목(.controls-open)은 예외. */
   body.is-editing .task-item:not(:focus-within):not(.row-pinned):not(.controls-open):hover .task-controls {
     max-height: 0;
     opacity: 0;
@@ -2326,7 +2324,7 @@
   }
 
   /* 하위 항목 간소화 — 지금 신경 쓸 것만 상시 보이고 나머지는 (완료/전체)로
-     압축, 행에 호버/포커스(편집 중 포함)하면 펼침(롱프레스는 아이콘 줄만 열고 하위 항목은 안 펼침).
+     압축, 행에 호버/포커스(편집 중 포함)하면 펼침(터치로 연 .controls-open은 아이콘 줄만 열고 하위 항목은 안 펼침).
      - waiting: 미완료 하위 항목은 그대로, 완료된 것만 숨김
      - someday, 완료된 gotta do 항목: 하위 항목 전체를 숨김
      .subtask-list 기본 규칙(display:flex)보다 뒤에, 더 구체적인 선택자로 씀. */
@@ -2975,22 +2973,15 @@
      탭을 "호버 흉내"로 먼저 처리했다가 뒤늦게 진짜 클릭을 보내거나, 네이티브
      날짜 피커가 뜨는 순간 focus-within을 잠깐 놓치는 등 타이밍이 제각각이라,
      호버로만 펼쳐지던 날짜/긴급/+(하위 항목 추가) 버튼이 누르자마자 다시
-     접혀버리는 문제가 반복됐음. 처음엔 늘 떠 있는 "⋯" 버튼으로 펼쳤는데,
-     항상 보여서 지저분하다는 피드백에 스와이프도 고려했지만 이 화면은 세로
-     스크롤이 있어서 가로 스와이프와 겹쳐 오작동하기 쉬움 — 대신 그 줄을
-     길게 누르면(attachLongPress) 이 클래스가 붙어서 "그 항목만" 펼쳐짐. */
+     접혀버리는 문제가 반복됐음. 그래서 터치 기기는 탭이 직접 이 클래스를 붙임 —
+     닫힌 항목을 탭하면 "그 항목만" 펼쳐지고(JS: renderItem의 row 클릭), 열린 항목의
+     글자를 한 번 더 탭하면 편집. (늘 떠 있는 "⋯" 버튼은 지저분하고, 스와이프는 세로
+     스크롤과 겹치고, 롱프레스는 OS 글자 선택과 시간이 겹쳐서 모두 접음.) */
   .task-item.controls-open .task-controls {
     max-height: 26px;
     opacity: 1;
     margin-top: 4px;
-    /* 일부러 길게 누른 거라 기다릴 필요 없음 */
-    transition-delay: 0s;
-  }
-
-  .add-row-wrap.controls-open .draft-controls {
-    max-height: 26px;
-    opacity: 1;
-    margin-top: 6px;
+    /* 일부러 탭해서 연 거라 기다릴 필요 없음 */
     transition-delay: 0s;
   }
 
@@ -3322,25 +3313,4 @@
   #archivePanel .archive-date-heading {
     position: relative;
     top: 3px;
-  }
-
-  /* 터치 기기에서 항목을 길게 누르는 동안(PRESS_FEEDBACK_MS 뒤부터) 살짝 눌린 느낌을 줌 —
-     롱프레스가 인식되는 중임을 알리고, 글자가 선택되거나 시스템 메뉴가 뜨지 않게 막음. */
-  @media (hover: none) {
-    .task-item .task-row {
-      -webkit-touch-callout: none;
-      -webkit-user-select: none;
-      user-select: none;
-    }
-
-    /* 편집 입력창은 되살림 — iOS는 user-select:none인 입력창에 글자를 못 치는 경우가 있음. */
-    .task-item .task-row .task-edit-input {
-      -webkit-user-select: text;
-      user-select: text;
-    }
-
-    .task-item.long-pressing {
-      transform: scale(0.985);
-      opacity: 0.8;
-    }
   }
