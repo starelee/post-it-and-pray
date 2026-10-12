@@ -3904,12 +3904,12 @@
     if (!on) return;
     const badge = document.createElement('span');
     badge.className = 'reorder-badge';
-    badge.textContent = '⇅ 순서 바꾸는 중';
+    // 평소엔 "순서 바꾸는 중", 마우스를 올리면 "완료하기"로 바뀜(CSS가 둘을 겹쳐 두고 전환)
+    badge.innerHTML = '<span class="reorder-badge-idle">⇅ 순서 바꾸는 중</span><span class="reorder-badge-done">✓ 완료하기</span>';
     // 누르면 순서 바꾸기 끝(모서리 ✓와 같음). 제목이 접기 버튼인 someday에서 접히지 않게 전파 차단.
     badge.setAttribute('role', 'button');
     badge.tabIndex = 0;
-    badge.setAttribute('aria-label', '순서 바꾸기 끝내기');
-    badge.title = '눌러서 끝내기';
+    badge.setAttribute('aria-label', '순서 바꾸기 완료하기');
     badge.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();

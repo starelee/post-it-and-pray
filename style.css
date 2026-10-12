@@ -3509,3 +3509,41 @@ body.reorder-mode .sticky:not(.reorder-active) {
 .sticky.reorder-active:focus-within {
   transform: rotate(calc(var(--rot, -1.4deg) * 0.4));
 }
+
+/* 알약: 평소 "순서 바꾸는 중" → hover/포커스 시 "✓ 완료하기" (두 글자를 같은 칸에 겹쳐 폭이 안 흔들림) */
+.reorder-badge {
+  display: inline-grid;
+  justify-items: center;
+}
+
+.reorder-badge > span {
+  grid-area: 1 / 1;
+  transition: opacity 0.12s var(--ease-ui);
+}
+
+.reorder-badge-done {
+  opacity: 0;
+}
+
+.reorder-badge:focus-visible {
+  outline: none;
+}
+
+@media (hover: hover) {
+  .reorder-badge:hover,
+  .reorder-badge:focus-visible {
+    background: var(--accent);
+    color: #fff;
+    border-style: solid;
+  }
+
+  .reorder-badge:hover .reorder-badge-idle,
+  .reorder-badge:focus-visible .reorder-badge-idle {
+    opacity: 0;
+  }
+
+  .reorder-badge:hover .reorder-badge-done,
+  .reorder-badge:focus-visible .reorder-badge-done {
+    opacity: 1;
+  }
+}
