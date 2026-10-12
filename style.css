@@ -3646,7 +3646,7 @@ body.reorder-mode .sticky:not(.reorder-active) {
   opacity: 1 !important;
 }
 
-.sub-reorder-target .subtask-chip,
+.sub-reorder-target .subtask-chip:not(.complete-all-btn),
 .sub-reorder-target .subtask-edit-btn,
 .sub-reorder-target .subtask-reorder-btn,
 .sub-reorder-target .subtask-delete-btn {
@@ -3688,4 +3688,72 @@ body.reorder-mode .sticky:not(.reorder-active) {
   .task-controls > button {
     transition-delay: 0s;
   }
+}
+
+/* 하위 항목 칩+버튼 한 덩어리 — 칩이 두 줄이 되어도 ✎ ⇄ ×가 마지막 글자 옆에 붙음 */
+.subtask-item > .subtask-line {
+  display: block;
+}
+
+.subtask-line > .subtask-chip {
+  display: inline;
+}
+
+.subtask-line > .subtask-edit-btn,
+.subtask-line > .subtask-reorder-btn,
+.subtask-line > .subtask-delete-btn {
+  display: inline-block;
+  vertical-align: middle;
+}
+
+/* 하위 항목 편집 모드: 칩 자리에 입력창 + 항상 보이는 지우기 */
+.sub-reorder-target .sub-draggable .subtask-chip {
+  display: none;
+}
+
+.sub-draggable .subtask-line {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.sub-edit-input {
+  user-select: text;
+  -webkit-user-select: text;
+  cursor: text;
+  max-width: 100%;
+}
+
+.sub-edit-del {
+  background: none;
+  border: none;
+  cursor: pointer;
+  flex: 0 0 auto;
+  padding: 0 3px;
+  color: var(--ink-soft);
+  font-size: 13px;
+  line-height: 1;
+  pointer-events: auto;
+}
+
+.sub-edit-del:hover {
+  color: var(--accent);
+}
+
+.sub-add-input {
+  width: 72px;
+  border: none;
+  border-bottom: 1px dashed var(--ink-soft);
+  background: transparent;
+  font-family: var(--font-task);
+  font-size: 14px;
+  color: var(--ink-soft);
+  outline: none;
+  pointer-events: auto;
+  user-select: text;
+}
+
+.sub-add-item,
+.sub-complete-all {
+  pointer-events: auto;
 }

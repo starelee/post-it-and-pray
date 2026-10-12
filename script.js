@@ -2062,7 +2062,7 @@
     // 열림 상태는 .controls-open 클래스(항목이 다시 그려지면 닫힘).
     row.addEventListener('click', (e) => {
       if (!isTouchOnly()) return;
-      if (e.target.closest('.checkbox, button, input, .subtask-progress')) return;
+      if (e.target.closest('.checkbox, button, input, .subtask-progress, .subtask-chip')) return;
       if (!li.classList.contains('controls-open')) {
         closeOpenControls();
         li.classList.add('controls-open');
@@ -2077,8 +2077,8 @@
       const subList = document.createElement('ul');
       subList.className = 'subtask-list';
       task.subtasks.forEach(sub => subList.appendChild(renderSubtaskItem(boardId, task.id, sub)));
-      const completeAll = task.done ? null : makeCompleteAllItem(boardId, task);
-      if (completeAll) subList.appendChild(completeAll);
+      const editChip = (task.done || boardId === 'lupin') ? null : makeEditSubtasksItem(boardId, task);
+      if (editChip) subList.appendChild(editChip);
       // 목록을 grid 래퍼로 감싸서 CSS가 실제 높이만큼 0fr <-> 1fr로 접고
       // 펼 수 있게 함(.subtask-collapse 참고) — max-height 방식은 목표 값이
       // 실제 높이와 안 맞아 애니메이션 타이밍이 어긋났음.
@@ -3092,14 +3092,37 @@
     return li;
   }
 
+  // 하위 항목 줄 끝의 [✎ 편집] 칩 — 눌러서 하위 항목 편집 모드로(수정/삭제/순서/모두 완료를 한 번에).
+  function makeEditSubtasksItem(boardId, task) {
+    if (!(task.subtasks || []).length) return null;
+    const li = document.createElement('li');
+    li.className = 'subtask-item complete-all-item'; // 보이는 방식(hover 때 지연 후 나타남)은 [✓ 모두 완료] 칩과 같음
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'subtask-chip complete-all-btn';
+    btn.setAttribute('aria-label', '하위 항목 편집');
+    btn.textContent = '[✎ 편집]';
+    btn.addEventListener('click', () => enterSubReorder(boardId, task.id));
+    li.appendChild(btn);
+    return li;
+  }
+
   function renderSubtaskItem(boardId, taskId, sub) {
     const li = document.createElement('li');
     li.className = 'subtask-item' + (sub.done ? ' done' : '');
     li.dataset.id = sub.id;
 
-    const chip = document.createElement('button');
+    // 두 줄 이상이어도 ✎ ⇄ × 버튼이 맨 마지막 글자 바로 옆에 붙도록, 칩은 줄바꿈되는 span으로 두고
+    // 버튼들과 함께 한 덩어리(.subtask-line)의 인라인 흐름에 놓음(button은 통째로 한 덩어리라 글자 옆에 못 붙음).
+    const line = document.createElement('div');
+    line.className = 'subtask-line';
+    const chip = document.createElement('span');
     chip.className = 'subtask-chip';
-    chip.type = 'button';
+    chip.setAttribute('role', 'button');
+    chip.tabIndex = 0;
+    chip.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); chip.click(); }
+    });
     chip.setAttribute('aria-label', sub.done ? '완료 취소' : '완료 표시');
     chip.textContent = '[' + sub.text + ']';
     // 더블클릭으로 이름을 바꾸려는 순간에도 그 앞의 두 번의 click이 먼저
@@ -3122,37 +3145,9 @@
       startEditSubtask(boardId, taskId, sub.id);
     });
 
-    // 더블클릭으로 편집 들어가는 게 클릭 타이밍과 겹쳐서 헷갈린다는 피드백
-    // 때문에 추가한, 호버하면 삭제(×) 옆에 같이 뜨는 명시적 수정 버튼 —
-    // 더블클릭은 그대로 남겨두되(익숙한 사람은 계속 씀) 이게 기본 경로.
-    const edit = document.createElement('button');
-    edit.className = 'subtask-edit-btn';
-    edit.type = 'button';
-    edit.setAttribute('aria-label', '수정');
-    edit.textContent = '✎';
-    edit.addEventListener('click', () => startEditSubtask(boardId, taskId, sub.id));
-
-    const del = document.createElement('button');
-    del.className = 'subtask-delete-btn';
-    del.type = 'button';
-    del.setAttribute('aria-label', '삭제');
-    del.textContent = '×';
-    del.addEventListener('click', () => deleteSubtask(boardId, taskId, sub.id));
-
-    li.appendChild(chip);
-    li.appendChild(edit);
-    // ⇄ — 이 상위 항목의 하위 항목 순서 바꾸기 모드로 들어감(하위 항목이 2개 이상일 때만)
-    const parent = boards[boardId] && boards[boardId].find(t => t.id === taskId);
-    if (boardId !== 'lupin' && parent && (parent.subtasks || []).length >= 2) {
-      const reorderBtn = document.createElement('button');
-      reorderBtn.className = 'subtask-reorder-btn';
-      reorderBtn.type = 'button';
-      reorderBtn.setAttribute('aria-label', '하위 항목 순서 바꾸기');
-      reorderBtn.textContent = '⇄';
-      reorderBtn.addEventListener('click', () => enterSubReorder(boardId, taskId));
-      li.appendChild(reorderBtn);
-    }
-    li.appendChild(del);
+    // 칩 하나만 고치는 건 더블클릭(위), 여러 개를 한꺼번에 고치고 지우고 순서를 바꾸는 건 항목 맨 끝 [✎ 편집] 칩.
+    line.appendChild(chip);
+    li.appendChild(line);
     return li;
   }
 
@@ -4055,18 +4050,131 @@
     reorderSubId = taskId;
     reorderSubBoard = taskBoardId;
     sticky.classList.add('reorder-sub');
-    startReorderState(stickyBoard, '⇄ 하위 항목 순서 바꾸는 중');
+    startReorderState(stickyBoard, '✎ 하위 항목 편집 중');
   }
 
   function decorateSubReorder() {
     const li = findTaskLi(reorderSubId);
     if (!li) { exitReorder(); return; }
     li.classList.add('sub-reorder-target');
-    li.querySelectorAll('.subtask-list > li.subtask-item:not(.complete-all-item)').forEach(sli => {
+    const task = boards[reorderSubBoard] && boards[reorderSubBoard].find(t => t.id === reorderSubId);
+    const list = li.querySelector('.subtask-list');
+    if (!task || !list || list.dataset.subEditing) return;
+    list.dataset.subEditing = '1';
+
+    // 칩마다: 글자를 바로 고치는 입력창 + 항상 보이는 지우기(×). 칩을 6px 넘게 끌면 순서 바꾸기.
+    list.querySelectorAll(':scope > li.subtask-item:not(.complete-all-item)').forEach(sli => {
+      const sub = task.subtasks.find(x => String(x.id) === sli.dataset.id);
+      const line = sli.querySelector('.subtask-line');
+      if (!sub || !line) return;
       sli.classList.add('sub-draggable');
-      if (sli.dataset.subBound) return;
-      sli.dataset.subBound = '1';
-      sli.addEventListener('pointerdown', (e) => startSubDrag(e, sli));
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.className = 'subtask-edit-input sub-edit-input';
+      input.value = sub.text;
+      input.maxLength = 100;
+      input.dataset.subId = sub.id;
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
+      });
+      input.addEventListener('blur', commitSubEditInputs);
+      const del = document.createElement('button');
+      del.type = 'button';
+      del.className = 'sub-edit-del';
+      del.setAttribute('aria-label', '하위 항목 삭제');
+      del.textContent = '×';
+      del.addEventListener('click', () => {
+        commitSubEditInputs();
+        task.subtasks = task.subtasks.filter(x => x.id !== sub.id);
+        saveBoards();
+        render(reorderSubBoard);
+        if (reorderSubBoard === 'scheduled') render('today');
+      });
+      line.appendChild(input);
+      line.appendChild(del);
+      fitSubtaskEditInput(input, null);
+      bindSubDragStart(sli);
+    });
+
+    // 맨 끝: 새 하위 항목 입력 + 모두 완료
+    const addLi = document.createElement('li');
+    addLi.className = 'subtask-item sub-add-item';
+    const addInput = document.createElement('input');
+    addInput.type = 'text';
+    addInput.className = 'sub-add-input';
+    addInput.placeholder = '+ 추가';
+    addInput.maxLength = 100;
+    addInput.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter') return;
+      e.preventDefault();
+      const text = addInput.value.trim();
+      if (!text) return;
+      commitSubEditInputs();
+      task.subtasks.push({ id: Date.now(), text, done: false });
+      saveBoards();
+      render(reorderSubBoard);
+      if (reorderSubBoard === 'scheduled') render('today');
+      const fresh = findTaskLi(reorderSubId);
+      const next = fresh && fresh.querySelector('.sub-add-input');
+      if (next) next.focus({ preventScroll: true });
+    });
+    addLi.appendChild(addInput);
+    list.appendChild(addLi);
+    if (task.subtasks.filter(x => !x.done).length >= 2) {
+      const allLi = document.createElement('li');
+      allLi.className = 'subtask-item sub-complete-all';
+      const allBtn = document.createElement('button');
+      allBtn.type = 'button';
+      allBtn.className = 'subtask-chip complete-all-btn';
+      allBtn.textContent = '[✓ 모두 완료]';
+      allBtn.addEventListener('click', () => {
+        commitSubEditInputs();
+        completeAllSubtasks(reorderSubBoard, reorderSubId);
+      });
+      allLi.appendChild(allBtn);
+      list.appendChild(allLi);
+    }
+  }
+
+  // 편집 입력창의 글자를 항목에 반영(비우면 원래 글자 유지 — 지우기는 ×로).
+  function commitSubEditInputs() {
+    if (!reorderSubId) return;
+    const task = boards[reorderSubBoard] && boards[reorderSubBoard].find(t => t.id === reorderSubId);
+    const li = findTaskLi(reorderSubId);
+    if (!task || !li) return;
+    let changed = false;
+    li.querySelectorAll('.sub-edit-input').forEach(input => {
+      const sub = task.subtasks.find(x => String(x.id) === input.dataset.subId);
+      if (!sub) return;
+      const text = input.value.trim();
+      if (!text) { input.value = sub.text; return; }
+      if (text !== sub.text) { sub.text = text; changed = true; }
+    });
+    if (changed) saveBoards();
+  }
+
+  // 입력창/칩 어디를 잡든 6px 넘게 움직이면 끌기 시작, 그 전에 놓으면 그냥 클릭(입력창 포커스).
+  function bindSubDragStart(sli) {
+    sli.addEventListener('pointerdown', (e) => {
+      if (!reorderSubId || (e.button != null && e.button !== 0)) return;
+      if (e.target.closest('.sub-edit-del')) return;
+      const x0 = e.clientX, y0 = e.clientY, pid = e.pointerId;
+      const cleanup = () => {
+        document.removeEventListener('pointermove', onMove, true);
+        document.removeEventListener('pointerup', cleanup, true);
+        document.removeEventListener('pointercancel', cleanup, true);
+      };
+      const onMove = (ev) => {
+        if (Math.abs(ev.clientX - x0) < 6 && Math.abs(ev.clientY - y0) < 6) return;
+        cleanup();
+        if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+        const sel = window.getSelection && window.getSelection();
+        if (sel) sel.removeAllRanges();
+        startSubDrag({ pointerId: pid, clientX: ev.clientX, clientY: ev.clientY, button: 0, preventDefault() {} }, sli);
+      };
+      document.addEventListener('pointermove', onMove, true);
+      document.addEventListener('pointerup', cleanup, true);
+      document.addEventListener('pointercancel', cleanup, true);
     });
   }
 
@@ -4091,9 +4199,22 @@
     const swap = () => {
       const all = chips();
       const others = all.filter(c => c !== sli);
-      const target = others.find(c => {
+      // 포인터가 올라간 칩이 목적지. 칩과 칩 사이/끝 빈 곳이면 가장 가까운 칩을 고르고, 그 칩을 지나쳐
+      // 간 방향일 때만 자리를 바꿈(끝까지 끌어도 마지막 칩 뒤로 갈 수 있게).
+      const myIdx = all.indexOf(sli);
+      let target = null, best = Infinity;
+      others.forEach(c => {
         const r = c.getBoundingClientRect();
-        return lx >= r.left && lx <= r.right && ly >= r.top && ly <= r.bottom;
+        const dx = lx < r.left ? r.left - lx : (lx > r.right ? lx - r.right : 0);
+        const dy = ly < r.top ? r.top - ly : (ly > r.bottom ? ly - r.bottom : 0);
+        const d = dx * dx + dy * dy * 4;
+        if (d >= best) return;
+        if (d > 0) {
+          const after = all.indexOf(c) > myIdx;
+          const passed = after ? (lx > r.right || ly > r.bottom) : (lx < r.left || ly < r.top);
+          if (!passed) return;
+        }
+        best = d; target = c;
       });
       if (!target) return;
       const before = new Map(others.map(c => [c, c.getBoundingClientRect()]));
@@ -4125,20 +4246,22 @@
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
+    // 칩을 DOM에서 옮기면 포인터 캡처가 풀릴 수 있어서, 이동/종료는 document에서 받음
     const onMove = (ev) => { lx = ev.clientX; ly = ev.clientY; };
     const finish = () => {
       cancelAnimationFrame(raf);
       reorderDragging = false;
-      sli.removeEventListener('pointermove', onMove);
-      sli.removeEventListener('pointerup', finish);
-      sli.removeEventListener('pointercancel', finish);
+      document.removeEventListener('pointermove', onMove, true);
+      document.removeEventListener('pointerup', finish, true);
+      document.removeEventListener('pointercancel', finish, true);
       sli.classList.remove('sub-dragging');
       sli.style.transform = '';
+      commitSubEditInputs();
       commitSubReorder(chips().map(c => Number(c.dataset.id)));
     };
-    sli.addEventListener('pointermove', onMove);
-    sli.addEventListener('pointerup', finish);
-    sli.addEventListener('pointercancel', finish);
+    document.addEventListener('pointermove', onMove, true);
+    document.addEventListener('pointerup', finish, true);
+    document.addEventListener('pointercancel', finish, true);
   }
 
   function commitSubReorder(ids) {
@@ -4157,6 +4280,9 @@
 
   function exitReorder() {
     if (!reorderBoard) return;
+    const wasSub = reorderSubId != null;
+    const subBoard = reorderSubBoard;
+    if (wasSub) commitSubEditInputs();
     const sticky = getReorderSticky(reorderBoard);
     setReorderBadge(reorderBoard, false);
     reorderBoard = null;
@@ -4176,6 +4302,10 @@
     }
     updateReorderUI();
     haptic(HAPTIC_TAP);
+    if (wasSub && subBoard) {
+      render(subBoard);
+      if (subBoard === 'scheduled') render('today');
+    }
   }
 
   // 화면의 현재 항목 순서(DOM)를 task.order로 저장하고 다시 그림. 바뀐 게 없으면 그대로 둠.
@@ -4313,17 +4443,18 @@
     const finish = () => {
       cancelAnimationFrame(raf);
       reorderDragging = false;
-      handle.removeEventListener('pointermove', onMove);
-      handle.removeEventListener('pointerup', finish);
-      handle.removeEventListener('pointercancel', finish);
+      document.removeEventListener('pointermove', onMove, true);
+      document.removeEventListener('pointerup', finish, true);
+      document.removeEventListener('pointercancel', finish, true);
       li.classList.remove('dragging');
       li.style.transform = '';
       li.style.willChange = '';
       commitReorder(li.dataset.id);
     };
-    handle.addEventListener('pointermove', onMove);
-    handle.addEventListener('pointerup', finish);
-    handle.addEventListener('pointercancel', finish);
+    // 항목을 DOM에서 옮기면 포인터 캡처가 풀릴 수 있어서, 이동/종료는 document에서 받음
+    document.addEventListener('pointermove', onMove, true);
+    document.addEventListener('pointerup', finish, true);
+    document.addEventListener('pointercancel', finish, true);
   }
 
   // 모드 중에는 ↑/↓(손잡이에 포커스가 있을 때)와 Esc, Tab, Ctrl/Cmd 조합(되돌리기 등)만 통과 —
