@@ -5714,6 +5714,7 @@
     todaySwapTimer = setTimeout(() => {
       todayListEl.hidden = open;
       todayFocusEl.hidden = !open;
+      updateReorderUI(); // focus 화면에서는 순서 바꾸기 모서리 숨김
       // lupin은 원래 상태(waiting)도 --paper-waiting이라는 별도 변수라
       // 그대로 세팅하면 되지만, today의 기본 종이색 변수 이름 자체가
       // --paper라서 "닫힐 때 --paper를 var(--paper)로" 쓰면 자기 자신을
@@ -5830,6 +5831,7 @@
     todayFocusVisible = true;
     todayListEl.hidden = true;
     todayFocusEl.hidden = false;
+    updateReorderUI();
     todayStickyEl.style.setProperty('--paper', 'var(--paper-focus)');
     renderFocusPanel();
   }
