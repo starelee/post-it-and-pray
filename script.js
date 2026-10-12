@@ -1087,6 +1087,19 @@
     return merged;
   }
 
+  // 보드 내용 비교용 키 — 항목 순서와 updatedAt은 무시(병합이 순서를 바꾸고 시각만 다를 수 있음).
+  function boardsContentKey(b) {
+    return BOARD_IDS.concat(['archive', 'lupin', 'trash']).map(id =>
+      (b[id] || []).slice().sort((x, y) => (x.id < y.id ? -1 : x.id > y.id ? 1 : 0))
+        .map(t => { const { updatedAt, ...rest } = t; return JSON.stringify(rest); }).join('|')
+    ).join('||');
+  }
+
+  // 다른 기기의 변경을 합쳐 화면을 다시 그리면 안 되는 순간 — 항목 글자를 고치는 중, 순서를 끄는 중.
+  function isCloudMergeBusy() {
+    return document.body.classList.contains('is-editing') || reorderDragging;
+  }
+
   async function pushToCloudNow() {
     if (!cloudClient || !activeRowId) return;
     const newUpdatedAt = new Date().toISOString();
@@ -1119,16 +1132,29 @@
         lastKnownServerUpdatedAt = newUpdatedAt;
         return;
       }
-      boards = mergeBoards(normalizeBoards(current.data), boards);
-      migrateArchive(boards);
-      resetHistory();
-      try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(boards));
-      } catch (e) {
-        /* ignore */
+      // 글자를 고치는 중이거나 순서를 끄는 중이면 지금 화면을 통째로 갈아엎지 않고 잠깐 뒤에 다시 시도
+      // (이 시점의 current는 다음 시도 때 다시 읽어 옴).
+      if (isCloudMergeBusy()) {
+        clearTimeout(cloudPushTimer);
+        cloudPushTimer = setTimeout(pushToCloudNow, 800);
+        return;
       }
-      renderAll();
+      const merged = mergeBoards(normalizeBoards(current.data), boards);
+      migrateArchive(merged);
       lastKnownServerUpdatedAt = current.updated_at;
+      // 합쳐도 내용이 그대로면(다른 기기가 저장했지만 이 화면에 보일 변화가 없는 경우) 화면을 다시
+      // 그리지도, 되돌리기 기록을 비우지도 않음 — 예전엔 이때도 전체가 새로 그려져 "혼자 새로고침"처럼 보였음.
+      const changed = boardsContentKey(merged) !== boardsContentKey(boards);
+      if (changed) {
+        boards = merged;
+        resetHistory();
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(boards));
+        } catch (e) {
+          /* ignore */
+        }
+        renderAll();
+      }
       pushToCloud(); // retry with the merged state, now conditioned on the version we just saw
     } catch (e) {
       /* offline or cloud unavailable — local state is still saved; the
@@ -1519,6 +1545,11 @@
       autoCloseTimer = setTimeout(() => {
         autoCloseTimer = null;
         if (body.hidden) return;
+        // 순서 바꾸는 중에는 구역이 저절로 접히면 안 됨
+        if (document.body.classList.contains('reorder-mode') && body.closest('.reorder-active')) {
+          scheduleAutoClose(COLLAPSE_AUTO_CLOSE_RETRY_MS);
+          return;
+        }
         if (body.contains(document.activeElement)) {
           scheduleAutoClose(COLLAPSE_AUTO_CLOSE_RETRY_MS);
           return;
