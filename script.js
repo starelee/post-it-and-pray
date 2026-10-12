@@ -3111,7 +3111,7 @@
     const chipLi = taskLi.querySelector('.subtask-collapse > .subtask-list > .complete-all-item');
     if (!chipLi) return;
     const list = chipLi.parentElement;
-    const btn = chipLi.querySelector('button');
+    const btn = chipLi.querySelector('.complete-all-btn');
     const chips = Array.from(list.children).filter(c => c !== chipLi && c.classList.contains('subtask-item') && c.offsetParent !== null && c.offsetWidth > 0);
     const last = chips[chips.length - 1];
     if (!btn || !last) return;
@@ -3127,13 +3127,23 @@
     if (!(task.subtasks || []).length) return null;
     const li = document.createElement('li');
     li.className = 'subtask-item complete-all-item'; // 보이는 방식(hover 때 지연 후 나타남)은 [✓ 모두 완료] 칩과 같음
-    const btn = document.createElement('button');
-    btn.type = 'button';
+    // 다른 하위 항목 칩과 똑같은 구조(li > .subtask-line > span.subtask-chip)로 만들어 글자 높이가 어긋나지 않게 함
+    // (<button>은 안쪽 글자를 자기 상자 가운데에 맞춰서 span 칩과 1px 정도 높이가 달라 보였음).
+    const line = document.createElement('div');
+    line.className = 'subtask-line';
+    const btn = document.createElement('span');
     btn.className = 'subtask-chip complete-all-btn';
+    btn.setAttribute('role', 'button');
+    btn.tabIndex = 0;
     btn.setAttribute('aria-label', '하위 항목 편집');
     btn.innerHTML = '[<span class="chip-ico">✎</span> 편집]'; // 연필 글리프만 작게(글자는 다른 칩과 같은 크기)
-    btn.addEventListener('click', () => enterSubReorder(boardId, task.id));
-    li.appendChild(btn);
+    const open = () => enterSubReorder(boardId, task.id);
+    btn.addEventListener('click', open);
+    btn.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); }
+    });
+    line.appendChild(btn);
+    li.appendChild(line);
     return li;
   }
 
