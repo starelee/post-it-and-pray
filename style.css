@@ -2485,8 +2485,8 @@
     transition-delay: var(--collapse-delay);
   }
 
-  .task-list[data-tasklist="waiting"] .task-item:not(.done-open) > .subtask-collapse:not(:has(.subtask-item:not(.done))),
-  .task-list[data-tasklist="waitingLater"] .task-item:not(.done-open) > .subtask-collapse:not(:has(.subtask-item:not(.done))),
+  .task-list[data-tasklist="waiting"] .task-item:not(.done-open) > .subtask-collapse:not(:has(.subtask-item:not(.done):not(.complete-all-item))),
+  .task-list[data-tasklist="waitingLater"] .task-item:not(.done-open) > .subtask-collapse:not(:has(.subtask-item:not(.done):not(.complete-all-item))),
   .task-list[data-tasklist="someday"] .task-item:not(:hover):not(:focus-within) > .subtask-collapse,
   body.is-editing .task-list[data-tasklist="someday"] .task-item:not(:focus-within) > .subtask-collapse,
   .task-list[data-tasklist="today"] .task-item.done:not(.done-open) > .subtask-collapse {
@@ -3646,7 +3646,7 @@ body.reorder-mode .sticky:not(.reorder-active) {
   opacity: 1 !important;
 }
 
-.sub-reorder-target .subtask-chip:not(.complete-all-btn),
+.sub-reorder-target .subtask-chip:not(.complete-all-btn):not(.sub-add-btn),
 .sub-reorder-target .subtask-edit-btn,
 .sub-reorder-target .subtask-reorder-btn,
 .sub-reorder-target .subtask-delete-btn {
@@ -3756,4 +3756,213 @@ body.reorder-mode .sticky:not(.reorder-active) {
 .sub-add-item,
 .sub-complete-all {
   pointer-events: auto;
+}
+
+/* 하위 항목 편집 모드 모양 정리 — 점선 박스/밑줄 대신 은은한 알약 하나로 통일 */
+.sub-draggable {
+  outline: none;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--ink) 8%, transparent);
+  padding: 1px 3px 1px 9px;
+  transition: box-shadow 0.15s var(--ease-ui), background 0.15s var(--ease-ui);
+}
+
+.sub-draggable:focus-within {
+  background: color-mix(in srgb, var(--ink) 12%, transparent);
+  box-shadow: 0 0 0 1.5px var(--accent);
+}
+
+.sub-draggable .subtask-line {
+  gap: 0;
+}
+
+.sub-draggable .sub-edit-input {
+  border: none;
+  border-bottom: none;
+  background: transparent;
+  padding: 0;
+  color: var(--ink);
+  line-height: 1.3;
+}
+
+.sub-draggable .sub-edit-del {
+  padding: 0 5px;
+  opacity: 0.55;
+}
+
+.sub-draggable .sub-edit-del:hover {
+  opacity: 1;
+}
+
+.sub-add-item {
+  border-radius: 999px;
+  border: 1px dashed color-mix(in srgb, var(--ink-soft) 55%, transparent);
+  padding: 0 9px;
+}
+
+.sub-add-item:focus-within {
+  border-style: solid;
+  border-color: var(--accent);
+}
+
+.sub-add-item .sub-add-input {
+  width: 62px;
+  border: none;
+  background: transparent;
+  padding: 1px 0;
+  line-height: 1.3;
+  color: var(--ink);
+}
+
+.sub-draggable.sub-dragging {
+  background: var(--paper);
+}
+
+/* 편집 모드 모양 재정리 — 평소 칩과 같은 [] 표시, 뒤에 작은 × ⇄ (알약 배경/점선 박스 없음) */
+.sub-draggable,
+.sub-draggable:focus-within {
+  background: none;
+  box-shadow: none;
+  padding: 0;
+  border-radius: 0;
+  cursor: default;
+  touch-action: auto;
+}
+
+.sub-draggable .subtask-line {
+  align-items: baseline;
+}
+
+.sub-br {
+  font-family: var(--font-task);
+  font-size: 14px;
+  line-height: 1.3;
+  color: var(--ink-soft);
+}
+
+.sub-draggable .sub-edit-input {
+  color: var(--ink-soft);
+  border-bottom: 1px dashed transparent;
+}
+
+.sub-draggable .sub-edit-input:focus {
+  border-bottom-color: var(--accent);
+}
+
+.sub-edit-move {
+  background: none;
+  border: none;
+  cursor: grab;
+  touch-action: none;
+  padding: 0 5px;
+  color: var(--ink-soft);
+  font-size: 12px;
+  line-height: 1;
+  opacity: 0.55;
+  pointer-events: auto;
+}
+
+.sub-edit-move:hover,
+.sub-edit-move:focus-visible,
+.sub-draggable.sub-dragging .sub-edit-move {
+  opacity: 1;
+  color: var(--accent);
+  outline: none;
+}
+
+.sub-edit-move:active {
+  cursor: grabbing;
+}
+
+.sub-draggable .sub-edit-del {
+  padding: 0 2px 0 4px;
+}
+
+.sub-add-item,
+.sub-add-item:focus-within {
+  border: none;
+  border-radius: 0;
+  padding: 0;
+}
+
+.sub-add-btn {
+  opacity: 0.7;
+  pointer-events: auto;
+}
+
+.sub-add-btn:hover,
+.sub-add-btn:focus-visible {
+  opacity: 1;
+  color: var(--accent);
+}
+
+.sub-add-field[hidden] {
+  display: none;
+}
+
+.sub-add-field {
+  display: inline-flex;
+  align-items: baseline;
+}
+
+.sub-add-item .sub-add-input {
+  width: 90px;
+  color: var(--ink-soft);
+  border-bottom: 1px dashed var(--accent);
+}
+
+.sub-draggable.sub-dragging {
+  background: var(--paper);
+  border-radius: 4px;
+}
+
+/* 하위 항목 칩에 마우스를 올리면(또는 포커스) 분홍 강조색 */
+.task-list .subtask-chip:hover,
+.task-list .subtask-chip:focus-visible {
+  color: var(--accent);
+}
+
+/* "순서 바꾸는 중 / 편집 중" 알약의 hover 전환(→ ✓ 완료하기)도 잠깐 기다렸다가 — 스치기만 해도 바뀌지 않게 */
+.reorder-badge {
+  transition: background 0.15s var(--ease-ui), color 0.15s var(--ease-ui), border-color 0.15s var(--ease-ui);
+}
+
+@media (hover: hover) {
+  .reorder-badge:hover,
+  .reorder-badge:focus-visible,
+  .reorder-badge:hover .reorder-badge-idle,
+  .reorder-badge:hover .reorder-badge-done,
+  .reorder-badge:focus-visible .reorder-badge-idle,
+  .reorder-badge:focus-visible .reorder-badge-done {
+    transition-delay: var(--expand-delay);
+  }
+}
+
+/* [✎ 편집] / [✓ 모두 완료] 칩 — 폭이 아니라 높이로(아이콘 줄과 같은 속도·곡선·지연으로) 슬며시 내려옴.
+   폭으로 펼치면 줄바꿈이 한순간에 일어나 항목이 툭 내려앉아 보였음. */
+.subtask-collapse > .subtask-list > .subtask-item.complete-all-item {
+  flex: 0 0 100%;
+  max-width: none;
+  max-height: 0;
+  margin-top: 0;
+  margin-right: 0;
+  overflow: hidden;
+  opacity: 0;
+  transition: max-height var(--collapse-dur) var(--collapse-ease) var(--collapse-delay),
+              opacity var(--collapse-dur) var(--collapse-ease) var(--collapse-delay),
+              margin-top var(--collapse-dur) var(--collapse-ease) var(--collapse-delay);
+}
+
+.task-item:is(:hover, :focus-within, .controls-open) .subtask-collapse > .subtask-list > .subtask-item.complete-all-item {
+  max-height: 1.9em;
+  margin-top: 5px;
+  opacity: 1;
+  transition-delay: var(--expand-delay);
+}
+
+.focus-subtask-list > .subtask-item.complete-all-item {
+  flex: 0 0 auto;
+  max-height: none;
+  margin-top: 0;
+  opacity: 1;
 }

@@ -4090,20 +4090,59 @@
         render(reorderSubBoard);
         if (reorderSubBoard === 'scheduled') render('today');
       });
+      // [ 글자 ] × ⇄ — 평소 칩과 같은 [] 표시를 유지, ⇄를 잡고 끌면(또는 포커스 후 ←/→) 이 칩만 순서 변경
+      const mover = document.createElement('button');
+      mover.type = 'button';
+      mover.className = 'sub-edit-move';
+      mover.setAttribute('aria-label', '순서 바꾸기 (끌거나 ← → 키)');
+      mover.textContent = '⇄';
+      mover.addEventListener('pointerdown', (e) => {
+        if (e.button != null && e.button !== 0) return;
+        mover.focus({ preventScroll: true });
+        startSubDrag(e, sli);
+      });
+      const lb = document.createElement('span');
+      lb.className = 'sub-br';
+      lb.textContent = '[';
+      const rb = document.createElement('span');
+      rb.className = 'sub-br';
+      rb.textContent = ']';
+      line.appendChild(lb);
       line.appendChild(input);
+      line.appendChild(rb);
       line.appendChild(del);
+      line.appendChild(mover);
       fitSubtaskEditInput(input, null);
-      bindSubDragStart(sli);
     });
 
-    // 맨 끝: 새 하위 항목 입력 + 모두 완료
+    // 맨 끝: [+추가](누르면 그 자리에서 입력창) + 모두 완료
     const addLi = document.createElement('li');
     addLi.className = 'subtask-item sub-add-item';
+    const addBtn = document.createElement('button');
+    addBtn.type = 'button';
+    addBtn.className = 'subtask-chip sub-add-btn';
+    addBtn.textContent = '[+추가]';
+    const addField = document.createElement('span');
+    addField.className = 'sub-add-field';
+    addField.hidden = true;
     const addInput = document.createElement('input');
     addInput.type = 'text';
     addInput.className = 'sub-add-input';
-    addInput.placeholder = '+ 추가';
+    addInput.placeholder = '하위 항목...';
     addInput.maxLength = 100;
+    ['[', ']'].forEach((ch, i) => {
+      const br = document.createElement('span');
+      br.className = 'sub-br';
+      br.textContent = ch;
+      if (i === 0) { addField.appendChild(br); addField.appendChild(addInput); } else addField.appendChild(br);
+    });
+    const closeAdd = () => { addInput.value = ''; addField.hidden = true; addBtn.hidden = false; };
+    addBtn.addEventListener('click', () => {
+      addBtn.hidden = true;
+      addField.hidden = false;
+      addInput.focus({ preventScroll: true });
+    });
+    addInput.addEventListener('blur', () => { if (!addInput.value) closeAdd(); });
     addInput.addEventListener('keydown', (e) => {
       if (e.key !== 'Enter') return;
       e.preventDefault();
@@ -4114,11 +4153,13 @@
       saveBoards();
       render(reorderSubBoard);
       if (reorderSubBoard === 'scheduled') render('today');
+      // 이어서 여러 개 넣을 수 있게 새로 그려진 [+추가]를 바로 다시 엶
       const fresh = findTaskLi(reorderSubId);
-      const next = fresh && fresh.querySelector('.sub-add-input');
-      if (next) next.focus({ preventScroll: true });
+      const nextBtn = fresh && fresh.querySelector('.sub-add-btn');
+      if (nextBtn) nextBtn.click();
     });
-    addLi.appendChild(addInput);
+    addLi.appendChild(addBtn);
+    addLi.appendChild(addField);
     list.appendChild(addLi);
     if (task.subtasks.filter(x => !x.done).length >= 2) {
       const allLi = document.createElement('li');
@@ -4151,31 +4192,6 @@
       if (text !== sub.text) { sub.text = text; changed = true; }
     });
     if (changed) saveBoards();
-  }
-
-  // 입력창/칩 어디를 잡든 6px 넘게 움직이면 끌기 시작, 그 전에 놓으면 그냥 클릭(입력창 포커스).
-  function bindSubDragStart(sli) {
-    sli.addEventListener('pointerdown', (e) => {
-      if (!reorderSubId || (e.button != null && e.button !== 0)) return;
-      if (e.target.closest('.sub-edit-del')) return;
-      const x0 = e.clientX, y0 = e.clientY, pid = e.pointerId;
-      const cleanup = () => {
-        document.removeEventListener('pointermove', onMove, true);
-        document.removeEventListener('pointerup', cleanup, true);
-        document.removeEventListener('pointercancel', cleanup, true);
-      };
-      const onMove = (ev) => {
-        if (Math.abs(ev.clientX - x0) < 6 && Math.abs(ev.clientY - y0) < 6) return;
-        cleanup();
-        if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
-        const sel = window.getSelection && window.getSelection();
-        if (sel) sel.removeAllRanges();
-        startSubDrag({ pointerId: pid, clientX: ev.clientX, clientY: ev.clientY, button: 0, preventDefault() {} }, sli);
-      };
-      document.addEventListener('pointermove', onMove, true);
-      document.addEventListener('pointerup', cleanup, true);
-      document.addEventListener('pointercancel', cleanup, true);
-    });
   }
 
   // 칩은 가로로 줄바꿈되며 흐르므로 포인터가 올라간 다른 칩 자리로 옮김(2차원), 밀려난 칩은 짧게 미끄러짐.
@@ -4216,7 +4232,7 @@
         }
         best = d; target = c;
       });
-      if (!target) return;
+      if (!target) return false;
       const before = new Map(others.map(c => [c, c.getBoundingClientRect()]));
       if (all.indexOf(target) < all.indexOf(sli)) list.insertBefore(sli, target);
       else list.insertBefore(sli, target.nextSibling);
@@ -4233,15 +4249,17 @@
           setTimeout(() => { c.style.transition = ''; }, 180);
         });
       });
+      return true;
     };
+    let dirty = false; // 한 프레임에 한 칸씩만 옮기므로, 포인터가 멈춰도 더 옮길 게 남았으면 계속 처리
     const tick = () => {
       const edge = 70;
       if (ly < edge) window.scrollBy(0, -Math.ceil((edge - ly) / 5));
       else if (ly > window.innerHeight - edge) window.scrollBy(0, Math.ceil((ly - (window.innerHeight - edge)) / 5));
-      if (lx !== prevX || ly !== prevY || window.scrollY !== prevScroll) {
+      if (dirty || lx !== prevX || ly !== prevY || window.scrollY !== prevScroll) {
         prevX = lx; prevY = ly; prevScroll = window.scrollY;
         place();
-        swap();
+        dirty = swap();
       }
       raf = requestAnimationFrame(tick);
     };
@@ -4420,20 +4438,21 @@
               setTimeout(() => { other.style.transition = ''; }, 180);
             });
           }
-          return;
+          return true;
         }
       }
+      return false;
     };
-    let prevY = null, prevScroll = null;
+    let prevY = null, prevScroll = null, dirty = false;
     const tick = () => {
       // 화면 위/아래 가장자리 근처에서 끌면 페이지가 따라 스크롤됨
       const edge = 70;
       if (lastY < edge) window.scrollBy(0, -Math.ceil((edge - lastY) / 5));
       else if (lastY > window.innerHeight - edge) window.scrollBy(0, Math.ceil((lastY - (window.innerHeight - edge)) / 5));
-      if (lastY !== prevY || window.scrollY !== prevScroll) {
+      if (dirty || lastY !== prevY || window.scrollY !== prevScroll) {
         prevY = lastY; prevScroll = window.scrollY;
         place();
-        swap();
+        dirty = swap();
       }
       raf = requestAnimationFrame(tick);
     };
@@ -4469,6 +4488,26 @@
     }
     if (e.ctrlKey || e.metaKey || e.altKey || e.key === 'Tab') return;
     const active = document.activeElement;
+    // 하위 항목 편집 모드: ⇄에 포커스가 있을 때 ←/→(↑/↓)로 그 칩만 한 칸씩 이동
+    if (reorderSubId != null && active && active.closest && active.closest('.sub-edit-move')
+        && ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)) {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      const sli = active.closest('li.sub-draggable');
+      const list = sli.parentElement;
+      const chips = Array.from(list.children).filter(c => c.classList.contains('sub-draggable'));
+      const dir = (e.key === 'ArrowLeft' || e.key === 'ArrowUp') ? -1 : 1;
+      const target = chips[chips.indexOf(sli) + dir];
+      if (!target) return;
+      const id = sli.dataset.id;
+      list.insertBefore(sli, dir < 0 ? target : target.nextSibling);
+      commitSubEditInputs();
+      commitSubReorder(Array.from(list.children).filter(c => c.classList.contains('sub-draggable')).map(c => Number(c.dataset.id)));
+      const fresh = findTaskLi(reorderSubId);
+      const nh = fresh && fresh.querySelector('li.sub-draggable[data-id="' + id + '"] .sub-edit-move');
+      if (nh) nh.focus({ preventScroll: true });
+      return;
+    }
     const handle = active && active.closest ? active.closest('.reorder-handle') : null;
     if (handle && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
       e.preventDefault();
