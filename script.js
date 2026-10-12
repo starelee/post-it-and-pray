@@ -1535,6 +1535,7 @@
       // 별도 상태 객체 없이 이 값을 바로 읽을 수 있음.
       if (open) setOpen.openedAt = Date.now();
       scheduleAutoClose(autoCloseMs);
+      updateReorderUI(); // 접힘/펼침에 따라 순서 바꾸기 모서리를 보이거나 숨김
     }
     setOpen.openedAt = defaultOpen ? Date.now() : 0;
     scheduleAutoClose(autoCloseMs);
@@ -3883,6 +3884,7 @@
       handle.addEventListener('pointerdown', (e) => startReorderDrag(e, li, handle));
       li.appendChild(handle);
     });
+    bindReorderRows();
   }
 
   // 모드 중인 보드의 제목 옆에 "순서 바꾸는 중" 표시
@@ -3903,6 +3905,23 @@
     const badge = document.createElement('span');
     badge.className = 'reorder-badge';
     badge.textContent = '⇅ 순서 바꾸는 중';
+    // 누르면 순서 바꾸기 끝(모서리 ✓와 같음). 제목이 접기 버튼인 someday에서 접히지 않게 전파 차단.
+    badge.setAttribute('role', 'button');
+    badge.tabIndex = 0;
+    badge.setAttribute('aria-label', '순서 바꾸기 끝내기');
+    badge.title = '눌러서 끝내기';
+    badge.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      exitReorder();
+    });
+    badge.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        e.stopPropagation();
+        exitReorder();
+      }
+    });
     const flower = title.querySelector('.flower');
     if (flower) flower.after(badge);
     else title.appendChild(badge);
@@ -3967,22 +3986,70 @@
     refocus();
   }
 
-  function startReorderDrag(e, li, handle) {
+  // 손잡이뿐 아니라 항목 어디를 잡아도 끌 수 있게 — 마우스/펜은 바로, 터치는 스크롤과 안 겹치게
+  // 꾹 누르면(손가락을 안 움직이고 350ms) 끌기 시작.
+  const REORDER_LONG_PRESS_MS = 350;
+  const REORDER_LONG_PRESS_SLOP = 8;
+  function bindReorderRows() {
+    reorderableLis(reorderBoard).forEach(li => {
+      if (li.dataset.reorderBound) return;
+      li.dataset.reorderBound = '1';
+      li.addEventListener('pointerdown', (e) => {
+        if (!reorderBoard || e.target.closest('.reorder-handle, input, textarea')) return;
+        if (e.pointerType !== 'touch') {
+          startReorderDrag(e, li, li);
+          return;
+        }
+        const x0 = e.clientX, y0 = e.clientY, pid = e.pointerId;
+        const cancel = () => {
+          clearTimeout(timer);
+          li.removeEventListener('pointermove', onMove);
+          li.removeEventListener('pointerup', cancel);
+          li.removeEventListener('pointercancel', cancel);
+        };
+        const onMove = (ev) => {
+          if (Math.abs(ev.clientX - x0) > REORDER_LONG_PRESS_SLOP || Math.abs(ev.clientY - y0) > REORDER_LONG_PRESS_SLOP) cancel();
+        };
+        const timer = setTimeout(() => {
+          cancel();
+          startReorderDrag({ pointerId: pid, clientY: y0, button: 0, preventDefault() {} }, li, li);
+        }, REORDER_LONG_PRESS_MS);
+        li.addEventListener('pointermove', onMove);
+        li.addEventListener('pointerup', cancel);
+        li.addEventListener('pointercancel', cancel);
+      });
+    });
+  }
+
+  // 끄는 동안(특히 터치) 페이지가 같이 스크롤되지 않게
+  let reorderDragging = false;
+  window.addEventListener('touchmove', (e) => {
+    if (reorderDragging && e.cancelable) e.preventDefault();
+  }, { passive: false });
+
+  function startReorderDrag(e, li, capEl) {
+    const handle = capEl;
     if (e.button != null && e.button !== 0) return;
     e.preventDefault();
-    handle.setPointerCapture(e.pointerId);
-    handle.focus({ preventScroll: true }); // preventDefault가 기본 포커스를 막으니 직접 줌
+    try { capEl.setPointerCapture(e.pointerId); } catch (err) { /* 이미 끝난 포인터 */ }
+    const ownHandle = li.querySelector(':scope > .reorder-handle');
+    if (ownHandle) ownHandle.focus({ preventScroll: true }); // preventDefault가 기본 포커스를 막으니 직접 줌
+    reorderDragging = true;
     const grab = e.clientY - li.getBoundingClientRect().top;
     let lastY = e.clientY;
     let raf = 0;
     li.classList.add('dragging');
 
+    // 현재 translate(ty)를 알고 있으니 transform을 지웠다 다시 재지 않고도 "원래 자리"를 구할 수 있음
+    // — 프레임마다 레이아웃을 여러 번 강제하지 않아서 훨씬 부드러움.
+    let ty = 0;
     const place = () => {
-      li.style.transform = '';
-      const natural = li.getBoundingClientRect().top;
-      li.style.transform = 'translateY(' + (lastY - grab - natural) + 'px)';
+      const natural = li.getBoundingClientRect().top - ty;
+      ty = lastY - grab - natural;
+      li.style.transform = 'translateY(' + ty + 'px)';
     };
-    // 끌고 있는 항목의 중심이 이웃의 중심을 넘으면 그 자리로 DOM을 옮김
+    li.style.willChange = 'transform';
+    // 끌고 있는 항목의 중심이 이웃의 중심을 넘으면 그 자리로 DOM을 옮기고, 밀려난 이웃은 짧게 미끄러지듯 이동
     const swap = () => {
       const items = reorderableLis(reorderBoard);
       const r = li.getBoundingClientRect();
@@ -3993,16 +4060,36 @@
         if (other === li) continue;
         const o = other.getBoundingClientRect();
         const omid = o.top + o.height / 2;
-        if (i < myIdx && mid < omid) { li.parentNode.insertBefore(li, other); return; }
-        if (i > myIdx && mid > omid) { li.parentNode.insertBefore(li, other.nextSibling); return; }
+        let moved = false;
+        if (i < myIdx && mid < omid) { li.parentNode.insertBefore(li, other); moved = true; }
+        else if (i > myIdx && mid > omid) { li.parentNode.insertBefore(li, other.nextSibling); moved = true; }
+        if (moved) {
+          place();
+          const delta = o.top - other.getBoundingClientRect().top;
+          if (delta) {
+            other.style.transition = 'none';
+            other.style.transform = 'translateY(' + delta + 'px)';
+            requestAnimationFrame(() => {
+              other.style.transition = 'transform 0.14s ease-out';
+              other.style.transform = '';
+              setTimeout(() => { other.style.transition = ''; }, 180);
+            });
+          }
+          return;
+        }
       }
     };
+    let prevY = null, prevScroll = null;
     const tick = () => {
       // 화면 위/아래 가장자리 근처에서 끌면 페이지가 따라 스크롤됨
       const edge = 70;
       if (lastY < edge) window.scrollBy(0, -Math.ceil((edge - lastY) / 5));
       else if (lastY > window.innerHeight - edge) window.scrollBy(0, Math.ceil((lastY - (window.innerHeight - edge)) / 5));
-      place(); swap(); place();
+      if (lastY !== prevY || window.scrollY !== prevScroll) {
+        prevY = lastY; prevScroll = window.scrollY;
+        place();
+        swap();
+      }
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
@@ -4010,11 +4097,13 @@
     const onMove = (ev) => { lastY = ev.clientY; };
     const finish = () => {
       cancelAnimationFrame(raf);
+      reorderDragging = false;
       handle.removeEventListener('pointermove', onMove);
       handle.removeEventListener('pointerup', finish);
       handle.removeEventListener('pointercancel', finish);
       li.classList.remove('dragging');
       li.style.transform = '';
+      li.style.willChange = '';
       commitReorder(li.dataset.id);
     };
     handle.addEventListener('pointermove', onMove);
@@ -4057,7 +4146,7 @@
     }
     // 모드 중에도 맨 아래 새 항목 입력창에는 글자를 칠 수 있어야 함
     if (active && active.matches && active.matches('input, textarea')) return;
-    if (active && active.closest && active.closest('.reorder-corner') && (e.key === 'Enter' || e.key === ' ')) return;
+    if (active && active.closest && active.closest('.reorder-corner, .reorder-badge') && (e.key === 'Enter' || e.key === ' ')) return;
     e.stopImmediatePropagation();
     e.preventDefault();
   }, true);
@@ -4613,6 +4702,7 @@
     }
 
     lupinOpen = open;
+    updateReorderUI(); // 뒷면(lupin)에서는 waiting 순서 바꾸기 모서리를 숨김
     lupinSwapPending = true;
     lupinFocusPending = !!focusInput;
     clearTimeout(lupinSwapTimer);
@@ -4631,6 +4721,7 @@
       // 있음 — 실제로 보이게 된 지금 다시 잰다.
       if (open) layoutStrikeLines(getListEl('lupin'));
       lupinSwapPending = false;
+      updateReorderUI(); // 앞면이 실제로 보이게 된 지금 waiting 순서 바꾸기 모서리를 다시 맞춤
       if (lupinFocusPending) {
         lupinFocusPending = false;
         const faceEl = open ? lupinBackEl : lupinFrontEl;
