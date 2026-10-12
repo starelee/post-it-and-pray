@@ -4009,3 +4009,21 @@ body.reorder-mode .sticky:not(.reorder-active) {
 .sub-draggable.done .sub-br {
   opacity: 0.6;
 }
+
+/* "oops, still here" 구분선은 누를 수 있음 */
+.divider-oops {
+  cursor: pointer;
+  transition: opacity 0.15s var(--ease-ui);
+}
+
+.divider-oops:hover,
+.divider-oops:focus-visible {
+  opacity: 1;
+  outline: none;
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+}
+
+.reorder-active .divider-oops {
+  pointer-events: none;
+}
