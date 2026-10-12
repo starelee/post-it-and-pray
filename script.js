@@ -3991,9 +3991,22 @@
     else title.appendChild(badge);
   }
 
+  // 3분 동안 아무것도 안 하면 순서 바꾸기 모드는 저절로 꺼짐(깜빡 잊고 흐린 화면이 남지 않게).
+  const REORDER_IDLE_MS = 3 * 60 * 1000;
+  let reorderIdleTimer = null;
+  function touchReorderIdle() {
+    clearTimeout(reorderIdleTimer);
+    reorderIdleTimer = null;
+    if (reorderBoard) reorderIdleTimer = setTimeout(exitReorder, REORDER_IDLE_MS);
+  }
+  ['pointerdown', 'pointermove', 'keydown', 'wheel', 'touchstart'].forEach(type => {
+    window.addEventListener(type, () => { if (reorderBoard) touchReorderIdle(); }, { capture: true, passive: true });
+  });
+
   function enterReorder(boardId) {
     if (reorderBoard) exitReorder();
     reorderBoard = boardId;
+    touchReorderIdle();
     const sticky = getReorderSticky(boardId);
     setReorderBadge(boardId, true);
     document.body.classList.add('reorder-mode');
@@ -4014,6 +4027,8 @@
     const sticky = getReorderSticky(reorderBoard);
     setReorderBadge(reorderBoard, false);
     reorderBoard = null;
+    clearTimeout(reorderIdleTimer);
+    reorderIdleTimer = null;
     document.body.classList.remove('reorder-mode');
     document.querySelectorAll('[inert]').forEach(el => {
       if (el.matches('.header, .sticky')) el.removeAttribute('inert');
