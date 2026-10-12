@@ -1252,14 +1252,18 @@
         } else {
           markUserSynced(rowId);
         }
-        boards = cloudBoards;
-        resetHistory();
-        try {
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(boards));
-        } catch (e) {
-          /* ignore */
+        // 화면에 이미 있는 내용과 같으면(보통 새로고침 직후) 다시 그리지 않음 — 안 그러면 열자마자 한 번
+        // 더 전체가 갈아엎어져 "혼자 새로고침"처럼 보임.
+        if (boardsContentKey(cloudBoards) !== boardsContentKey(boards)) {
+          boards = cloudBoards;
+          resetHistory();
+          try {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(boards));
+          } catch (e) {
+            /* ignore */
+          }
+          renderAll();
         }
-        renderAll();
         lastKnownServerUpdatedAt = data.updated_at;
       } else {
         markUserSynced(rowId);
@@ -1273,8 +1277,14 @@
 
   const authRowEl = document.getElementById('authRow');
 
+  // supabase가 탭으로 돌아올 때마다 같은 로그인 상태로 이벤트를 또 보내는데, 그때마다 헤더의 로그인
+  // 영역을 지웠다 다시 그리면 화면이 깜빡이며 "새로고침"처럼 보임 — 같은 상태면 그대로 둠.
+  let renderedAuthKey = null;
   function renderAuthUI(user) {
     if (!authRowEl) return;
+    const key = user ? 'u:' + user.id + ':' + (user.email || '') : 'guest';
+    if (key === renderedAuthKey && authRowEl.childNodes.length) return;
+    renderedAuthKey = key;
     authRowEl.innerHTML = '';
     if (!cloudClient) return;
 
@@ -3121,7 +3131,7 @@
     btn.type = 'button';
     btn.className = 'subtask-chip complete-all-btn';
     btn.setAttribute('aria-label', '하위 항목 편집');
-    btn.textContent = '[✎ 편집]';
+    btn.innerHTML = '[<span class="chip-ico">✎</span> 편집]'; // 연필 글리프만 작게(글자는 다른 칩과 같은 크기)
     btn.addEventListener('click', () => enterSubReorder(boardId, task.id));
     li.appendChild(btn);
     return li;
