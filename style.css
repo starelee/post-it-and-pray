@@ -3757,3 +3757,63 @@ body.reorder-mode .sticky:not(.reorder-active) {
 .sub-complete-all {
   pointer-events: auto;
 }
+
+/* 하위 항목 편집 모드 모양 정리 — 점선 박스/밑줄 대신 은은한 알약 하나로 통일 */
+.sub-draggable {
+  outline: none;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--ink) 8%, transparent);
+  padding: 1px 3px 1px 9px;
+  transition: box-shadow 0.15s var(--ease-ui), background 0.15s var(--ease-ui);
+}
+
+.sub-draggable:focus-within {
+  background: color-mix(in srgb, var(--ink) 12%, transparent);
+  box-shadow: 0 0 0 1.5px var(--accent);
+}
+
+.sub-draggable .subtask-line {
+  gap: 0;
+}
+
+.sub-draggable .sub-edit-input {
+  border: none;
+  border-bottom: none;
+  background: transparent;
+  padding: 0;
+  color: var(--ink);
+  line-height: 1.3;
+}
+
+.sub-draggable .sub-edit-del {
+  padding: 0 5px;
+  opacity: 0.55;
+}
+
+.sub-draggable .sub-edit-del:hover {
+  opacity: 1;
+}
+
+.sub-add-item {
+  border-radius: 999px;
+  border: 1px dashed color-mix(in srgb, var(--ink-soft) 55%, transparent);
+  padding: 0 9px;
+}
+
+.sub-add-item:focus-within {
+  border-style: solid;
+  border-color: var(--accent);
+}
+
+.sub-add-item .sub-add-input {
+  width: 62px;
+  border: none;
+  background: transparent;
+  padding: 1px 0;
+  line-height: 1.3;
+  color: var(--ink);
+}
+
+.sub-draggable.sub-dragging {
+  background: var(--paper);
+}
