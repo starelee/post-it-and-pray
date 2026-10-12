@@ -3998,3 +3998,14 @@ body.reorder-mode .sticky:not(.reorder-active) {
   pointer-events: auto;
   cursor: text;
 }
+
+/* 편집 모드에서도 완료한 하위 항목은 취소선 + 흐리게 */
+.sub-draggable.done .sub-edit-input {
+  text-decoration: line-through;
+  text-decoration-color: var(--ink-soft);
+  opacity: 0.6;
+}
+
+.sub-draggable.done .sub-br {
+  opacity: 0.6;
+}
