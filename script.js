@@ -3081,7 +3081,7 @@
     const pending = (task.subtasks || []).filter(s => !s.done).length;
     if (pending < 2) return null;
     const li = document.createElement('li');
-    li.className = 'complete-all-item';
+    li.className = 'subtask-item complete-all-item'; // 다른 하위 항목 칩과 같은 배치/간격 규칙을 그대로 씀
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'subtask-chip complete-all-btn';
@@ -4062,7 +4062,7 @@
     const li = findTaskLi(reorderSubId);
     if (!li) { exitReorder(); return; }
     li.classList.add('sub-reorder-target');
-    li.querySelectorAll('.subtask-list > li.subtask-item').forEach(sli => {
+    li.querySelectorAll('.subtask-list > li.subtask-item:not(.complete-all-item)').forEach(sli => {
       sli.classList.add('sub-draggable');
       if (sli.dataset.subBound) return;
       sli.dataset.subBound = '1';
