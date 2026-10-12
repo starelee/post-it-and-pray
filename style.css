@@ -3552,3 +3552,42 @@ body.reorder-mode .sticky:not(.reorder-active) {
 .sticky:not(.has-reorder)::after {
   display: none;
 }
+
+/* [✓ 모두 완료] 칩 — 메인 목록에서는 항목에 마우스를 올리거나 아이콘 줄이 열렸을 때만, focus 화면에서는 늘 보임 */
+.complete-all-item {
+  display: none;
+  list-style: none;
+}
+
+.task-item:is(:hover, :focus-within, .controls-open) .complete-all-item,
+.focus-subtask-list .complete-all-item {
+  display: block;
+}
+
+.complete-all-btn {
+  opacity: 0.7;
+}
+
+.complete-all-btn:hover,
+.complete-all-btn:focus-visible {
+  opacity: 1;
+  color: var(--accent);
+}
+
+.reorder-active .complete-all-item {
+  display: none;
+}
+
+/* waiting의 완료된 하위 항목도 gotta do처럼 가로로 주르륵(줄바꿈은 폭이 모자랄 때만).
+   접혀 있을 땐 자리를 안 차지하게 display:none, (n/m) 알약을 눌러 펼치면 칩이 나란히 나타남. */
+.task-list[data-tasklist="waiting"] .subtask-item.done,
+.task-list[data-tasklist="waitingLater"] .subtask-item.done {
+  flex: 0 1 auto;
+  max-height: none;
+  overflow: visible;
+}
+
+.task-list[data-tasklist="waiting"] .task-item:not(.done-open) .subtask-item.done,
+.task-list[data-tasklist="waitingLater"] .task-item:not(.done-open) .subtask-item.done {
+  display: none;
+}
