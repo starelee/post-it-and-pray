@@ -2537,7 +2537,9 @@
     width: 0;
     padding: 1px 0;
     overflow: hidden;
-    transition: opacity 0.15s var(--ease-ui), color 0.15s var(--ease-ui), width 0.15s var(--ease-ui), padding 0.15s var(--ease-ui);
+    /* 항목 아이콘 줄처럼 열기 전/닫기 전에 잠깐 기다림 — 마우스가 하위 항목 위를 스칠 때마다
+       버튼이 펼쳐졌다 접히며 옆 칩이 출렁이던 걸 줄임(지연은 :root의 --expand/collapse-delay, 터치는 0). */
+    transition: opacity 0.15s var(--ease-ui) var(--collapse-delay), color 0.15s var(--ease-ui), width 0.15s var(--ease-ui) var(--collapse-delay), padding 0.15s var(--ease-ui) var(--collapse-delay);
   }
 
   .subtask-item:hover .subtask-edit-btn,
@@ -2547,6 +2549,7 @@
     opacity: 1;
     width: 13px;
     padding: 1px 2px 1px 0;
+    transition-delay: var(--expand-delay), 0s, var(--expand-delay), var(--expand-delay);
   }
 
   .subtask-edit-btn:hover,
