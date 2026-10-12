@@ -30,6 +30,7 @@
     .move-btn,
     .subtask-chip,
     .subtask-edit-btn,
+    .subtask-reorder-btn,
     .subtask-delete-btn,
     .add-subtask-toggle,
     .date-btn,
@@ -58,7 +59,8 @@
     /* 호버로 펼쳐지고 접히는 것들의 공통 타이밍 — 마우스를 올리자마자 아이콘이
        우르르 뜨지 않게 아주 잠깐 기다렸다가(expand-delay) 펼치고, 뗄 땐 살짝
        머물렀다가(collapse-delay) 부드럽게 접힘. */
-    --expand-delay: 0.15s;
+    --expand-delay: 0.3s;
+    --sub-expand-delay: 0.4s; /* 하위 항목 hover 버튼은 아이콘 줄보다 아주 조금 더 늦게 */
     --collapse-delay: 0.25s;
     --collapse-dur: 0.32s;
     /* 빠르게 출발해서 끝에서 천천히 안착하는 ease-out 계열 곡선 */
@@ -119,6 +121,7 @@
   @media (hover: none) {
     :root {
       --expand-delay: 0s;
+      --sub-expand-delay: 0s;
       --collapse-delay: 0s;
     }
   }
@@ -2528,6 +2531,7 @@
   /* 평소엔 아예 폭 0으로 접어서 칩 사이에 빈자리를 안 남김 — 호버/포커스
      때만 펼쳐지면서 옆 칩들이 살짝 밀리는 건 괜찮다는 피드백 반영. */
   .subtask-edit-btn,
+  .subtask-reorder-btn,
   .subtask-delete-btn {
     flex: 0 0 auto;
     color: var(--ink-soft);
@@ -2544,15 +2548,18 @@
 
   .subtask-item:hover .subtask-edit-btn,
   .subtask-item:focus-within .subtask-edit-btn,
+  .subtask-item:hover .subtask-reorder-btn,
+  .subtask-item:focus-within .subtask-reorder-btn,
   .subtask-item:hover .subtask-delete-btn,
   .subtask-item:focus-within .subtask-delete-btn {
     opacity: 1;
     width: 13px;
     padding: 1px 2px 1px 0;
-    transition-delay: var(--expand-delay), 0s, var(--expand-delay), var(--expand-delay);
+    transition-delay: var(--sub-expand-delay), 0s, var(--sub-expand-delay), var(--sub-expand-delay);
   }
 
   .subtask-edit-btn:hover,
+  .subtask-reorder-btn:hover,
   .subtask-delete-btn:hover {
     color: var(--accent);
   }
@@ -3556,19 +3563,35 @@ body.reorder-mode .sticky:not(.reorder-active) {
   display: none;
 }
 
-/* [✓ 모두 완료] 칩 — 메인 목록에서는 항목에 마우스를 올리거나 아이콘 줄이 열렸을 때만, focus 화면에서는 늘 보임 */
+/* [✓ 모두 완료] 칩 — 메인 목록에서는 항목에 마우스를 올리거나 아이콘 줄이 열렸을 때만(하위 항목 수정 버튼처럼
+   잠깐 기다렸다가 폭/투명도로 나타남), focus 화면에서는 늘 보임 */
 .complete-all-item {
-  display: none;
   list-style: none;
+  max-width: 0;
+  margin-right: 0;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s var(--ease-ui) var(--collapse-delay), max-width 0.15s var(--ease-ui) var(--collapse-delay);
 }
 
-.task-item:is(:hover, :focus-within, .controls-open) .complete-all-item,
+.task-item:is(:hover, :focus-within, .controls-open) .complete-all-item {
+  max-width: 160px;
+  opacity: 1;
+  pointer-events: auto;
+  transition-delay: var(--sub-expand-delay);
+}
+
 .focus-subtask-list .complete-all-item {
-  display: block;
+  max-width: none;
+  overflow: visible;
+  opacity: 1;
+  pointer-events: auto;
 }
 
 .complete-all-btn {
   opacity: 0.7;
+  white-space: nowrap;
 }
 
 .complete-all-btn:hover,
@@ -3593,4 +3616,76 @@ body.reorder-mode .sticky:not(.reorder-active) {
 .task-list[data-tasklist="waiting"] .task-item:not(.done-open) .subtask-item.done,
 .task-list[data-tasklist="waitingLater"] .task-item:not(.done-open) .subtask-item.done {
   display: none;
+}
+
+/* ───────── 하위 항목 순서 바꾸기 (⇄) ───────── */
+.reorder-active.reorder-sub .add-row {
+  pointer-events: none;
+  opacity: 0.4;
+}
+
+.reorder-active .task-item.sub-reorder-target {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.reorder-active .task-item.sub-reorder-target .subtask-collapse,
+.reorder-active .task-item.sub-reorder-target .subtask-list {
+  pointer-events: auto;
+}
+
+/* 모드 중엔 hover로만 펼쳐지는/접힌 하위 항목도 전부 펼쳐 둠 */
+.sub-reorder-target > .subtask-collapse {
+  grid-template-rows: 1fr !important;
+  opacity: 1 !important;
+}
+
+.sub-reorder-target .subtask-item.done {
+  display: inline-flex !important;
+  max-height: none !important;
+  opacity: 1 !important;
+}
+
+.sub-reorder-target .subtask-chip,
+.sub-reorder-target .subtask-edit-btn,
+.sub-reorder-target .subtask-reorder-btn,
+.sub-reorder-target .subtask-delete-btn {
+  pointer-events: none;
+}
+
+.sub-reorder-target .subtask-edit-btn,
+.sub-reorder-target .subtask-reorder-btn,
+.sub-reorder-target .subtask-delete-btn {
+  display: none !important;
+}
+
+.sub-draggable {
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  outline: 1px dashed var(--ink-soft);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.sub-draggable.sub-dragging {
+  position: relative;
+  z-index: 5;
+  background: var(--paper);
+  box-shadow: 0 4px 10px -3px var(--paper-shadow);
+  cursor: grabbing;
+  transition: none;
+}
+
+/* 아이콘 줄의 각 아이콘 hover 애니메이션(밝아짐/커짐)도 살짝 늦게, 조금 더 천천히 — 마우스가 스칠 때 우르르 반짝이지 않게 */
+.task-controls > button {
+  transition-duration: 0.22s;
+  transition-delay: 0.08s;
+}
+
+@media (hover: none) {
+  .task-controls > button {
+    transition-delay: 0s;
+  }
 }
