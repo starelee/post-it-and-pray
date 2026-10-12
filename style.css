@@ -3156,7 +3156,7 @@
     margin: 0 0 18px;
     font-family: var(--font-ui);
     letter-spacing: var(--ui-letter-spacing);
-    font-size: 19px;
+    font-size: 16px;
     line-height: 1.5;
     white-space: pre-line;
     color: var(--ink-soft);
@@ -4026,4 +4026,35 @@ body.reorder-mode .sticky:not(.reorder-active) {
 
 .reorder-active .divider-oops {
   pointer-events: none;
+}
+
+/* "오늘 할 일로 바꿀까요?" 확인창 안의 항목 목록 */
+.oops-confirm-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-family: var(--font-task);
+  font-size: 15px;
+  line-height: 1.4;
+  color: var(--ink);
+}
+
+.oops-confirm-list li {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+  padding: 4px 0;
+  border-bottom: 1px dashed var(--input-line);
+}
+
+.oops-confirm-list li:last-child {
+  border-bottom: none;
+}
+
+.oops-confirm-list small {
+  flex: 0 0 auto;
+  color: var(--urgent);
+  font-size: 12px;
+  font-family: var(--font-ui);
 }

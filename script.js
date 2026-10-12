@@ -1855,9 +1855,23 @@
     const today = todayStr();
     const overdue = boards.scheduled.filter(t => !t.done && t.dueDate && t.dueDate < today);
     if (!overdue.length) return;
+    // 어떤 항목이 바뀌는지 제목과 원래 마감일(○일 지남)을 보여줌
+    const list = document.createElement('ul');
+    list.className = 'oops-confirm-list';
+    overdue.slice().sort(byDueDate).forEach(t => {
+      const li = document.createElement('li');
+      const name = document.createElement('span');
+      name.textContent = t.text;
+      const when = document.createElement('small');
+      when.textContent = -daysUntilDue(t.dueDate) + '일 지남';
+      li.appendChild(name);
+      li.appendChild(when);
+      list.appendChild(li);
+    });
     const ok = await showConfirm({
       title: '오늘 할 일로 바꿀까요?',
-      message: '아래 지난 항목 ' + overdue.length + '개의 날짜를 오늘로 바꿔요.',
+      message: '마감이 지난 항목 ' + overdue.length + '개의 날짜를 오늘로 바꿔서, 오늘 할 일로 옮겨요.',
+      content: list,
       confirmLabel: '오늘로 변경',
       cancelLabel: '취소',
       anchorEl
