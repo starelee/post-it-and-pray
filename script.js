@@ -3131,7 +3131,7 @@
     btn.type = 'button';
     btn.className = 'subtask-chip complete-all-btn';
     btn.setAttribute('aria-label', '하위 항목 편집');
-    btn.textContent = '[✎ 편집]';
+    btn.innerHTML = '[<span class="chip-ico">✎</span> 편집]'; // 연필 글리프만 작게(글자는 다른 칩과 같은 크기)
     btn.addEventListener('click', () => enterSubReorder(boardId, task.id));
     li.appendChild(btn);
     return li;

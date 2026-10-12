@@ -3984,3 +3984,10 @@ body.reorder-mode .sticky:not(.reorder-active) {
   opacity: 1;
   transition-delay: var(--expand-delay);
 }
+
+/* 칩 안의 연필 글리프는 글꼴 폴백 때문에 글자보다 커 보여서 따로 줄임 */
+.chip-ico {
+  font-size: 0.75em;
+  line-height: 1;
+  vertical-align: 0.05em;
+}
