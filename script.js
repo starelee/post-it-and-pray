@@ -3802,7 +3802,9 @@
   // draft: 등록 전 입력창에서 마우스로 미리 정해둔 긴급/날짜/하위 항목
   // ({ urgent, dueDate, subtasks: string[] }) — 새 항목 입력창의 draft
   // 컨트롤(아래 [data-newtask] 와이어링)에서 넘어옴.
-  function addTask(boardId, text, draft) {
+  const ADD_TO_LABEL = { today: 'gotta do에', waiting: 'waiting에', someday: 'someday에', scheduled: 'pray later에' };
+
+  function addTask(boardId, text, draft, forceToast) {
     const trimmed = text.trim();
     if (!trimmed) return;
     const task = {
@@ -3813,6 +3815,19 @@
       subtasks: (draft && draft.subtasks || []).map((t, i) => ({ id: Date.now() + i, text: t, done: false }))
     };
     lastAddedTaskId[boardId] = task.id;
+    // 등록한 자리가 지금 안 보이면(접힌 구역, 날짜로 다른 보드행, focus 화면) 등록됐다고 알림.
+    // 날짜 없이 입력창이 있는 보드에 그대로 등록한 경우는 눈에 보이니 생략.
+    const destBoard = draft && draft.dueDate ? (boardId === 'waiting' ? 'waiting' : 'scheduled') : boardId;
+    let hidden;
+    if (forceToast) {
+      hidden = true;
+    } else if (destBoard === boardId) {
+      const listEl = getListEl(boardId);
+      hidden = !listEl || listEl.offsetParent === null;
+    } else {
+      hidden = !isMoveDestinationVisible(destBoard, { dueDate: draft.dueDate });
+    }
+    if (hidden) showToast(ADD_TO_LABEL[destBoard] + ' 등록했어요');
     if (boardId === 'waiting' && draft && draft.dueDate) {
       task.replyDate = draft.dueDate;
       boards.waiting.push(task);
@@ -4783,7 +4798,7 @@
     input.addEventListener('keydown', (e) => {
       if (e.key !== 'Enter') return;
       const text = input.value;
-      addTask('today', text);
+      addTask('today', text, null, true);
       // addTask -> render('today')가 renderFocusPanel까지 다시 그려서
       // 이 입력창도 새 노드로 바뀜 — 연달아 등록할 수 있게 그 새 입력창에
       // 다시 포커스를 줌.
