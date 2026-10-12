@@ -1967,7 +1967,9 @@
     // waiting(완료된 하위 항목)과 완료된 gotta do 항목(하위 항목 전체)은
     // 접어두고, (완료/전체)를 눌러야 아래로 펼쳐짐. 다시 누르거나 30초가
     // 지나면 접힘.
-    const togglable = boardId === 'waiting' ? task.subtasks.some(s => s.done) : task.done;
+    // waiting은 하위 항목이 있으면 늘 눌 수 있게 — 그릴 때의 완료 개수로 정하면, 나중에 체크한 뒤에
+    // (다시 그려지기 전까지) (n/m) 알약이 안 눌렸음.
+    const togglable = boardId === 'waiting' ? task.subtasks.length > 0 : task.done;
     const makeToggle = (el) => {
       if (!togglable) return;
       el.classList.add('subtask-progress-toggle');
@@ -2042,6 +2044,8 @@
       const subList = document.createElement('ul');
       subList.className = 'subtask-list';
       task.subtasks.forEach(sub => subList.appendChild(renderSubtaskItem(boardId, task.id, sub)));
+      const completeAll = task.done ? null : makeCompleteAllItem(boardId, task);
+      if (completeAll) subList.appendChild(completeAll);
       // 목록을 grid 래퍼로 감싸서 CSS가 실제 높이만큼 0fr <-> 1fr로 접고
       // 펼 수 있게 함(.subtask-collapse 참고) — max-height 방식은 목표 값이
       // 실제 높이와 안 맞아 애니메이션 타이밍이 어긋났음.
@@ -3024,6 +3028,35 @@
       const input = row.querySelector('.new-subtask-input');
       if (input) input.focus();
     }
+  }
+
+  // 남은 하위 항목을 한 번에 완료(부모는 그대로). 되돌리기는 Ctrl+Z.
+  function completeAllSubtasks(boardId, taskId) {
+    const task = boards[boardId] && boards[boardId].find(t => t.id === taskId);
+    if (!task) return;
+    let changed = false;
+    (task.subtasks || []).forEach(s => { if (!s.done) { s.done = true; changed = true; } });
+    if (!changed) return;
+    saveBoards();
+    render(boardId);
+    if (boardId === 'scheduled') render('today');
+    if (focusState) renderFocusPanel();
+  }
+
+  // 하위 항목 줄 끝의 [✓ 모두 완료] 칩 — 미완료가 2개 이상일 때만.
+  function makeCompleteAllItem(boardId, task) {
+    const pending = (task.subtasks || []).filter(s => !s.done).length;
+    if (pending < 2) return null;
+    const li = document.createElement('li');
+    li.className = 'complete-all-item';
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'subtask-chip complete-all-btn';
+    btn.setAttribute('aria-label', '하위 항목 모두 완료');
+    btn.textContent = '[✓ 모두 완료]';
+    btn.addEventListener('click', () => completeAllSubtasks(boardId, task.id));
+    li.appendChild(btn);
+    return li;
   }
 
   function renderSubtaskItem(boardId, taskId, sub) {
@@ -4935,6 +4968,8 @@
     });
     // 하위 항목이 하나도 없어도 이 [+추가]는 항상 마지막 칩 자리에 보임 —
     // 별도 줄로 뺀 add-row는 없앰.
+    const completeAll = makeCompleteAllItem(boardId, task);
+    if (completeAll) list.appendChild(completeAll);
     list.appendChild(makeFocusAddSubtaskItem(boardId, taskId));
     container.appendChild(list);
   }
