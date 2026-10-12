@@ -3433,6 +3433,10 @@ body.reorder-mode .sticky:not(.reorder-active) {
 .reorder-active .task-item.reorder-item {
   position: relative;
   padding-right: 30px;
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
 }
 
 .reorder-handle {
@@ -3474,7 +3478,7 @@ body.reorder-mode .sticky:not(.reorder-active) {
   border-radius: 6px;
   box-shadow: 0 6px 14px -4px var(--paper-shadow);
   transition: none;
-  pointer-events: none;
+  cursor: grabbing;
 }
 
 .task-item.dragging .reorder-handle {
@@ -3490,11 +3494,13 @@ body.reorder-mode .sticky:not(.reorder-active) {
   border: 1px dashed var(--accent);
   border-radius: 999px;
   color: var(--accent);
-  font-family: var(--font-note);
-  font-size: 12px;
+  font-family: var(--font-ui);
+  font-size: 13px;
   line-height: 1.5;
   vertical-align: middle;
   white-space: nowrap;
+  pointer-events: auto;
+  cursor: pointer;
 }
 
 /* 순서 바꾸는 동안엔 카드가 hover/포커스로 들썩이지 않게 — 끌 때 항목이 같이 움직여서 정확히 놓기 어려움 */
