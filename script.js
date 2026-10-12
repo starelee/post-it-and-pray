@@ -3904,12 +3904,12 @@
     if (!on) return;
     const badge = document.createElement('span');
     badge.className = 'reorder-badge';
-    badge.textContent = '⇅ 순서 바꾸는 중';
+    // 평소엔 "순서 바꾸는 중", 마우스를 올리면 "완료하기"로 바뀜(CSS가 둘을 겹쳐 두고 전환)
+    badge.innerHTML = '<span class="reorder-badge-idle">⇅ 순서 바꾸는 중</span><span class="reorder-badge-done">✓ 완료하기</span>';
     // 누르면 순서 바꾸기 끝(모서리 ✓와 같음). 제목이 접기 버튼인 someday에서 접히지 않게 전파 차단.
     badge.setAttribute('role', 'button');
     badge.tabIndex = 0;
-    badge.setAttribute('aria-label', '순서 바꾸기 끝내기');
-    badge.title = '눌러서 끝내기';
+    badge.setAttribute('aria-label', '순서 바꾸기 완료하기');
     badge.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
@@ -5714,6 +5714,7 @@
     todaySwapTimer = setTimeout(() => {
       todayListEl.hidden = open;
       todayFocusEl.hidden = !open;
+      updateReorderUI(); // focus 화면에서는 순서 바꾸기 모서리 숨김
       // lupin은 원래 상태(waiting)도 --paper-waiting이라는 별도 변수라
       // 그대로 세팅하면 되지만, today의 기본 종이색 변수 이름 자체가
       // --paper라서 "닫힐 때 --paper를 var(--paper)로" 쓰면 자기 자신을
@@ -5830,6 +5831,7 @@
     todayFocusVisible = true;
     todayListEl.hidden = true;
     todayFocusEl.hidden = false;
+    updateReorderUI();
     todayStickyEl.style.setProperty('--paper', 'var(--paper-focus)');
     renderFocusPanel();
   }
