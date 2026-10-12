@@ -3490,8 +3490,8 @@ body.reorder-mode .sticky:not(.reorder-active) {
   border: 1px dashed var(--accent);
   border-radius: 999px;
   color: var(--accent);
-  font-family: var(--font-note);
-  font-size: 12px;
+  font-family: var(--font-ui);
+  font-size: 13px;
   line-height: 1.5;
   vertical-align: middle;
   white-space: nowrap;
