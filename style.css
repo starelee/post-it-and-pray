@@ -3991,3 +3991,10 @@ body.reorder-mode .sticky:not(.reorder-active) {
   line-height: 1;
   vertical-align: 0.05em;
 }
+
+/* 하위 항목 편집 모드에서도 상위 항목 글자는 눌러서 수정할 수 있게 */
+.reorder-active .task-item.sub-reorder-target .task-text,
+.reorder-active .task-item.sub-reorder-target .task-edit-input {
+  pointer-events: auto;
+  cursor: text;
+}

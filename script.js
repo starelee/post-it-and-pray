@@ -3111,7 +3111,7 @@
     const chipLi = taskLi.querySelector('.subtask-collapse > .subtask-list > .complete-all-item');
     if (!chipLi) return;
     const list = chipLi.parentElement;
-    const btn = chipLi.querySelector('button');
+    const btn = chipLi.querySelector('.complete-all-btn');
     const chips = Array.from(list.children).filter(c => c !== chipLi && c.classList.contains('subtask-item') && c.offsetParent !== null && c.offsetWidth > 0);
     const last = chips[chips.length - 1];
     if (!btn || !last) return;
@@ -3127,13 +3127,23 @@
     if (!(task.subtasks || []).length) return null;
     const li = document.createElement('li');
     li.className = 'subtask-item complete-all-item'; // 보이는 방식(hover 때 지연 후 나타남)은 [✓ 모두 완료] 칩과 같음
-    const btn = document.createElement('button');
-    btn.type = 'button';
+    // 다른 하위 항목 칩과 똑같은 구조(li > .subtask-line > span.subtask-chip)로 만들어 글자 높이가 어긋나지 않게 함
+    // (<button>은 안쪽 글자를 자기 상자 가운데에 맞춰서 span 칩과 1px 정도 높이가 달라 보였음).
+    const line = document.createElement('div');
+    line.className = 'subtask-line';
+    const btn = document.createElement('span');
     btn.className = 'subtask-chip complete-all-btn';
+    btn.setAttribute('role', 'button');
+    btn.tabIndex = 0;
     btn.setAttribute('aria-label', '하위 항목 편집');
     btn.innerHTML = '[<span class="chip-ico">✎</span> 편집]'; // 연필 글리프만 작게(글자는 다른 칩과 같은 크기)
-    btn.addEventListener('click', () => enterSubReorder(boardId, task.id));
-    li.appendChild(btn);
+    const open = () => enterSubReorder(boardId, task.id);
+    btn.addEventListener('click', open);
+    btn.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); }
+    });
+    line.appendChild(btn);
+    li.appendChild(line);
     return li;
   }
 
@@ -4087,6 +4097,16 @@
     const li = findTaskLi(reorderSubId);
     if (!li) { exitReorder(); return; }
     li.classList.add('sub-reorder-target');
+    // 모드 중에도 상위 항목 글자를 탭/클릭하면 바로 수정(터치는 한 번에)
+    const parentText = li.querySelector('.task-text');
+    if (parentText && !parentText.dataset.subEditBound) {
+      parentText.dataset.subEditBound = '1';
+      parentText.addEventListener('click', (e) => {
+        if (!reorderSubId) return;
+        e.stopPropagation(); // 터치에서 행 탭이 "아이콘 줄 열기"로 가로채지 않게
+        if (isTouchOnly()) startEditTask(reorderSubBoard, reorderSubId);
+      });
+    }
     const task = boards[reorderSubBoard] && boards[reorderSubBoard].find(t => t.id === reorderSubId);
     const list = li.querySelector('.subtask-list');
     if (!task || !list || list.dataset.subEditing) return;
@@ -4142,7 +4162,7 @@
       line.appendChild(rb);
       line.appendChild(del);
       line.appendChild(mover);
-      fitSubtaskEditInput(input, null);
+      fitSubtaskEditInput(input, null, 2); // 대괄호 `]`가 글자 바로 옆에 붙게 여백을 최소로
     });
 
     // 맨 끝: [+추가](누르면 그 자리에서 입력창) + 모두 완료
@@ -4657,7 +4677,8 @@
   // 실제보다 훨씬 좁게 잡혀 글자가 잘렸음. 원래 칩 너비에서 시작해 글자를
   // 입력하는 만큼 같은 글꼴로 실제 폭을 재서 늘림. chipEl은 아직 DOM에
   // 붙어 있을 때(replaceWith 전에) 넘겨야 너비를 잴 수 있음.
-  function fitSubtaskEditInput(input, chipEl) {
+  function fitSubtaskEditInput(input, chipEl, pad) {
+    const extra = pad == null ? 8 : pad;
     const startW = chipEl && chipEl.offsetWidth ? chipEl.offsetWidth : 0;
     const probe = document.createElement('span');
     probe.style.cssText = 'position:absolute;visibility:hidden;white-space:pre;left:-9999px;top:0;';
@@ -4671,7 +4692,7 @@
       const textW = probe.getBoundingClientRect().width;
       probe.remove();
       input.style.boxSizing = 'content-box';
-      input.style.width = Math.ceil(Math.max(startW, textW + 8)) + 'px';
+      input.style.width = Math.ceil(Math.max(startW, textW + extra)) + 'px';
     };
     input.addEventListener('input', fit);
     // 붙은 직후(replaceWith 다음 틱)에 한 번 맞춤 — 그때부터 폰트가 계산됨
