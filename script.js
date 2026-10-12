@@ -4184,13 +4184,6 @@
     e.preventDefault();
   }, true);
 
-  // 보드 바깥을 누르면 모드 종료
-  document.addEventListener('pointerdown', (e) => {
-    if (!reorderBoard) return;
-    if (e.target.closest && (e.target.closest('.reorder-active') || e.target.closest('.reorder-corner'))) return;
-    exitReorder();
-  }, true);
-
   const lastAddedTaskId = { today: null, waiting: null, someday: null, lupin: null };
 
   // Set right before a render caused by toggleUrgent, so the freshly
