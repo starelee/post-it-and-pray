@@ -3689,3 +3689,19 @@ body.reorder-mode .sticky:not(.reorder-active) {
     transition-delay: 0s;
   }
 }
+
+/* 하위 항목 칩+버튼 한 덩어리 — 칩이 두 줄이 되어도 ✎ ⇄ ×가 마지막 글자 옆에 붙음 */
+.subtask-item > .subtask-line {
+  display: block;
+}
+
+.subtask-line > .subtask-chip {
+  display: inline;
+}
+
+.subtask-line > .subtask-edit-btn,
+.subtask-line > .subtask-reorder-btn,
+.subtask-line > .subtask-delete-btn {
+  display: inline-block;
+  vertical-align: middle;
+}

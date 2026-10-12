@@ -2062,7 +2062,7 @@
     // 열림 상태는 .controls-open 클래스(항목이 다시 그려지면 닫힘).
     row.addEventListener('click', (e) => {
       if (!isTouchOnly()) return;
-      if (e.target.closest('.checkbox, button, input, .subtask-progress')) return;
+      if (e.target.closest('.checkbox, button, input, .subtask-progress, .subtask-chip')) return;
       if (!li.classList.contains('controls-open')) {
         closeOpenControls();
         li.classList.add('controls-open');
@@ -3097,9 +3097,17 @@
     li.className = 'subtask-item' + (sub.done ? ' done' : '');
     li.dataset.id = sub.id;
 
-    const chip = document.createElement('button');
+    // 두 줄 이상이어도 ✎ ⇄ × 버튼이 맨 마지막 글자 바로 옆에 붙도록, 칩은 줄바꿈되는 span으로 두고
+    // 버튼들과 함께 한 덩어리(.subtask-line)의 인라인 흐름에 놓음(button은 통째로 한 덩어리라 글자 옆에 못 붙음).
+    const line = document.createElement('div');
+    line.className = 'subtask-line';
+    const chip = document.createElement('span');
     chip.className = 'subtask-chip';
-    chip.type = 'button';
+    chip.setAttribute('role', 'button');
+    chip.tabIndex = 0;
+    chip.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); chip.click(); }
+    });
     chip.setAttribute('aria-label', sub.done ? '완료 취소' : '완료 표시');
     chip.textContent = '[' + sub.text + ']';
     // 더블클릭으로 이름을 바꾸려는 순간에도 그 앞의 두 번의 click이 먼저
@@ -3139,8 +3147,8 @@
     del.textContent = '×';
     del.addEventListener('click', () => deleteSubtask(boardId, taskId, sub.id));
 
-    li.appendChild(chip);
-    li.appendChild(edit);
+    line.appendChild(chip);
+    line.appendChild(edit);
     // ⇄ — 이 상위 항목의 하위 항목 순서 바꾸기 모드로 들어감(하위 항목이 2개 이상일 때만)
     const parent = boards[boardId] && boards[boardId].find(t => t.id === taskId);
     if (boardId !== 'lupin' && parent && (parent.subtasks || []).length >= 2) {
@@ -3150,9 +3158,10 @@
       reorderBtn.setAttribute('aria-label', '하위 항목 순서 바꾸기');
       reorderBtn.textContent = '⇄';
       reorderBtn.addEventListener('click', () => enterSubReorder(boardId, taskId));
-      li.appendChild(reorderBtn);
+      line.appendChild(reorderBtn);
     }
-    li.appendChild(del);
+    line.appendChild(del);
+    li.appendChild(line);
     return li;
   }
 
