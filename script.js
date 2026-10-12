@@ -3802,7 +3802,9 @@
   // draft: 등록 전 입력창에서 마우스로 미리 정해둔 긴급/날짜/하위 항목
   // ({ urgent, dueDate, subtasks: string[] }) — 새 항목 입력창의 draft
   // 컨트롤(아래 [data-newtask] 와이어링)에서 넘어옴.
-  function addTask(boardId, text, draft) {
+  const ADD_TO_LABEL = { today: 'gotta do에', waiting: 'waiting에', someday: 'someday에', scheduled: 'pray later에' };
+
+  function addTask(boardId, text, draft, forceToast) {
     const trimmed = text.trim();
     if (!trimmed) return;
     const task = {
@@ -3813,6 +3815,19 @@
       subtasks: (draft && draft.subtasks || []).map((t, i) => ({ id: Date.now() + i, text: t, done: false }))
     };
     lastAddedTaskId[boardId] = task.id;
+    // 등록한 자리가 지금 안 보이면(접힌 구역, 날짜로 다른 보드행, focus 화면) 등록됐다고 알림.
+    // 날짜 없이 입력창이 있는 보드에 그대로 등록한 경우는 눈에 보이니 생략.
+    const destBoard = draft && draft.dueDate ? (boardId === 'waiting' ? 'waiting' : 'scheduled') : boardId;
+    let hidden;
+    if (forceToast) {
+      hidden = true;
+    } else if (destBoard === boardId) {
+      const listEl = getListEl(boardId);
+      hidden = !listEl || listEl.offsetParent === null;
+    } else {
+      hidden = !isMoveDestinationVisible(destBoard, { dueDate: draft.dueDate });
+    }
+    if (hidden) showToast(ADD_TO_LABEL[destBoard] + ' 등록했어요');
     if (boardId === 'waiting' && draft && draft.dueDate) {
       task.replyDate = draft.dueDate;
       boards.waiting.push(task);
@@ -4636,6 +4651,43 @@
     input.addEventListener('blur', () => setTimeout(commit, 0));
   }
 
+  function startEditFocusNote(noteEl) {
+    if (!focusState || !focusState.taskBoardId) return;
+    const boardId = focusState.taskBoardId;
+    const task = boards[boardId] && boards[boardId].find(t => t.id === focusState.taskId);
+    if (!task) return;
+    const area = document.createElement('textarea');
+    area.className = 'focus-note-edit';
+    area.value = task.note || '';
+    area.maxLength = NOTE_MAX;
+    noteEl.replaceWith(area);
+    const fit = () => { area.style.height = 'auto'; area.style.height = area.scrollHeight + 'px'; };
+    area.addEventListener('input', fit);
+    area.focus();
+    fit();
+
+    let done = false;
+    const finish = (save) => {
+      if (done) return;
+      done = true;
+      if (save) {
+        const note = area.value.trim().slice(0, NOTE_MAX);
+        if (note) task.note = note;
+        else delete task.note;
+        saveBoards();
+        render(boardId);
+        if (boardId === 'scheduled') render('today');
+      }
+      renderFocusPanel();
+    };
+    area.addEventListener('keydown', (e) => {
+      e.stopPropagation(); // focus 화면 단축키가 입력 중 글자를 가로채지 않게
+      if (e.key === 'Escape') finish(false);
+      else if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) finish(true);
+    });
+    area.addEventListener('blur', () => finish(true));
+  }
+
   // 상위 항목(선택된 할 일) 텍스트 — 본문에 세 단계(pick-duration/running/
   // ended) 모두에서 같은 모양으로 나오므로 공통 팩토리로 뽑음. 클릭하면
   // 원본 task-text와 동일하게 곧장 편집 모드로 들어감.
@@ -4668,17 +4720,16 @@
       const noteEl = document.createElement('p');
       noteEl.className = 'focus-note';
       noteEl.textContent = focusTask.note;
-      if (!isFocusLocked()) {
-        noteEl.classList.add('focus-note-editable');
-        noteEl.tabIndex = 0;
-        noteEl.setAttribute('role', 'button');
-        noteEl.setAttribute('aria-label', '메모 수정');
-        const edit = () => openNoteModal(focusState.taskBoardId, focusState.taskId, { anchorEl: box, startEditing: true });
-        noteEl.addEventListener('click', edit);
-        noteEl.addEventListener('keydown', (e) => {
-          if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); edit(); }
-        });
-      }
+      // 카운트다운/종료 화면에서도 메모는 바로 고칠 수 있게 — 클릭하면 그 자리에서 편집.
+      noteEl.classList.add('focus-note-editable');
+      noteEl.tabIndex = 0;
+      noteEl.setAttribute('role', 'button');
+      noteEl.setAttribute('aria-label', '메모 수정');
+      const edit = () => startEditFocusNote(noteEl);
+      noteEl.addEventListener('click', edit);
+      noteEl.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); edit(); }
+      });
       box.appendChild(noteEl);
     }
     if (showReselect) {
@@ -4783,7 +4834,7 @@
     input.addEventListener('keydown', (e) => {
       if (e.key !== 'Enter') return;
       const text = input.value;
-      addTask('today', text);
+      addTask('today', text, null, true);
       // addTask -> render('today')가 renderFocusPanel까지 다시 그려서
       // 이 입력창도 새 노드로 바뀜 — 연달아 등록할 수 있게 그 새 입력창에
       // 다시 포커스를 줌.

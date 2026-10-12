@@ -2690,6 +2690,24 @@
     overflow-wrap: anywhere;
   }
 
+  .focus-note-edit {
+    display: block;
+    width: 100%;
+    box-sizing: border-box;
+    margin: 0;
+    font-family: var(--font-note);
+    font-size: 13px;
+    line-height: 1.4;
+    color: var(--ink);
+    background: transparent;
+    border: none;
+    border-bottom: 1px dashed var(--accent);
+    outline: none;
+    padding: 0 0 2px;
+    resize: none;
+    overflow: hidden;
+  }
+
   .focus-note-editable {
     cursor: pointer;
   }
