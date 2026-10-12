@@ -2347,7 +2347,7 @@
 
     addSubRow.appendChild(plus);
     addSubRow.appendChild(subInput);
-    li.appendChild(addSubRow);
+    li.insertBefore(addSubRow, controls); // 하위 항목 입력줄은 아이콘 줄 위(하위 항목 바로 아래)에 둠
 
     return li;
   }
