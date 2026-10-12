@@ -3496,3 +3496,10 @@ body.reorder-mode .sticky:not(.reorder-active) {
   vertical-align: middle;
   white-space: nowrap;
 }
+
+/* 순서 바꾸는 동안엔 카드가 hover/포커스로 들썩이지 않게 — 끌 때 항목이 같이 움직여서 정확히 놓기 어려움 */
+.sticky.reorder-active,
+.sticky.reorder-active:hover,
+.sticky.reorder-active:focus-within {
+  transform: rotate(calc(var(--rot, -1.4deg) * 0.4));
+}
