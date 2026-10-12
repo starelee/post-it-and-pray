@@ -1850,6 +1850,32 @@
     layoutStrikeLines(listEl);
   }
 
+  // "oops, still here"(지난 마감) 아래 미완료 항목들의 마감일을 오늘로 — 확인창을 거침.
+  async function moveOopsToToday(anchorEl) {
+    const today = todayStr();
+    const overdue = boards.scheduled.filter(t => !t.done && t.dueDate && t.dueDate < today);
+    if (!overdue.length) return;
+    const ok = await showConfirm({
+      title: '오늘 할 일로 바꿀까요?',
+      message: '아래 지난 항목 ' + overdue.length + '개의 날짜를 오늘로 바꿔요.',
+      confirmLabel: '오늘로 변경',
+      cancelLabel: '취소',
+      anchorEl
+    });
+    if (!ok) return;
+    // 확인창이 떠 있던 사이 상태가 바뀌었을 수 있어 다시 골라 반영
+    let changed = 0;
+    boards.scheduled.forEach(t => {
+      if (!t.done && t.dueDate && t.dueDate < today) { t.dueDate = today; changed++; }
+    });
+    if (!changed) return;
+    saveBoards();
+    render('today');
+    render('scheduled');
+    if (archivePanelEl.classList.contains('open')) renderUpcoming();
+    showToast('오늘 할 일로 바꿨어요');
+  }
+
   function renderToday() {
     const listEl = getListEl('today');
     if (!listEl) return;
@@ -1893,6 +1919,15 @@
       const divider = document.createElement('li');
       divider.className = 'divider divider-oops';
       divider.textContent = 'oops, still here';
+      // 누르면 아래 지난 항목들을 한꺼번에 오늘로 옮길지 물어봄
+      divider.setAttribute('role', 'button');
+      divider.tabIndex = 0;
+      divider.title = '눌러서 아래 항목을 오늘 할 일로 바꾸기';
+      const askMoveOopsToToday = () => moveOopsToToday(divider);
+      divider.addEventListener('click', askMoveOopsToToday);
+      divider.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); askMoveOopsToToday(); }
+      });
       listEl.appendChild(divider);
       oops.forEach(t => listEl.appendChild(renderItem('scheduled', t, { showFocusBtn: true })));
     }
