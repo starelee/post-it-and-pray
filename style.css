@@ -3380,7 +3380,9 @@
 
 .reorder-corner[aria-pressed="true"] .reorder-icon {
   opacity: 1;
-  font-size: 13px;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--accent);
 }
 
 /* 모서리와 맨 아래 입력줄이 겹치지 않게 */
@@ -3405,7 +3407,6 @@ body.reorder-mode .sticky:not(.reorder-active) {
 .reorder-active .task-item .task-row,
 .reorder-active .task-item .subtask-collapse,
 .reorder-active .task-item .date-picker-row,
-.reorder-active .add-row,
 .reorder-active .sticky-title,
 .reorder-active .archive-flag,
 .reorder-active .search-flag,
@@ -3418,7 +3419,6 @@ body.reorder-mode .sticky:not(.reorder-active) {
   display: none;
 }
 
-.reorder-active .add-row,
 .reorder-active .sticky-title-toggle,
 .reorder-active .reply-later,
 .reorder-active [data-tasklist="scheduled"] {
@@ -3456,12 +3456,12 @@ body.reorder-mode .sticky:not(.reorder-active) {
 }
 
 .reorder-handle:hover,
-.reorder-handle:focus-visible {
+.reorder-handle:focus {
   opacity: 1;
   outline: none;
 }
 
-.task-item.reorder-item:has(.reorder-handle:focus-visible) {
+.task-item.reorder-item:has(.reorder-handle:focus) {
   outline: 1.5px dashed var(--accent);
   outline-offset: 2px;
   border-radius: 6px;
@@ -3480,4 +3480,26 @@ body.reorder-mode .sticky:not(.reorder-active) {
 .task-item.dragging .reorder-handle {
   cursor: grabbing;
   pointer-events: auto;
+}
+
+/* 제목 옆 "순서 바꾸는 중" 표시 */
+.reorder-badge {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 1px 8px;
+  border: 1px dashed var(--accent);
+  border-radius: 999px;
+  color: var(--accent);
+  font-family: var(--font-note);
+  font-size: 12px;
+  line-height: 1.5;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+/* 순서 바꾸는 동안엔 카드가 hover/포커스로 들썩이지 않게 — 끌 때 항목이 같이 움직여서 정확히 놓기 어려움 */
+.sticky.reorder-active,
+.sticky.reorder-active:hover,
+.sticky.reorder-active:focus-within {
+  transform: rotate(calc(var(--rot, -1.4deg) * 0.4));
 }
