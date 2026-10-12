@@ -1945,6 +1945,9 @@
       moveHighlight = null;
     }
     li.dataset.id = task.id;
+    li.addEventListener('pointerenter', () => placeEditChip(li));
+    li.addEventListener('focusin', () => placeEditChip(li));
+    li.addEventListener('touchstart', () => placeEditChip(li), { passive: true });
 
     const row = document.createElement('div');
     row.className = 'task-row';
@@ -3090,6 +3093,23 @@
     btn.addEventListener('click', () => completeAllSubtasks(boardId, task.id));
     li.appendChild(btn);
     return li;
+  }
+
+  // [✎ 편집] 칩이 마지막 하위 항목 줄의 남는 자리에 들어가면 그 줄 오른쪽에 붙이고(폭으로 나타남),
+  // 안 들어가면 다음 줄에 놓음(높이로 나타남). 마우스를 올리거나 포커스할 때 그 항목의 칩을 재서 정함.
+  function placeEditChip(taskLi) {
+    const chipLi = taskLi.querySelector('.subtask-collapse > .subtask-list > .complete-all-item');
+    if (!chipLi) return;
+    const list = chipLi.parentElement;
+    const btn = chipLi.querySelector('button');
+    const chips = Array.from(list.children).filter(c => c !== chipLi && c.classList.contains('subtask-item') && c.offsetParent !== null && c.offsetWidth > 0);
+    const last = chips[chips.length - 1];
+    if (!btn || !last) return;
+    const cs = getComputedStyle(list);
+    const listRight = list.getBoundingClientRect().right - parseFloat(cs.paddingRight || 0);
+    const need = btn.offsetWidth + 6; // 칩 폭 + 칩 사이 간격
+    const fits = last.getBoundingClientRect().right + need <= listRight;
+    chipLi.classList.toggle('edit-inline', fits);
   }
 
   // 하위 항목 줄 끝의 [✎ 편집] 칩 — 눌러서 하위 항목 편집 모드로(수정/삭제/순서/모두 완료를 한 번에).

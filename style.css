@@ -3966,3 +3966,21 @@ body.reorder-mode .sticky:not(.reorder-active) {
   margin-top: 0;
   opacity: 1;
 }
+
+/* [✎ 편집] 칩이 마지막 하위 항목 줄에 들어갈 자리가 있으면(JS가 .edit-inline을 붙임) 그 줄 오른쪽에 폭으로 나타남 */
+.subtask-collapse > .subtask-list > .subtask-item.complete-all-item.edit-inline {
+  flex: 0 0 auto;
+  max-height: none;
+  max-width: 0;
+  margin-top: 5px;
+  margin-right: 0;
+  opacity: 0;
+  transition: max-width var(--collapse-dur) var(--collapse-ease) var(--collapse-delay),
+              opacity var(--collapse-dur) var(--collapse-ease) var(--collapse-delay);
+}
+
+.task-item:is(:hover, :focus-within, .controls-open) .subtask-collapse > .subtask-list > .subtask-item.complete-all-item.edit-inline {
+  max-width: 160px;
+  opacity: 1;
+  transition-delay: var(--expand-delay);
+}
