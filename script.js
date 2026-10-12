@@ -862,6 +862,8 @@
   // 순서 바꾸기 모드 — 지금 모드에 들어가 있는 보드 id(today/waiting/someday) 또는 null.
   // updateCounter가 모든 렌더 끝에서 불리므로, 거기서 모서리 버튼/손잡이를 다시 맞춤.
   let reorderBoard = null;
+  let reorderSubId = null;    // 하위 항목 순서 바꾸기 모드일 때: 대상 상위 항목 id(아니면 null)
+  let reorderSubBoard = null; // 그 항목이 들어 있는 보드(scheduled일 수 있음)
   const REORDER_BOARDS = ['today', 'waiting', 'someday'];
 
   function updateCounter() {
@@ -3139,6 +3141,17 @@
 
     li.appendChild(chip);
     li.appendChild(edit);
+    // ⇄ — 이 상위 항목의 하위 항목 순서 바꾸기 모드로 들어감(하위 항목이 2개 이상일 때만)
+    const parent = boards[boardId] && boards[boardId].find(t => t.id === taskId);
+    if (boardId !== 'lupin' && parent && (parent.subtasks || []).length >= 2) {
+      const reorderBtn = document.createElement('button');
+      reorderBtn.className = 'subtask-reorder-btn';
+      reorderBtn.type = 'button';
+      reorderBtn.setAttribute('aria-label', '하위 항목 순서 바꾸기');
+      reorderBtn.textContent = '⇄';
+      reorderBtn.addEventListener('click', () => enterSubReorder(boardId, taskId));
+      li.appendChild(reorderBtn);
+    }
     li.appendChild(del);
     return li;
   }
@@ -3933,7 +3946,10 @@
       corner.setAttribute('aria-pressed', active ? 'true' : 'false');
       corner.querySelector('.reorder-icon').textContent = active ? '✓' : '⇅';
     });
-    if (reorderBoard) decorateReorderList();
+    if (reorderBoard) {
+      if (reorderSubId != null) decorateSubReorder();
+      else decorateReorderList();
+    }
   }
 
   function decorateReorderList() {
@@ -3960,7 +3976,7 @@
     return sticky.querySelector('.sticky-title-toggle-spaced');
   }
 
-  function setReorderBadge(boardId, on) {
+  function setReorderBadge(boardId, on, text) {
     const title = reorderTitleEl(boardId);
     if (!title) return;
     const old = title.querySelector('.reorder-badge');
@@ -3969,7 +3985,7 @@
     const badge = document.createElement('span');
     badge.className = 'reorder-badge';
     // 평소엔 "순서 바꾸는 중", 마우스를 올리면 "완료하기"로 바뀜(CSS가 둘을 겹쳐 두고 전환)
-    badge.innerHTML = '<span class="reorder-badge-idle">⇅ 순서 바꾸는 중</span><span class="reorder-badge-done">✓ 완료하기</span>';
+    badge.innerHTML = '<span class="reorder-badge-idle">' + (text || '⇅ 순서 바꾸는 중') + '</span><span class="reorder-badge-done">✓ 완료하기</span>';
     // 누르면 순서 바꾸기 끝(모서리 ✓와 같음). 제목이 접기 버튼인 someday에서 접히지 않게 전파 차단.
     badge.setAttribute('role', 'button');
     badge.tabIndex = 0;
@@ -4003,12 +4019,12 @@
     window.addEventListener(type, () => { if (reorderBoard) touchReorderIdle(); }, { capture: true, passive: true });
   });
 
-  function enterReorder(boardId) {
-    if (reorderBoard) exitReorder();
+  // 순서 바꾸기 모드 공통 시작(메인 목록 / 하위 항목 둘 다) — 그 보드만 남기고 나머지는 흐리게.
+  function startReorderState(boardId, badgeText) {
     reorderBoard = boardId;
     touchReorderIdle();
     const sticky = getReorderSticky(boardId);
-    setReorderBadge(boardId, true);
+    setReorderBadge(boardId, true, badgeText);
     document.body.classList.add('reorder-mode');
     sticky.classList.add('reorder-active');
     document.querySelectorAll('.header, .sticky:not(.reorder-active)').forEach(el => el.setAttribute('inert', ''));
@@ -4018,8 +4034,125 @@
     closeOpenControls();
     updateReorderUI();
     haptic(HAPTIC_TAP);
+    return sticky;
+  }
+
+  function enterReorder(boardId) {
+    if (reorderBoard) exitReorder();
+    reorderSubId = null;
+    const sticky = startReorderState(boardId, '⇅ 순서 바꾸는 중');
     const first = sticky.querySelector('.reorder-handle');
     if (first) first.focus({ preventScroll: true });
+  }
+
+  // 하위 항목 순서 바꾸기 — 그 상위 항목의 하위 항목 칩만 끌 수 있게 함.
+  function enterSubReorder(taskBoardId, taskId) {
+    const li = findTaskLi(taskId);
+    const sticky = li && li.closest('.sticky');
+    const stickyBoard = sticky && sticky.dataset.board;
+    if (!sticky || !REORDER_BOARDS.includes(stickyBoard)) return;
+    if (reorderBoard) exitReorder();
+    reorderSubId = taskId;
+    reorderSubBoard = taskBoardId;
+    sticky.classList.add('reorder-sub');
+    startReorderState(stickyBoard, '⇄ 하위 항목 순서 바꾸는 중');
+  }
+
+  function decorateSubReorder() {
+    const li = findTaskLi(reorderSubId);
+    if (!li) { exitReorder(); return; }
+    li.classList.add('sub-reorder-target');
+    li.querySelectorAll('.subtask-list > li.subtask-item').forEach(sli => {
+      sli.classList.add('sub-draggable');
+      if (sli.dataset.subBound) return;
+      sli.dataset.subBound = '1';
+      sli.addEventListener('pointerdown', (e) => startSubDrag(e, sli));
+    });
+  }
+
+  // 칩은 가로로 줄바꿈되며 흐르므로 포인터가 올라간 다른 칩 자리로 옮김(2차원), 밀려난 칩은 짧게 미끄러짐.
+  function startSubDrag(e, sli) {
+    if (!reorderSubId || (e.button != null && e.button !== 0)) return;
+    e.preventDefault();
+    try { sli.setPointerCapture(e.pointerId); } catch (err) { /* 이미 끝난 포인터 */ }
+    const list = sli.parentElement;
+    const r0 = sli.getBoundingClientRect();
+    const gx = e.clientX - r0.left, gy = e.clientY - r0.top;
+    let lx = e.clientX, ly = e.clientY, tx = 0, ty = 0, raf = 0, prevX = null, prevY = null, prevScroll = null;
+    sli.classList.add('sub-dragging');
+    reorderDragging = true;
+    const chips = () => Array.from(list.children).filter(c => c.classList.contains('sub-draggable'));
+    const place = () => {
+      const r = sli.getBoundingClientRect();
+      tx = lx - gx - (r.left - tx);
+      ty = ly - gy - (r.top - ty);
+      sli.style.transform = 'translate(' + tx + 'px,' + ty + 'px)';
+    };
+    const swap = () => {
+      const all = chips();
+      const others = all.filter(c => c !== sli);
+      const target = others.find(c => {
+        const r = c.getBoundingClientRect();
+        return lx >= r.left && lx <= r.right && ly >= r.top && ly <= r.bottom;
+      });
+      if (!target) return;
+      const before = new Map(others.map(c => [c, c.getBoundingClientRect()]));
+      if (all.indexOf(target) < all.indexOf(sli)) list.insertBefore(sli, target);
+      else list.insertBefore(sli, target.nextSibling);
+      place();
+      others.forEach(c => {
+        const a = before.get(c), b = c.getBoundingClientRect();
+        const dx = a.left - b.left, dy = a.top - b.top;
+        if (!dx && !dy) return;
+        c.style.transition = 'none';
+        c.style.transform = 'translate(' + dx + 'px,' + dy + 'px)';
+        requestAnimationFrame(() => {
+          c.style.transition = 'transform 0.14s ease-out';
+          c.style.transform = '';
+          setTimeout(() => { c.style.transition = ''; }, 180);
+        });
+      });
+    };
+    const tick = () => {
+      const edge = 70;
+      if (ly < edge) window.scrollBy(0, -Math.ceil((edge - ly) / 5));
+      else if (ly > window.innerHeight - edge) window.scrollBy(0, Math.ceil((ly - (window.innerHeight - edge)) / 5));
+      if (lx !== prevX || ly !== prevY || window.scrollY !== prevScroll) {
+        prevX = lx; prevY = ly; prevScroll = window.scrollY;
+        place();
+        swap();
+      }
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    const onMove = (ev) => { lx = ev.clientX; ly = ev.clientY; };
+    const finish = () => {
+      cancelAnimationFrame(raf);
+      reorderDragging = false;
+      sli.removeEventListener('pointermove', onMove);
+      sli.removeEventListener('pointerup', finish);
+      sli.removeEventListener('pointercancel', finish);
+      sli.classList.remove('sub-dragging');
+      sli.style.transform = '';
+      commitSubReorder(chips().map(c => Number(c.dataset.id)));
+    };
+    sli.addEventListener('pointermove', onMove);
+    sli.addEventListener('pointerup', finish);
+    sli.addEventListener('pointercancel', finish);
+  }
+
+  function commitSubReorder(ids) {
+    const task = boards[reorderSubBoard] && boards[reorderSubBoard].find(t => t.id === reorderSubId);
+    if (!task) return;
+    const byId = new Map(task.subtasks.map(sub => [sub.id, sub]));
+    const next = ids.map(id => byId.get(id)).filter(Boolean);
+    if (next.length !== task.subtasks.length) return;
+    if (next.every((sub, i) => sub === task.subtasks[i])) return;
+    task.subtasks = next;
+    saveBoards();
+    render(reorderSubBoard);
+    if (reorderSubBoard === 'scheduled') render('today');
+    haptic(HAPTIC_TAP);
   }
 
   function exitReorder() {
@@ -4027,6 +4160,8 @@
     const sticky = getReorderSticky(reorderBoard);
     setReorderBadge(reorderBoard, false);
     reorderBoard = null;
+    reorderSubId = null;
+    reorderSubBoard = null;
     clearTimeout(reorderIdleTimer);
     reorderIdleTimer = null;
     document.body.classList.remove('reorder-mode');
@@ -4034,7 +4169,8 @@
       if (el.matches('.header, .sticky')) el.removeAttribute('inert');
     });
     if (sticky) {
-      sticky.classList.remove('reorder-active');
+      sticky.classList.remove('reorder-active', 'reorder-sub');
+      sticky.querySelectorAll('.sub-reorder-target, .sub-draggable').forEach(el => el.classList.remove('sub-reorder-target', 'sub-draggable'));
       sticky.querySelectorAll('.reorder-handle').forEach(el => el.remove());
       sticky.querySelectorAll('.reorder-item').forEach(el => el.classList.remove('reorder-item'));
     }
