@@ -859,7 +859,13 @@
   if (trashToggleBtn) trashToggleBtn.addEventListener('click', () => setTrashViewOpen(true));
   if (trashToggleBackBtn) trashToggleBackBtn.addEventListener('click', () => setTrashViewOpen(false));
 
+  // 순서 바꾸기 모드 — 지금 모드에 들어가 있는 보드 id(today/waiting/someday) 또는 null.
+  // updateCounter가 모든 렌더 끝에서 불리므로, 거기서 모서리 버튼/손잡이를 다시 맞춤.
+  let reorderBoard = null;
+  const REORDER_BOARDS = ['today', 'waiting', 'someday'];
+
   function updateCounter() {
+    updateReorderUI();
     const today = todayStr();
     const tasks = boards.today.concat(
       boards.scheduled.filter(t => t.dueDate <= today)
@@ -926,6 +932,7 @@
       if (typeof t.replyDate === 'string' && t.replyDate) out.replyDate = t.replyDate;
       if (typeof t.note === 'string' && t.note.trim()) out.note = t.note.slice(0, NOTE_MAX);
       if (typeof t.from === 'string' && t.from) out.from = t.from;
+      if (typeof t.order === 'number' && isFinite(t.order)) out.order = t.order;
       if (typeof t.deletedAt === 'string' && t.deletedAt) out.deletedAt = t.deletedAt;
       if (typeof t.updatedAt === 'number' && isFinite(t.updatedAt)) out.updatedAt = t.updatedAt;
       if (out.done) {
@@ -1596,6 +1603,19 @@
     updateCounter();
   }
 
+  // 수동 순서(task.order)대로 정렬 — order가 없는 항목은 원래 순서를 지킨 채 맨 뒤로 감.
+  // key: 항목에서 order를 가진 task를 꺼내는 함수(생략하면 항목 자체).
+  function sortByOrder(list, key) {
+    const orderOf = (x) => {
+      const t = key ? key(x) : x;
+      return typeof t.order === 'number' ? t.order : Infinity;
+    };
+    return list
+      .map((x, i) => ({ x, i, o: orderOf(x) }))
+      .sort((a, b) => (a.o === b.o ? a.i - b.i : (a.o < b.o ? -1 : 1)))
+      .map(e => e.x);
+  }
+
   function byDueDate(a, b) {
     return (a.dueDate || '').localeCompare(b.dueDate || '');
   }
@@ -1688,7 +1708,7 @@
     listEl.innerHTML = '';
 
     const tasks = boards[boardId];
-    const active = tasks.filter(t => !t.done);
+    const active = sortByOrder(tasks.filter(t => !t.done));
     const done = tasks.filter(t => t.done);
 
     if (active.length === 0 && done.length === 0) {
@@ -1723,7 +1743,7 @@
     const today = todayStr();
     const isLater = t => !!t.replyDate && t.replyDate > today;
     const tasks = boards.waiting;
-    const normal = tasks.filter(t => !isLater(t));
+    const normal = sortByOrder(tasks.filter(t => !isLater(t)));
     const later = tasks.filter(isLater).sort((a, b) => a.replyDate.localeCompare(b.replyDate));
 
     if (normal.length === 0) {
@@ -1807,8 +1827,14 @@
       listEl.appendChild(hint);
     }
 
-    active.forEach(t => listEl.appendChild(renderItem('today', t, { showFocusBtn: true })));
-    dueToday.forEach(t => listEl.appendChild(renderItem('scheduled', t, { showFocusBtn: true })));
+    // 직접 등록한 항목과 오늘 마감 항목을 한 줄로 합쳐 수동 순서(order)대로 — 순서를
+    // 정한 적 없으면 예전처럼 일반 항목 → 오늘 마감 순.
+    const activeEntries = sortByOrder(
+      active.map(t => ({ boardId: 'today', task: t }))
+        .concat(dueToday.map(t => ({ boardId: 'scheduled', task: t }))),
+      e => e.task
+    );
+    activeEntries.forEach(e => listEl.appendChild(renderItem(e.boardId, e.task, { showFocusBtn: true })));
 
     if (done.length > 0 || doneToday.length > 0) {
       const divider = document.createElement('li');
@@ -1964,7 +1990,8 @@
 
     const dateKey = dateFieldOf(boardId);
     let badge = null;
-    if (task[dateKey]) {
+    // gotta do 카드 안의 오늘 마감 항목은 "오늘"이 뻔하니 라벨만 숨김(날짜 값은 그대로 — 📅로 수정 가능)
+    if (task[dateKey] && !(boardId === 'scheduled' && task.dueDate === todayStr())) {
       badge = document.createElement('span');
       badge.className = 'due-badge';
       badge.textContent = formatDueDateRelative(task[dateKey]);
@@ -3690,6 +3717,7 @@
     delete task.dueDate;
     delete task.replyDate; // 회신 예정일은 waiting에 있을 때만 의미 있음
     delete task.from;
+    delete task.order; // 수동 순서는 그 보드 안에서만 의미 있음
     if (toBoardId === 'waiting') {
       // waiting has no done concept — defend against a done task landing
       // there via a hover move-button from another board.
@@ -3784,6 +3812,222 @@
   // they target the task the user just typed, not merely whatever happens
   // to sit last in the array (which could be an unrelated older task if
   // no task has been added yet in this session).
+
+  // ───────── 순서 바꾸기 모드 ─────────
+  // 카드 오른쪽 아래 접힌 모서리를 누르면 그 보드만 남기고 나머지는 흐려진 채, 항목 오른쪽의
+  // ⋮⋮ 손잡이를 끌어(키보드는 ↑/↓) 순서를 바꿈. 순서는 항목마다 task.order(0,1,2…)로 저장.
+  function getReorderSticky(boardId) {
+    return document.querySelector('.sticky[data-board="' + boardId + '"]');
+  }
+
+  // 끌 수 있는 항목 — 목록 맨 위부터 첫 구분선(완료/oops 구역) 전까지.
+  function reorderableLis(boardId) {
+    const listEl = getListEl(boardId);
+    const out = [];
+    if (!listEl) return out;
+    for (const el of listEl.children) {
+      if (el.classList.contains('divider')) break;
+      if (el.classList.contains('task-item')) out.push(el);
+    }
+    return out;
+  }
+
+  function reorderTaskById(boardId, id) {
+    const found = boards[boardId].find(t => t.id === id);
+    if (found) return found;
+    return boardId === 'today' ? boards.scheduled.find(t => t.id === id) : null;
+  }
+
+  function updateReorderUI() {
+    REORDER_BOARDS.forEach(boardId => {
+      const sticky = getReorderSticky(boardId);
+      if (!sticky) return;
+      let corner = sticky.querySelector(':scope > .reorder-corner');
+      if (!corner) {
+        corner = document.createElement('button');
+        corner.type = 'button';
+        corner.className = 'reorder-corner';
+        corner.dataset.reorderFor = boardId;
+        corner.innerHTML = '<span class="reorder-icon" aria-hidden="true"></span>';
+        corner.addEventListener('click', () => {
+          if (reorderBoard === boardId) exitReorder();
+          else enterReorder(boardId);
+        });
+        sticky.appendChild(corner);
+      }
+      const listEl = getListEl(boardId);
+      let lupin = false;
+      try { lupin = boardId === 'waiting' && isLupinOpen(); } catch (e) { /* 초기화 중 */ }
+      const visible = !!listEl && listEl.offsetParent !== null && !lupin;
+      if (reorderBoard === boardId && !visible) exitReorder();
+      const usable = visible && reorderableLis(boardId).length >= 2;
+      const active = reorderBoard === boardId;
+      corner.hidden = !usable && !active;
+      sticky.classList.toggle('has-reorder', !corner.hidden);
+      corner.setAttribute('aria-label', active ? '순서 바꾸기 끝내기' : '순서 바꾸기');
+      corner.setAttribute('aria-pressed', active ? 'true' : 'false');
+      corner.querySelector('.reorder-icon').textContent = active ? '✓' : '⇅';
+    });
+    if (reorderBoard) decorateReorderList();
+  }
+
+  function decorateReorderList() {
+    reorderableLis(reorderBoard).forEach(li => {
+      li.classList.add('reorder-item');
+      if (li.querySelector(':scope > .reorder-handle')) return;
+      const handle = document.createElement('button');
+      handle.type = 'button';
+      handle.className = 'reorder-handle';
+      handle.setAttribute('aria-label', '순서 바꾸기 (↑ ↓ 키로 이동)');
+      handle.textContent = '⋮⋮';
+      handle.addEventListener('pointerdown', (e) => startReorderDrag(e, li, handle));
+      li.appendChild(handle);
+    });
+  }
+
+  function enterReorder(boardId) {
+    if (reorderBoard) exitReorder();
+    reorderBoard = boardId;
+    const sticky = getReorderSticky(boardId);
+    document.body.classList.add('reorder-mode');
+    sticky.classList.add('reorder-active');
+    document.querySelectorAll('.header, .sticky:not(.reorder-active)').forEach(el => el.setAttribute('inert', ''));
+    if (document.activeElement && document.activeElement.blur && !sticky.contains(document.activeElement)) {
+      document.activeElement.blur();
+    }
+    closeOpenControls();
+    updateReorderUI();
+    haptic(HAPTIC_TAP);
+    const first = sticky.querySelector('.reorder-handle');
+    if (first) first.focus({ preventScroll: true });
+  }
+
+  function exitReorder() {
+    if (!reorderBoard) return;
+    const sticky = getReorderSticky(reorderBoard);
+    reorderBoard = null;
+    document.body.classList.remove('reorder-mode');
+    document.querySelectorAll('[inert]').forEach(el => {
+      if (el.matches('.header, .sticky')) el.removeAttribute('inert');
+    });
+    if (sticky) {
+      sticky.classList.remove('reorder-active');
+      sticky.querySelectorAll('.reorder-handle').forEach(el => el.remove());
+      sticky.querySelectorAll('.reorder-item').forEach(el => el.classList.remove('reorder-item'));
+    }
+    updateReorderUI();
+    haptic(HAPTIC_TAP);
+  }
+
+  // 화면의 현재 항목 순서(DOM)를 task.order로 저장하고 다시 그림. 바뀐 게 없으면 그대로 둠.
+  function commitReorder() {
+    const boardId = reorderBoard;
+    if (!boardId) return;
+    const ids = reorderableLis(boardId).map(li => Number(li.dataset.id));
+    let changed = false;
+    ids.forEach((id, i) => {
+      const t = reorderTaskById(boardId, id);
+      if (t && t.order !== i) { t.order = i; changed = true; }
+    });
+    if (!changed) return;
+    saveBoards();
+    render(boardId);
+    haptic(HAPTIC_TAP);
+  }
+
+  function startReorderDrag(e, li, handle) {
+    if (e.button != null && e.button !== 0) return;
+    e.preventDefault();
+    handle.setPointerCapture(e.pointerId);
+    const grab = e.clientY - li.getBoundingClientRect().top;
+    let lastY = e.clientY;
+    let raf = 0;
+    li.classList.add('dragging');
+
+    const place = () => {
+      li.style.transform = '';
+      const natural = li.getBoundingClientRect().top;
+      li.style.transform = 'translateY(' + (lastY - grab - natural) + 'px)';
+    };
+    // 끌고 있는 항목의 중심이 이웃의 중심을 넘으면 그 자리로 DOM을 옮김
+    const swap = () => {
+      const items = reorderableLis(reorderBoard);
+      const r = li.getBoundingClientRect();
+      const mid = r.top + r.height / 2;
+      const myIdx = items.indexOf(li);
+      for (let i = 0; i < items.length; i++) {
+        const other = items[i];
+        if (other === li) continue;
+        const o = other.getBoundingClientRect();
+        const omid = o.top + o.height / 2;
+        if (i < myIdx && mid < omid) { li.parentNode.insertBefore(li, other); return; }
+        if (i > myIdx && mid > omid) { li.parentNode.insertBefore(li, other.nextSibling); return; }
+      }
+    };
+    const tick = () => {
+      // 화면 위/아래 가장자리 근처에서 끌면 페이지가 따라 스크롤됨
+      const edge = 70;
+      if (lastY < edge) window.scrollBy(0, -Math.ceil((edge - lastY) / 5));
+      else if (lastY > window.innerHeight - edge) window.scrollBy(0, Math.ceil((lastY - (window.innerHeight - edge)) / 5));
+      place(); swap(); place();
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+
+    const onMove = (ev) => { lastY = ev.clientY; };
+    const finish = () => {
+      cancelAnimationFrame(raf);
+      handle.removeEventListener('pointermove', onMove);
+      handle.removeEventListener('pointerup', finish);
+      handle.removeEventListener('pointercancel', finish);
+      li.classList.remove('dragging');
+      li.style.transform = '';
+      commitReorder();
+    };
+    handle.addEventListener('pointermove', onMove);
+    handle.addEventListener('pointerup', finish);
+    handle.addEventListener('pointercancel', finish);
+  }
+
+  // 모드 중에는 ↑/↓(손잡이에 포커스가 있을 때)와 Esc, Tab, Ctrl/Cmd 조합(되돌리기 등)만 통과 —
+  // 나머지 단축키가 순서 바꾸기 도중에 발동하지 않게 가로챔.
+  window.addEventListener('keydown', (e) => {
+    if (!reorderBoard) return;
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      exitReorder();
+      return;
+    }
+    if (e.ctrlKey || e.metaKey || e.altKey || e.key === 'Tab') return;
+    const active = document.activeElement;
+    const handle = active && active.closest ? active.closest('.reorder-handle') : null;
+    if (handle && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      const li = handle.closest('li');
+      const id = li.dataset.id;
+      const items = reorderableLis(reorderBoard);
+      const target = items[items.indexOf(li) + (e.key === 'ArrowUp' ? -1 : 1)];
+      if (!target) return;
+      li.parentNode.insertBefore(li, e.key === 'ArrowUp' ? target : target.nextSibling);
+      commitReorder();
+      const nh = getListEl(reorderBoard).querySelector('li[data-id="' + id + '"] .reorder-handle');
+      if (nh) nh.focus({ preventScroll: true });
+      return;
+    }
+    if (active && active.closest && active.closest('.reorder-corner') && (e.key === 'Enter' || e.key === ' ')) return;
+    e.stopImmediatePropagation();
+    e.preventDefault();
+  }, true);
+
+  // 보드 바깥을 누르면 모드 종료
+  document.addEventListener('pointerdown', (e) => {
+    if (!reorderBoard) return;
+    if (e.target.closest && (e.target.closest('.reorder-active') || e.target.closest('.reorder-corner'))) return;
+    exitReorder();
+  }, true);
+
   const lastAddedTaskId = { today: null, waiting: null, someday: null, lupin: null };
 
   // Set right before a render caused by toggleUrgent, so the freshly
@@ -4498,16 +4742,16 @@
     const today = todayStr();
     const active = boards.today
       .filter(t => !t.done)
-      .map(t => ({ boardId: 'today', id: t.id, text: t.text }));
+      .map(t => ({ boardId: 'today', id: t.id, text: t.text, order: t.order }));
     const dueToday = boards.scheduled
       .filter(t => !t.done && t.dueDate === today)
       .sort(byDueDate)
-      .map(t => ({ boardId: 'scheduled', id: t.id, text: t.text }));
+      .map(t => ({ boardId: 'scheduled', id: t.id, text: t.text, order: t.order }));
     const oops = boards.scheduled
       .filter(t => !t.done && t.dueDate < today)
       .sort(byDueDate)
       .map(t => ({ boardId: 'scheduled', id: t.id, text: t.text }));
-    return active.concat(dueToday, oops);
+    return sortByOrder(active.concat(dueToday)).concat(oops);
   }
 
   // 카운트다운 화면에서도 하위 항목을 하나씩 체크할 수 있게 — 기존
