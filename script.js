@@ -3885,10 +3885,34 @@
     });
   }
 
+  // 모드 중인 보드의 제목 옆에 "순서 바꾸는 중" 표시
+  function reorderTitleEl(boardId) {
+    const sticky = getReorderSticky(boardId);
+    if (!sticky) return null;
+    if (boardId === 'today') return sticky.querySelector('[data-today-list] .sticky-title');
+    if (boardId === 'waiting') return sticky.querySelector('[data-lupin-front] .sticky-title');
+    return sticky.querySelector('.sticky-title-toggle-spaced');
+  }
+
+  function setReorderBadge(boardId, on) {
+    const title = reorderTitleEl(boardId);
+    if (!title) return;
+    const old = title.querySelector('.reorder-badge');
+    if (old) old.remove();
+    if (!on) return;
+    const badge = document.createElement('span');
+    badge.className = 'reorder-badge';
+    badge.textContent = '⇅ 순서 바꾸는 중';
+    const flower = title.querySelector('.flower');
+    if (flower) flower.after(badge);
+    else title.appendChild(badge);
+  }
+
   function enterReorder(boardId) {
     if (reorderBoard) exitReorder();
     reorderBoard = boardId;
     const sticky = getReorderSticky(boardId);
+    setReorderBadge(boardId, true);
     document.body.classList.add('reorder-mode');
     sticky.classList.add('reorder-active');
     document.querySelectorAll('.header, .sticky:not(.reorder-active)').forEach(el => el.setAttribute('inert', ''));
@@ -3905,6 +3929,7 @@
   function exitReorder() {
     if (!reorderBoard) return;
     const sticky = getReorderSticky(reorderBoard);
+    setReorderBadge(reorderBoard, false);
     reorderBoard = null;
     document.body.classList.remove('reorder-mode');
     document.querySelectorAll('[inert]').forEach(el => {
@@ -3920,25 +3945,33 @@
   }
 
   // 화면의 현재 항목 순서(DOM)를 task.order로 저장하고 다시 그림. 바뀐 게 없으면 그대로 둠.
-  function commitReorder() {
+  function commitReorder(focusId) {
     const boardId = reorderBoard;
     if (!boardId) return;
+    // 다시 그려져도 방금 옮긴 항목의 손잡이에 포커스를 돌려줘서 ↑/↓를 이어서 쓸 수 있게
+    const refocus = () => {
+      if (focusId == null) return;
+      const nh = getListEl(boardId).querySelector('li[data-id="' + focusId + '"] .reorder-handle');
+      if (nh) nh.focus({ preventScroll: true });
+    };
     const ids = reorderableLis(boardId).map(li => Number(li.dataset.id));
     let changed = false;
     ids.forEach((id, i) => {
       const t = reorderTaskById(boardId, id);
       if (t && t.order !== i) { t.order = i; changed = true; }
     });
-    if (!changed) return;
+    if (!changed) { refocus(); return; }
     saveBoards();
     render(boardId);
     haptic(HAPTIC_TAP);
+    refocus();
   }
 
   function startReorderDrag(e, li, handle) {
     if (e.button != null && e.button !== 0) return;
     e.preventDefault();
     handle.setPointerCapture(e.pointerId);
+    handle.focus({ preventScroll: true }); // preventDefault가 기본 포커스를 막으니 직접 줌
     const grab = e.clientY - li.getBoundingClientRect().top;
     let lastY = e.clientY;
     let raf = 0;
@@ -3982,7 +4015,7 @@
       handle.removeEventListener('pointercancel', finish);
       li.classList.remove('dragging');
       li.style.transform = '';
-      commitReorder();
+      commitReorder(li.dataset.id);
     };
     handle.addEventListener('pointermove', onMove);
     handle.addEventListener('pointerup', finish);
@@ -4011,11 +4044,19 @@
       const target = items[items.indexOf(li) + (e.key === 'ArrowUp' ? -1 : 1)];
       if (!target) return;
       li.parentNode.insertBefore(li, e.key === 'ArrowUp' ? target : target.nextSibling);
-      commitReorder();
-      const nh = getListEl(reorderBoard).querySelector('li[data-id="' + id + '"] .reorder-handle');
-      if (nh) nh.focus({ preventScroll: true });
+      commitReorder(id);
       return;
     }
+    // 포커스가 손잡이에 없을 때(바깥을 눌렀다든가) ↑/↓를 누르면 첫 손잡이로 포커스부터 옮김
+    if ((e.key === 'ArrowUp' || e.key === 'ArrowDown') && !(active && active.matches && active.matches('input, textarea'))) {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      const first = getListEl(reorderBoard).querySelector('.reorder-handle');
+      if (first) first.focus({ preventScroll: true });
+      return;
+    }
+    // 모드 중에도 맨 아래 새 항목 입력창에는 글자를 칠 수 있어야 함
+    if (active && active.matches && active.matches('input, textarea')) return;
     if (active && active.closest && active.closest('.reorder-corner') && (e.key === 'Enter' || e.key === ' ')) return;
     e.stopImmediatePropagation();
     e.preventDefault();
