@@ -3594,3 +3594,669 @@ body.reorder-mode .sticky:not(.reorder-active) {
 .task-list[data-tasklist="waitingLater"] .task-item:not(.done-open) .subtask-item.done {
   display: none;
 }
+
+/* ─────────────────────────────────────────────
+   하루 시작하기 — 리갈패드형 오버레이 (.day-start)
+   검토(정비하기) → 일정/준비 → 오늘 순서 확정을 한곳에서. 색/글꼴/버튼 모양은 기존 변수를 그대로 쓰고,
+   전역 button/.card/.modal 규칙은 건드리지 않음(모든 규칙이 .day-start* 안). 종이줄은 본문에만 깔고
+   (편집 영역·헤더·푸터는 단색) 입력창이나 긴 설명 위에 줄무늬가 겹치지 않게 함.
+   ───────────────────────────────────────────── */
+:root {
+  --z-day-start: 900; /* 확인 모달(1000)·토스트(1100)보다 아래 */
+  --day-start-paper: var(--legal-paper);
+  --day-start-ink: var(--ink);
+  --day-start-backdrop: rgba(40, 34, 20, 0.38);
+  --day-start-shadow: 0 22px 44px -12px var(--paper-shadow), 0 3px 8px var(--paper-contact);
+  --day-start-accent: var(--accent);
+  --day-start-selected: color-mix(in srgb, var(--accent) 16%, transparent);
+  --day-start-line: 28px; /* 리갈패드 줄 간격 */
+}
+
+body.day-start-open {
+  overflow: hidden;
+}
+
+.day-start-btn {
+  position: relative;
+}
+
+.day-start-dot {
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 2px var(--bg-top);
+}
+
+.day-start-dot[hidden] {
+  display: none;
+}
+
+.day-start {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-day-start);
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: var(--day-start-backdrop);
+  -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: blur(4px);
+  animation: day-start-fade 0.25s var(--ease-ui);
+}
+
+.day-start[hidden] {
+  display: none;
+}
+
+.day-start__sheet {
+  position: relative;
+  width: min(100%, 1040px);
+  /* 단계를 오가도 시트 크기가 출렁이지 않게 높이를 고정(본문만 스크롤) */
+  height: min(720px, calc(100dvh - 48px));
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--day-start-paper);
+  color: var(--day-start-ink);
+  border-radius: 12px;
+  box-shadow: var(--day-start-shadow);
+  font-family: var(--font-ui);
+  letter-spacing: var(--ui-letter-spacing);
+  animation: day-start-rise 0.32s var(--ease-emphasized);
+}
+
+.day-start__sheet:focus {
+  outline: none;
+}
+
+@keyframes day-start-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes day-start-rise {
+  from { opacity: 0; transform: translateY(14px) scale(0.985); }
+  to { opacity: 1; transform: none; }
+}
+
+/* 헤더/푸터: 줄무늬 없는 단색 영역 */
+.day-start__header,
+.day-start__footer {
+  flex: none;
+  box-sizing: border-box;
+  padding: 16px 24px;
+  background: var(--day-start-paper);
+}
+
+.day-start__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 20px;
+  padding-right: 60px; /* 닫기 버튼 자리 */
+  border-bottom: 1px solid var(--divider);
+}
+
+.day-start__heading {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+}
+
+.day-start__title {
+  margin: 0;
+  font-family: var(--font-hand);
+  font-size: 26px;
+  font-weight: 400;
+  color: var(--day-start-ink);
+}
+
+.day-start__date {
+  margin: 0;
+  font-size: 14px;
+  color: var(--ink-soft);
+}
+
+.day-start__steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.day-start__step,
+.day-start__quick-btn,
+.day-start__opt,
+.day-start__discard,
+.day-start__clear {
+  font-family: var(--font-ui);
+  letter-spacing: var(--ui-letter-spacing);
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--ink-soft);
+  background: none;
+  border: 1px solid var(--ink-soft);
+  border-radius: 14px;
+  padding: 4px 12px;
+  cursor: pointer;
+  transition: color 0.15s var(--ease-ui), border-color 0.15s var(--ease-ui), background-color 0.15s var(--ease-ui);
+}
+
+.day-start__step:hover,
+.day-start__quick-btn:hover,
+.day-start__opt:hover,
+.day-start__discard:hover,
+.day-start__clear:hover {
+  color: var(--day-start-accent);
+  border-color: var(--day-start-accent);
+}
+
+.day-start__step[aria-current="step"],
+.day-start__opt[aria-pressed="true"] {
+  background: var(--day-start-accent);
+  border-color: var(--day-start-accent);
+  color: #fff;
+  font-weight: 700;
+}
+
+.day-start__close {
+  position: absolute;
+  top: 14px;
+  right: 18px;
+  font-size: 16px;
+  line-height: 1;
+  color: var(--ink-soft);
+  background: none;
+  border: none;
+  padding: 8px;
+  cursor: pointer;
+  opacity: 0.75;
+}
+
+.day-start__close:hover {
+  opacity: 1;
+  color: var(--day-start-accent);
+}
+
+/* 본문: 종이줄 + 왼쪽 여백선(스크롤과 함께 움직이도록 background-attachment: local) */
+.day-start__body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: var(--day-start-line) 24px var(--day-start-line) 48px;
+  background-color: var(--day-start-paper);
+  background-image:
+    linear-gradient(to right, transparent 33px, var(--legal-margin) 33px, var(--legal-margin) 34px, transparent 34px),
+    repeating-linear-gradient(
+      to bottom,
+      transparent 0,
+      transparent calc(var(--day-start-line) - 1px),
+      var(--legal-line) calc(var(--day-start-line) - 1px),
+      var(--legal-line) var(--day-start-line)
+    );
+  background-attachment: local, local;
+}
+
+.day-start__lead,
+.day-start__empty {
+  margin: 0 0 var(--day-start-line);
+  font-size: 16px;
+  line-height: var(--day-start-line);
+  color: var(--ink-soft);
+}
+
+.day-start__section-title {
+  margin: 0;
+  font-family: var(--font-hand);
+  font-size: 22px;
+  line-height: var(--day-start-line);
+  font-weight: 400;
+  color: var(--day-start-ink);
+}
+
+/* 정비하기: 넓은 화면은 목록 + 편집 영역 두 칸 */
+.day-start__review-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 24px;
+  align-items: start;
+}
+
+.day-start__review-list,
+.day-start__prep-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.day-start__review-item {
+  border-radius: 4px;
+}
+
+.day-start__review-item[aria-selected="true"] {
+  background: var(--day-start-selected);
+  outline: 2px solid var(--day-start-accent);
+  outline-offset: -2px;
+}
+
+.day-start__review-btn {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
+  box-sizing: border-box;
+  height: calc(var(--day-start-line) * 2);
+  padding: 0 8px;
+  text-align: left;
+  color: var(--day-start-ink);
+  background: none;
+  border: none;
+  font: inherit;
+  cursor: pointer;
+}
+
+.day-start__review-btn:hover .day-start__review-title {
+  color: var(--day-start-accent);
+}
+
+.day-start__mark {
+  flex: none;
+  width: 11px;
+  height: 11px;
+  margin-top: 9px;
+  border-radius: 50%;
+  border: 1px solid rgba(70, 60, 20, 0.35);
+  box-sizing: border-box;
+}
+
+.day-start__review-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.day-start__review-title,
+.day-start__order-text {
+  display: block;
+  font-family: var(--font-task);
+  font-size: 18px;
+  line-height: var(--day-start-line);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.day-start__review-tags {
+  display: flex;
+  gap: 6px;
+  height: var(--day-start-line);
+  overflow: hidden;
+  align-items: center;
+  white-space: nowrap;
+}
+
+.day-start__chip {
+  flex: none;
+  font-size: 12px;
+  line-height: 18px;
+  padding: 0 8px;
+  border-radius: 10px;
+  border: 1px solid var(--input-line);
+  color: var(--ink-soft);
+  background: var(--day-start-paper);
+}
+
+.day-start__chip-reason {
+  color: var(--urgent);
+  border-color: var(--urgent);
+  background: var(--urgent-bg);
+}
+
+.day-start__review-decision {
+  flex: none;
+  max-width: 40%;
+  font-size: 13px;
+  line-height: var(--day-start-line);
+  color: var(--day-start-accent);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.day-start__review-item[data-state="stale"] .day-start__review-decision,
+.day-start__review-item[data-state="incomplete"] .day-start__review-decision {
+  color: var(--urgent);
+}
+
+/* 편집 영역: 단색 바탕(줄무늬 없음) */
+.day-start__editor-col {
+  position: sticky;
+  top: 0;
+}
+
+.day-start__editor {
+  box-sizing: border-box;
+  padding: 16px;
+  background: var(--day-start-paper);
+  border: 1px solid var(--divider);
+  border-radius: 8px;
+  box-shadow: 0 2px 6px var(--paper-contact);
+}
+
+.day-start__editor-title {
+  margin: 0 0 4px;
+  font-family: var(--font-task);
+  font-size: 20px;
+  font-weight: 400;
+  line-height: 1.35;
+  word-break: break-word;
+}
+
+.day-start__editor-meta,
+.day-start__editor-note,
+.day-start__hint {
+  margin: 0 0 8px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--ink-soft);
+  word-break: break-word;
+}
+
+.day-start__hint-warn,
+.day-start__notice {
+  color: var(--urgent);
+}
+
+.day-start__notice {
+  margin: 0 0 10px;
+  padding: 6px 10px;
+  font-size: 14px;
+  line-height: 1.5;
+  border-radius: 6px;
+  background: var(--urgent-bg);
+}
+
+.day-start__options,
+.day-start__quick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 10px 0;
+}
+
+.day-start__field {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  margin: 10px 0;
+}
+
+.day-start__field-label {
+  flex: none;
+  font-size: 14px;
+  color: var(--ink-soft);
+}
+
+.day-start__input {
+  font-family: var(--font-ui);
+  letter-spacing: var(--ui-letter-spacing);
+  font-size: 15px;
+  color: var(--day-start-ink);
+  background: transparent;
+  border: 1px solid var(--input-line);
+  border-radius: 4px;
+  padding: 4px 8px;
+  box-sizing: border-box;
+}
+
+.day-start__input-text {
+  flex: 1 1 200px;
+  min-width: 0;
+  font-family: var(--font-task);
+  font-size: 17px;
+}
+
+.day-start__clear {
+  margin-top: 4px;
+  font-size: 13px;
+  border-color: transparent;
+  text-decoration: underline;
+}
+
+/* 일정 살펴보기 */
+.day-start__calendar,
+.day-start__prep {
+  max-width: 640px;
+}
+
+.day-start__calendar {
+  margin-bottom: var(--day-start-line);
+}
+
+.day-start__prep-item,
+.day-start__prep-add {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+  min-height: calc(var(--day-start-line) * 2);
+}
+
+.day-start__icon-btn {
+  flex: none;
+  min-width: 32px;
+  min-height: 32px;
+  font-size: 15px;
+  line-height: 1;
+  color: var(--ink-soft);
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.day-start__icon-btn:hover:not(:disabled) {
+  color: var(--day-start-accent);
+  border-color: var(--day-start-accent);
+}
+
+.day-start__icon-btn:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+/* 오늘 순서 정하기: 한 행에 한 작업 */
+.day-start__order-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-width: 720px;
+}
+
+.day-start__order-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 48px;
+  box-sizing: border-box;
+  margin-bottom: 8px;
+  padding: 4px 8px;
+  background: var(--day-start-paper);
+  border: 1px solid var(--divider);
+  border-radius: 8px;
+}
+
+.day-start__order-item.is-dragging {
+  opacity: 0.6;
+  box-shadow: 0 6px 14px var(--paper-shadow);
+}
+
+.day-start__order-item.drop-before::before,
+.day-start__order-item.drop-after::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--day-start-accent);
+  pointer-events: none;
+}
+
+.day-start__order-item.drop-before::before {
+  top: -6px;
+}
+
+.day-start__order-item.drop-after::after {
+  bottom: -6px;
+}
+
+.day-start__handle {
+  flex: none;
+  min-width: 32px;
+  min-height: 40px;
+  font-size: 16px;
+  letter-spacing: -2px;
+  color: var(--ink-soft);
+  background: none;
+  border: none;
+  cursor: grab;
+  touch-action: none;
+}
+
+.day-start__handle:active {
+  cursor: grabbing;
+}
+
+.day-start__num {
+  flex: none;
+  min-width: 1.6em;
+  font-family: var(--font-hand);
+  font-size: 20px;
+  text-align: center;
+  color: var(--day-start-accent);
+}
+
+.day-start__order-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.day-start__order-item .day-start__mark {
+  margin-top: 0;
+}
+
+/* 푸터: 변경 요약 + 확정 */
+.day-start__footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 16px;
+  border-top: 1px solid var(--divider);
+}
+
+.day-start__summary {
+  flex: 1 1 240px;
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--ink-soft);
+}
+
+.day-start__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.day-start__confirm {
+  font-family: var(--font-ui);
+  letter-spacing: var(--ui-letter-spacing);
+  font-size: 16px;
+  font-weight: 700;
+  padding: 6px 18px;
+  color: #fff;
+  background: var(--day-start-accent);
+  border: 1px solid var(--day-start-accent);
+  border-radius: 16px;
+  cursor: pointer;
+}
+
+.day-start__confirm:hover {
+  opacity: 0.85;
+}
+
+.day-start :focus-visible {
+  outline: 2px solid var(--day-start-accent);
+  outline-offset: 3px;
+}
+
+.day-start__review-item[aria-selected="true"] .day-start__review-btn:focus-visible {
+  outline-offset: -4px;
+}
+
+@media (max-width: 720px) {
+  .day-start {
+    padding: 0;
+  }
+
+  .day-start__sheet {
+    width: 100%;
+    height: 100dvh;
+    border-radius: 0;
+  }
+
+  .day-start__header {
+    padding: 12px 16px;
+    padding-right: 52px;
+  }
+
+  .day-start__close {
+    top: 8px;
+    right: 8px;
+  }
+
+  .day-start__body {
+    padding: var(--day-start-line) 14px var(--day-start-line) 40px;
+    background-image:
+      linear-gradient(to right, transparent 27px, var(--legal-margin) 27px, var(--legal-margin) 28px, transparent 28px),
+      repeating-linear-gradient(
+        to bottom,
+        transparent 0,
+        transparent calc(var(--day-start-line) - 1px),
+        var(--legal-line) calc(var(--day-start-line) - 1px),
+        var(--legal-line) var(--day-start-line)
+      );
+  }
+
+  .day-start__review-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* 선택한 항목 바로 아래에 편집 영역이 펼쳐지므로 별도 스크롤 없음 */
+  .day-start__review-item[aria-selected="true"] {
+    padding-bottom: 8px;
+  }
+
+  .day-start__review-item .day-start__editor {
+    margin: 4px 8px 0;
+  }
+
+  .day-start__footer {
+    padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+  }
+
+  .day-start__actions {
+    width: 100%;
+  }
+
+  .day-start__confirm {
+    flex: 1;
+  }
+}

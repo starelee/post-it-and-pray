@@ -65,6 +65,7 @@
   const FOCUS_URGENT_SEC = 60;
   const FOCUS_SHAKE_SEC = 10;
   const BOARD_IDS = ['today', 'waiting', 'someday', 'scheduled'];
+  let dayStartOpen = false; // 하루 시작하기 오버레이가 열려 있는지(맨 아래 '하루 시작하기' 블록)
   // Boards a task can be manually moved between with the move buttons.
   const MOVE_TARGET_IDS = ['today', 'waiting', 'someday'];
   // Boards that support a date (calendar icon). On today/someday, assigning
@@ -679,7 +680,10 @@
     return [];
   }
 
-  function collectSuggestions() {
+  // opts.all — 하루 시작하기(정비하기)용: 개수 제한/무작위 선정 없이 전부, '최근 완료'는 뺌.
+  function collectSuggestions(opts) {
+    const all = !!(opts && opts.all);
+    const limit = all ? Infinity : SUGGEST_LIMIT;
     const today = todayStr();
     const seen = new Set();
 
@@ -705,7 +709,7 @@
     boards.someday.filter(t => !t.done).forEach(t => consider(t, 'someday'));
     boards.scheduled.filter(t => !t.done).forEach(t => consider(t, 'scheduled'));
     watch.sort((a, b) => a.rank - b.rank || b.overdue - a.overdue || b.tags.length - a.tags.length);
-    const watchTop = watch.slice(0, SUGGEST_LIMIT);
+    const watchTop = watch.slice(0, limit);
     watch.forEach(w => seen.add(w.task.id)); // 4개를 넘겨 안 보이는 것도 다른 섹션에 중복해 올리지 않음
 
     // 2) 오래 묵은 것 — 마지막으로 손댄 시각(없으면 만든 시각=id)이 2주 넘은 someday/waiting
@@ -724,18 +728,23 @@
     // 패드를 열 때 한 번 뽑고(openSearchPanel에서 초기화) 열려 있는 동안은 고정해서,
     // 메모를 저장하는 등 다시 그릴 때마다 목록이 바뀌지 않게 함. 뽑은 뒤 더는 묵은 게
     // 아니게 된 항목은 빼고 남은 후보에서 채움.
-    const byId = new Map(stale.map(st => [st.task.id, st]));
-    if (!staleSampleIds) staleSampleIds = [];
-    staleSampleIds = staleSampleIds.filter(id => byId.has(id));
-    const pool = stale.filter(st => !staleSampleIds.includes(st.task.id));
-    while (staleSampleIds.length < SUGGEST_LIMIT && pool.length) {
-      const i = Math.floor(Math.random() * pool.length);
-      staleSampleIds.push(pool.splice(i, 1)[0].task.id);
+    let staleTop;
+    if (all) {
+      staleTop = stale.slice().sort((a, b) => b.days - a.days);
+    } else {
+      const byId = new Map(stale.map(st => [st.task.id, st]));
+      if (!staleSampleIds) staleSampleIds = [];
+      staleSampleIds = staleSampleIds.filter(id => byId.has(id));
+      const pool = stale.filter(st => !staleSampleIds.includes(st.task.id));
+      while (staleSampleIds.length < SUGGEST_LIMIT && pool.length) {
+        const i = Math.floor(Math.random() * pool.length);
+        staleSampleIds.push(pool.splice(i, 1)[0].task.id);
+      }
+      staleTop = staleSampleIds.map(id => byId.get(id)).sort((a, b) => b.days - a.days);
     }
-    const staleTop = staleSampleIds.map(id => byId.get(id)).sort((a, b) => b.days - a.days);
 
     // 3) 최근 완료 — 최근 3일(오늘 포함) 안에 끝낸 것
-    const recent = collectArchiveEntries()
+    const recent = all ? [] : collectArchiveEntries()
       .filter(e => e.task.doneAt && -daysUntilDue(e.task.doneAt) < RECENT_DONE_DAYS)
       .sort((a, b) => {
         if (a.task.doneAt !== b.task.doneAt) return b.task.doneAt.localeCompare(a.task.doneAt);
@@ -4880,8 +4889,13 @@
   // 카운트다운 진행 중이거나(러닝) 다 끝나서 결과를 고르는 중(엔디드)이면
   // "몰입 강제" 상태 — 마우스로 화면에 뜬 버튼을 눌러야만 빠져나갈 수
   // 있고, 그 어떤 키보드 단축키도 먹지 않음.
-  function isFocusLocked() {
+  function isFocusCountdownLocked() {
     return !!focusState && (focusState.step === 'running' || focusState.step === 'ended');
+  }
+
+  // 하루 시작하기 오버레이가 떠 있는 동안에도 보드 쪽 단축키/되돌리기는 모두 꺼야 해서 같이 묶음.
+  function isFocusLocked() {
+    return isDayStartOpen() || isFocusCountdownLocked();
   }
 
   function clearEl(el) {
@@ -6087,6 +6101,949 @@
   }
   if (screenEl && 'ResizeObserver' in window) new ResizeObserver(updateScreenTop).observe(boardRowEl);
   window.addEventListener('resize', updateScreenTop);
+
+  // ─────────────────────────────
+  // 하루 시작하기 — 필요할 때만 펼치는 리갈패드형 오버레이.
+  //  ① 정비하기: Oops / 검색 제안(챙길 것·오래 묵은 것) / 날짜 지난 waiting을 한 번씩 다시 판단
+  //  ② 일정 살펴보기: (구글 캘린더 연동은 아직 — 준비할 일 추가만)
+  //  ③ 오늘 순서 정하기: 확정 후 gotta do에 남을 미완료 할 일의 실행 순서
+  // 모든 선택은 "초안"(localStorage, 기기별·동기화 안 함)에만 쌓이고, 확정할 때 saveBoards 한 번으로
+  // 반영됨(그래서 Ctrl+Z 한 번에 통째로 되돌아감). 순서는 기존 gotta do의 task.order를 그대로 씀.
+  // ─────────────────────────────
+  const DAYSTART_DRAFT_KEY = 'postit-daystart-draft-v1';
+  const DAYSTART_DONE_KEY = 'postit-daystart-confirmed-v1'; // 마지막으로 확정한 날짜(YYYY-MM-DD)
+  const DAYSTART_STEPS = [
+    { id: 'tidy', label: '정비하기' },
+    { id: 'cal', label: '일정 살펴보기' },
+    { id: 'order', label: '오늘 순서 정하기' }
+  ];
+  const DAYSTART_NARROW_MQ = '(max-width: 720px)';
+  const DAYSTART_DAY_CHECK_MS = 60 * 1000; // 자정을 넘겼는지 확인하는 간격
+  const DAYSTART_ACTION_LABEL = {
+    today: '오늘 하기',
+    later: '다른 날 하기',
+    toWaiting: '대기중으로',
+    toSomeday: '언젠가로',
+    done: '완료',
+    keep: '그대로 두기',
+    wait: '계속 기다리기',
+    self: '오늘 직접 처리하기',
+    follow: '후속 연락하기',
+    resolved: '해결됨'
+  };
+  // 이 처리를 고르면 gotta do 목록에서 빠짐 / 새로 들어옴
+  const DAYSTART_LEAVES_TODAY = ['later', 'toWaiting', 'toSomeday', 'done'];
+
+  const dayStartEl = document.getElementById('dayStart');
+  const dayStartSheetEl = dayStartEl && dayStartEl.querySelector('.day-start__sheet');
+  const dayStartBodyEl = document.getElementById('dayStartBody');
+  const dayStartDateEl = document.getElementById('dayStartDate');
+  const dayStartStepsEl = document.getElementById('dayStartSteps');
+  const dayStartSummaryEl = document.getElementById('dayStartSummary');
+  const dayStartBtn = document.getElementById('dayStartBtn');
+  const dayStartDotEl = document.getElementById('dayStartDot');
+  const dayStartDiscardBtn = document.getElementById('dayStartDiscard');
+  const dayStartConfirmBtn = document.getElementById('dayStartConfirm');
+  const dayStartCloseBtn = document.getElementById('dayStartClose');
+
+  let ds = null;             // 초안 { date, step, decisions, prep, order, seq }
+  let dsSelectedId = null;   // 정비하기에서 편집 중인 항목 id
+  let dsPrevFocus = null;
+  let dsDayTimer = null;
+  const dsNarrowMq = window.matchMedia ? window.matchMedia(DAYSTART_NARROW_MQ) : null;
+
+  function isDayStartOpen() {
+    return dayStartOpen;
+  }
+
+  function dsDateAfter(days) {
+    const d = new Date();
+    d.setDate(d.getDate() + days);
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return d.getFullYear() + '-' + m + '-' + day;
+  }
+
+  function dsShortDate(dateStr) {
+    const d = new Date(dateStr + 'T00:00:00');
+    if (isNaN(d.getTime())) return dateStr;
+    return (d.getMonth() + 1) + '/' + d.getDate() + '(' + WEEKDAY_KO[d.getDay()] + ')';
+  }
+
+  function dsEl(tag, cls, text) {
+    const el = document.createElement(tag);
+    if (cls) el.className = cls;
+    if (text != null) el.textContent = text;
+    return el;
+  }
+
+  function dsButton(cls, text, onClick) {
+    const b = dsEl('button', cls, text);
+    b.type = 'button';
+    if (onClick) b.addEventListener('click', onClick);
+    return b;
+  }
+
+  // ───── 초안 저장/불러오기 ─────
+  function dsFreshDraft() {
+    return { date: todayStr(), step: 'tidy', decisions: {}, prep: [], order: [], seq: 1 };
+  }
+
+  function dsLoadDraft() {
+    try {
+      const raw = localStorage.getItem(DAYSTART_DRAFT_KEY);
+      if (raw) {
+        const d = JSON.parse(raw);
+        // 어제 초안은 이어 쓰지 않음(같은 날 다시 열었을 때만 이어서)
+        if (d && d.date === todayStr() && d.decisions && typeof d.decisions === 'object'
+            && Array.isArray(d.prep) && Array.isArray(d.order)) {
+          return {
+            date: d.date,
+            step: DAYSTART_STEPS.some(s => s.id === d.step) ? d.step : 'tidy',
+            decisions: d.decisions,
+            prep: d.prep.filter(p => p && typeof p.key === 'string' && typeof p.text === 'string'),
+            order: d.order.filter(k => typeof k === 'string'),
+            seq: Number(d.seq) > 0 ? Number(d.seq) : 1
+          };
+        }
+      }
+    } catch (e) {
+      /* 깨진 초안은 버림 */
+    }
+    return dsFreshDraft();
+  }
+
+  function dsSaveDraft() {
+    if (!ds) return;
+    try {
+      localStorage.setItem(DAYSTART_DRAFT_KEY, JSON.stringify(ds));
+    } catch (e) {
+      /* 저장 불가 — 이번 화면에서만 유지 */
+    }
+  }
+
+  function dsClearDraft() {
+    try { localStorage.removeItem(DAYSTART_DRAFT_KEY); } catch (e) { /* 무시 */ }
+  }
+
+  function dsConfirmedToday() {
+    try { return localStorage.getItem(DAYSTART_DONE_KEY) === todayStr(); } catch (e) { return false; }
+  }
+
+  function updateDayStartBadge() {
+    if (!dayStartDotEl) return;
+    dayStartDotEl.hidden = dsConfirmedToday();
+  }
+
+  // ───── 항목 찾기 / 변경 감지 ─────
+  function dsFind(id) {
+    for (const boardId of BOARD_IDS) {
+      const task = boards[boardId].find(t => t.id === id);
+      if (task) return { boardId, task };
+    }
+    return null;
+  }
+
+  // 결정을 내린 뒤 다른 기기에서 그 항목이 바뀌었는지(수정·이동·완료) 알아보는 서명
+  function dsSig(boardId, task) {
+    return boardId + '|' + (task.updatedAt || 0);
+  }
+
+  function dsAlreadyInToday(item) {
+    return item.boardId === 'today' || (item.boardId === 'scheduled' && item.task.dueDate === todayStr());
+  }
+
+  // 정비 대상 — 검색 제안과 같은 선정 규칙(개수 제한·무작위 없이 전부). 최근 완료는 제외.
+  function dsTidyItems() {
+    const items = [];
+    collectSuggestions({ all: true }).forEach(sec => {
+      sec.items.forEach(it => items.push({ task: it.task, boardId: it.boardId, tags: it.tags }));
+    });
+    return items;
+  }
+
+  function dsOptionsFor(item) {
+    if (item.boardId === 'waiting') return ['wait', 'self', 'follow', 'resolved', 'keep'];
+    const out = [];
+    if (!dsAlreadyInToday(item)) out.push('today');
+    out.push('later', 'toWaiting');
+    if (item.boardId !== 'someday') out.push('toSomeday');
+    out.push('done', 'keep');
+    return out;
+  }
+
+  // 날짜/제목이 필요한 처리인데 비어 있으면 아직 덜 정한 것 — 확정할 때 건너뜀
+  function dsComplete(d) {
+    if (!d || !d.action) return false;
+    if (d.action === 'later' || d.action === 'wait') return !!d.date && d.date > todayStr();
+    if (d.action === 'follow') return !!d.date && d.date > todayStr() && !!(d.text && d.text.trim());
+    return true;
+  }
+
+  function dsDecisionState(id) {
+    const d = ds.decisions[id];
+    if (!d) return { d: null, state: 'none' };
+    const f = dsFind(Number(id)); // 초안 키는 문자열이라 숫자 id로 바꿔 찾음
+    if (!f) return { d, state: 'missing' };
+    if (d.sig !== dsSig(f.boardId, f.task)) return { d, state: 'stale' };
+    if (!dsComplete(d)) return { d, state: 'incomplete' };
+    return { d, state: 'ok' };
+  }
+
+  function dsEffective(id) {
+    const s = dsDecisionState(id);
+    return s.state === 'ok' ? s.d : null;
+  }
+
+  function dsDecisionText(id) {
+    const s = dsDecisionState(id);
+    if (s.state === 'none') return '';
+    if (s.state === 'stale') return '다시 확인';
+    if (s.state === 'missing') return '사라짐';
+    const label = DAYSTART_ACTION_LABEL[s.d.action];
+    if (s.state === 'incomplete') return label + ' · 날짜 필요';
+    if (s.d.action === 'later' || s.d.action === 'wait' || s.d.action === 'follow') {
+      return label + ' · ' + dsShortDate(s.d.date);
+    }
+    return label;
+  }
+
+  // ───── 오늘 순서 목록(시뮬레이션) ─────
+  // 확정하면 gotta do에 남을 미완료 할 일 = 지금 gotta do 목록(일반 + 오늘 마감) - 빠져나갈 것 + 들어올 것.
+  function dsBuildOrderEntries() {
+    const today = todayStr();
+    const entries = [];
+    const current = sortByOrder(
+      boards.today.filter(t => !t.done).map(t => ({ boardId: 'today', task: t }))
+        .concat(boards.scheduled.filter(t => !t.done && t.dueDate === today).map(t => ({ boardId: 'scheduled', task: t }))),
+      e => e.task
+    );
+    current.forEach(e => {
+      const d = dsEffective(e.task.id);
+      if (d && DAYSTART_LEAVES_TODAY.includes(d.action)) return;
+      entries.push({
+        key: String(e.task.id),
+        text: e.task.text,
+        origin: e.boardId === 'scheduled' ? '오늘 마감' : '기존 Today',
+        board: e.boardId
+      });
+    });
+    dsTidyItems().forEach(item => {
+      const d = dsEffective(item.task.id);
+      if (!d) return;
+      if (d.action === 'today' && !dsAlreadyInToday(item)) {
+        entries.push({ key: String(item.task.id), text: item.task.text, origin: '정비에서 가져옴', board: item.boardId });
+      } else if (d.action === 'self') {
+        entries.push({ key: String(item.task.id), text: item.task.text, origin: '직접 처리', board: 'waiting' });
+      } else if (d.action === 'follow') {
+        entries.push({ key: 'f:' + item.task.id, text: d.text.trim(), origin: '후속 연락', board: 'new' });
+      }
+    });
+    ds.prep.forEach(p => {
+      if (p.text.trim() && (p.date || todayStr()) === today) {
+        entries.push({ key: p.key, text: p.text.trim(), origin: '준비 작업', board: 'new' });
+      }
+    });
+    return entries;
+  }
+
+  // 초안의 순서(ds.order)를 먼저 따르고, 거기 없는 항목(새로 들어온 것)은 아래에 붙임
+  function dsMergeOrder(entries) {
+    const byKey = new Map(entries.map(e => [e.key, e]));
+    const keys = [];
+    ds.order.forEach(k => { if (byKey.has(k) && !keys.includes(k)) keys.push(k); });
+    entries.forEach(e => { if (!keys.includes(e.key)) keys.push(e.key); });
+    return keys;
+  }
+
+  // ───── 변경 요약 ─────
+  function dsSummary() {
+    const counts = { today: 0, later: 0, move: 0, done: 0, wait: 0, newTask: 0 };
+    let incomplete = 0;
+    let stale = 0;
+    Object.keys(ds.decisions).forEach(id => {
+      const s = dsDecisionState(id);
+      if (s.state === 'stale') { stale++; return; }
+      if (s.state === 'incomplete') { incomplete++; return; }
+      if (s.state !== 'ok' || s.d.action === 'keep') return;
+      const a = s.d.action;
+      if (a === 'today' || a === 'self') counts.today++;
+      else if (a === 'later') counts.later++;
+      else if (a === 'toWaiting' || a === 'toSomeday') counts.move++;
+      else if (a === 'done' || a === 'resolved') counts.done++;
+      else if (a === 'wait') counts.wait++;
+      else if (a === 'follow') { counts.wait++; counts.newTask++; }
+    });
+    counts.newTask += ds.prep.filter(p => p.text.trim()).length;
+    const entries = dsBuildOrderEntries();
+    const orderChanged = dsMergeOrder(entries).join('|') !== entries.map(e => e.key).join('|');
+    const parts = [];
+    if (counts.today) parts.push('오늘로 ' + counts.today);
+    if (counts.later) parts.push('미루기 ' + counts.later);
+    if (counts.move) parts.push('옮기기 ' + counts.move);
+    if (counts.done) parts.push('완료 ' + counts.done);
+    if (counts.wait) parts.push('기다림 ' + counts.wait);
+    if (counts.newTask) parts.push('새 할 일 ' + counts.newTask);
+    if (orderChanged) parts.push('순서 변경');
+    let text = parts.length ? parts.join(' · ') : '아직 바뀐 게 없어요';
+    if (incomplete) text += ' · 날짜가 필요한 ' + incomplete + '개는 건너뛰어요';
+    if (stale) text += ' · 다시 확인할 ' + stale + '개';
+    return text;
+  }
+
+  function dsRefreshSummary() {
+    if (dayStartSummaryEl) dayStartSummaryEl.textContent = dsSummary();
+  }
+
+  // ───── 화면 그리기 ─────
+  function dsRender() {
+    if (!ds || !dayStartBodyEl) return;
+    const scroll = dayStartBodyEl.scrollTop;
+    // 다시 그려도 방금 누르던 컨트롤에 포커스가 남도록 (같은 종류 중 몇 번째인지로 기억)
+    const active = document.activeElement;
+    let refocus = null;
+    if (active && active !== document.body && dayStartBodyEl.contains(active) && active.classList.length) {
+      const cls = active.classList[0];
+      refocus = { cls, idx: Array.from(dayStartBodyEl.querySelectorAll('.' + cls)).indexOf(active) };
+    }
+    clearEl(dayStartBodyEl);
+    const d = new Date();
+    dayStartDateEl.textContent = (d.getMonth() + 1) + '월 ' + d.getDate() + '일 ' + WEEKDAY_KO[d.getDay()] + '요일';
+    Array.from(dayStartStepsEl.children).forEach(btn => {
+      const on = btn.dataset.step === ds.step;
+      if (on) btn.setAttribute('aria-current', 'step');
+      else btn.removeAttribute('aria-current');
+    });
+    if (ds.step === 'tidy') dsRenderTidy();
+    else if (ds.step === 'cal') dsRenderCalendar();
+    else dsRenderOrder();
+    dsRefreshSummary();
+    dayStartBodyEl.scrollTop = scroll;
+    if (refocus && refocus.idx >= 0) {
+      const found = dayStartBodyEl.querySelectorAll('.' + refocus.cls);
+      const el = found[Math.min(refocus.idx, found.length - 1)];
+      if (el) el.focus({ preventScroll: true });
+    }
+  }
+
+  function dsBoardMarkVar(board) {
+    if (board === 'waiting') return 'var(--paper-waiting)';
+    if (board === 'someday' || board === 'scheduled') return 'var(--paper-someday)';
+    if (board === 'new') return 'var(--accent)';
+    return 'var(--paper)';
+  }
+
+  const DAYSTART_BOARD_LABEL = { today: 'gotta do', waiting: 'waiting', someday: 'someday', scheduled: 'pray later' };
+  function dsBoardLabel(boardId) {
+    return DAYSTART_BOARD_LABEL[boardId] || boardId;
+  }
+
+  // ① 정비하기
+  function dsRenderTidy() {
+    const items = dsTidyItems();
+    dayStartBodyEl.appendChild(dsEl('p', 'day-start__lead', '남아 있는 일을 한 번씩 다시 판단해 보세요. 전부 처리하지 않아도 돼요.'));
+    if (!items.length) {
+      dayStartBodyEl.appendChild(dsEl('p', 'day-start__empty', '지금 챙길 게 없어요. 다음 단계로 가요 ☁️'));
+      return;
+    }
+    const narrow = !!(dsNarrowMq && dsNarrowMq.matches);
+    if (!narrow && !items.some(i => i.task.id === dsSelectedId)) dsSelectedId = items[0].task.id;
+    if (narrow && dsSelectedId != null && !items.some(i => i.task.id === dsSelectedId)) dsSelectedId = null;
+
+    const layout = dsEl('div', 'day-start__review-layout');
+    const list = dsEl('ul', 'day-start__review-list');
+    list.setAttribute('aria-label', '정비할 항목');
+    items.forEach(item => {
+      const id = item.task.id;
+      const li = dsEl('li', 'day-start__review-item');
+      li.dataset.id = id;
+      const selected = id === dsSelectedId;
+      li.setAttribute('aria-selected', selected ? 'true' : 'false');
+      const st = dsDecisionState(id).state;
+      if (st !== 'none') li.dataset.state = st;
+      const btn = dsEl('button', 'day-start__review-btn');
+      btn.type = 'button';
+      btn.setAttribute('aria-expanded', selected ? 'true' : 'false');
+      const mark = dsEl('span', 'day-start__mark');
+      mark.style.background = dsBoardMarkVar(item.boardId);
+      mark.setAttribute('aria-hidden', 'true');
+      const main = dsEl('span', 'day-start__review-main');
+      main.appendChild(dsEl('span', 'day-start__review-title', item.task.text));
+      const tagsEl = dsEl('span', 'day-start__review-tags');
+      tagsEl.appendChild(dsEl('span', 'day-start__chip', dsBoardLabel(item.boardId)));
+      item.tags.forEach(t => tagsEl.appendChild(dsEl('span', 'day-start__chip day-start__chip-reason', t)));
+      main.appendChild(tagsEl);
+      const dec = dsEl('span', 'day-start__review-decision', dsDecisionText(id));
+      btn.appendChild(mark);
+      btn.appendChild(main);
+      btn.appendChild(dec);
+      btn.addEventListener('click', () => {
+        dsSelectedId = (narrow && dsSelectedId === id) ? null : id;
+        dsRender();
+      });
+      li.appendChild(btn);
+      list.appendChild(li);
+    });
+    layout.appendChild(list);
+
+    const sel = items.find(i => i.task.id === dsSelectedId);
+    if (sel) {
+      const editor = dsBuildEditor(sel);
+      if (narrow) {
+        list.querySelector('.day-start__review-item[aria-selected="true"]').appendChild(editor);
+      } else {
+        const col = dsEl('div', 'day-start__editor-col');
+        col.appendChild(editor);
+        layout.appendChild(col);
+      }
+    } else if (!narrow) {
+      layout.appendChild(dsEl('div', 'day-start__editor-col'));
+    }
+    dayStartBodyEl.appendChild(layout);
+  }
+
+  function dsSetDecision(item, patch) {
+    const id = item.task.id;
+    const prev = ds.decisions[id];
+    const prevOk = prev && prev.sig === dsSig(item.boardId, item.task);
+    // 다른 기기에서 바뀐 항목이면 이전 선택(날짜 등)을 이어받지 않고 새로 시작
+    const base = prevOk ? prev : {};
+    ds.decisions[id] = Object.assign({}, base, patch, { sig: dsSig(item.boardId, item.task) });
+    dsSaveDraft();
+  }
+
+  function dsQuickDates(onPick) {
+    const wrap = dsEl('div', 'day-start__quick');
+    [['내일', 1], ['3일 뒤', 3], ['1주 뒤', 7]].forEach(([label, n]) => {
+      wrap.appendChild(dsButton('day-start__quick-btn', label, () => onPick(dsDateAfter(n))));
+    });
+    return wrap;
+  }
+
+  function dsDateField(value, min, onChange, label) {
+    const row = dsEl('label', 'day-start__field');
+    row.appendChild(dsEl('span', 'day-start__field-label', label));
+    const input = document.createElement('input');
+    input.type = 'date';
+    input.className = 'day-start__input date-picker-input';
+    input.min = min;
+    input.value = value || '';
+    input.addEventListener('change', () => onChange(input.value));
+    row.appendChild(wrapDateInputWithHint(input));
+    return row;
+  }
+
+  function dsBuildEditor(item) {
+    const id = item.task.id;
+    const task = item.task;
+    const st = dsDecisionState(id);
+    const box = dsEl('div', 'day-start__editor');
+    box.setAttribute('role', 'group');
+    box.setAttribute('aria-label', '처리 방법: ' + task.text);
+
+    box.appendChild(dsEl('h3', 'day-start__editor-title', task.text));
+    const meta = [];
+    if (task.subtasks && task.subtasks.length) meta.push('하위 ' + subtaskProgressText(task));
+    if (item.boardId === 'waiting' && task.replyDate) meta.push('확인 예정 ' + dsShortDate(task.replyDate));
+    if (item.boardId === 'scheduled' && task.dueDate) meta.push('마감 ' + dsShortDate(task.dueDate));
+    if (meta.length) box.appendChild(dsEl('p', 'day-start__editor-meta', meta.join(' · ')));
+    if (task.note) {
+      const n = task.note.replace(/\s+/g, ' ');
+      box.appendChild(dsEl('p', 'day-start__editor-note', '📝 ' + (n.length > 80 ? n.slice(0, 80) + '…' : n)));
+    }
+    if (st.state === 'stale') {
+      box.appendChild(dsEl('p', 'day-start__notice', '다른 곳에서 이 항목이 바뀌었어요. 처리 방법을 다시 골라 주세요.'));
+    }
+
+    const cur = st.state === 'stale' ? null : ds.decisions[id];
+    const opts = dsEl('div', 'day-start__options');
+    dsOptionsFor(item).forEach(action => {
+      const b = dsButton('day-start__opt', DAYSTART_ACTION_LABEL[action], () => {
+        const patch = { action };
+        if (action === 'follow' && !(cur && cur.text)) patch.text = task.text + ' 후속 연락';
+        dsSetDecision(item, patch);
+        dsRender();
+      });
+      b.setAttribute('aria-pressed', cur && cur.action === action ? 'true' : 'false');
+      opts.appendChild(b);
+    });
+    box.appendChild(opts);
+
+    if (cur && (cur.action === 'later' || cur.action === 'wait' || cur.action === 'follow')) {
+      const minDate = dsDateAfter(1);
+      const label = cur.action === 'later' ? '날짜' : '다음 확인 날짜';
+      const setDate = (v) => { dsSetDecision(item, { date: v }); dsRender(); };
+      box.appendChild(dsDateField(cur.date, minDate, setDate, label));
+      box.appendChild(dsQuickDates(setDate));
+    }
+    if (cur && cur.action === 'follow') {
+      const row = dsEl('label', 'day-start__field');
+      row.appendChild(dsEl('span', 'day-start__field-label', '후속 작업 제목'));
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.className = 'day-start__input day-start__input-text';
+      input.maxLength = 100;
+      input.value = cur.text || '';
+      input.addEventListener('input', () => {
+        dsSetDecision(item, { text: input.value });
+        dsRefreshSummary();
+        const dec = dayStartBodyEl.querySelector('.day-start__review-item[data-id="' + id + '"] .day-start__review-decision');
+        if (dec) dec.textContent = dsDecisionText(id);
+      });
+      row.appendChild(input);
+      box.appendChild(row);
+      const text = (cur.text || '').trim();
+      const dup = text && boards.today.some(t => !t.done && t.text.trim() === text);
+      box.appendChild(dsEl('p', 'day-start__hint', dup
+        ? '오늘 gotta do에 같은 제목이 이미 있어요. 그래도 만들 수 있어요.'
+        : '원본은 waiting에 남고, 오늘 할 일로 후속 작업이 새로 생겨요.'));
+    }
+    if (cur && (cur.action === 'done' || cur.action === 'resolved')) {
+      const open = (task.subtasks || []).filter(s => !s.done).length;
+      if (open) box.appendChild(dsEl('p', 'day-start__hint', '남은 하위 항목 ' + open + '개도 함께 완료돼요.'));
+    }
+    if (cur && cur.action && !dsComplete(cur) && st.state !== 'stale') {
+      box.appendChild(dsEl('p', 'day-start__hint day-start__hint-warn', '날짜를 골라야 적용돼요.'));
+    }
+    if (cur) {
+      box.appendChild(dsButton('day-start__clear', '선택 취소', () => {
+        delete ds.decisions[id];
+        dsSaveDraft();
+        dsRender();
+      }));
+    }
+    return box;
+  }
+
+  // ② 일정 살펴보기 — 캘린더 연동 전이라 준비할 일 추가만
+  function dsRenderCalendar() {
+    const cal = dsEl('section', 'day-start__calendar');
+    cal.appendChild(dsEl('h3', 'day-start__section-title', '오늘 · 내일 일정 📅'));
+    cal.appendChild(dsEl('p', 'day-start__empty', '구글 캘린더는 아직 연결 전이에요. 연결되면 오늘·내일 일정이 여기에 나와요.'));
+    dayStartBodyEl.appendChild(cal);
+
+    const prep = dsEl('section', 'day-start__prep');
+    prep.appendChild(dsEl('h3', 'day-start__section-title', '준비할 일'));
+    prep.appendChild(dsEl('p', 'day-start__lead', '일정이나 오늘 하루를 위해 미리 해 둘 일을 적어요. 날짜는 기본이 오늘이에요.'));
+    const list = dsEl('ul', 'day-start__prep-list');
+    ds.prep.forEach(p => {
+      const li = dsEl('li', 'day-start__prep-item');
+      const text = document.createElement('input');
+      text.type = 'text';
+      text.className = 'day-start__input day-start__input-text';
+      text.maxLength = 100;
+      text.value = p.text;
+      text.setAttribute('aria-label', '준비할 일');
+      text.addEventListener('input', () => { p.text = text.value; dsSaveDraft(); dsRefreshSummary(); });
+      li.appendChild(text);
+      const date = document.createElement('input');
+      date.type = 'date';
+      date.className = 'day-start__input date-picker-input';
+      date.min = todayStr();
+      date.value = p.date || todayStr();
+      date.setAttribute('aria-label', '날짜');
+      date.addEventListener('change', () => { p.date = date.value || todayStr(); dsSaveDraft(); dsRefreshSummary(); });
+      li.appendChild(wrapDateInputWithHint(date));
+      const del = dsButton('day-start__icon-btn', '✕', () => {
+        ds.prep = ds.prep.filter(x => x !== p);
+        dsSaveDraft();
+        dsRender();
+      });
+      del.setAttribute('aria-label', '준비할 일 삭제');
+      li.appendChild(del);
+      list.appendChild(li);
+    });
+    prep.appendChild(list);
+
+    const addRow = dsEl('div', 'day-start__prep-add');
+    const addInput = document.createElement('input');
+    addInput.type = 'text';
+    addInput.className = 'day-start__input day-start__input-text';
+    addInput.maxLength = 100;
+    addInput.placeholder = '준비할 일...';
+    addInput.setAttribute('aria-label', '새 준비할 일');
+    const add = () => {
+      const text = addInput.value.trim();
+      if (!text) return;
+      ds.prep.push({ key: 'p:' + (ds.seq++), text, date: todayStr() });
+      dsSaveDraft();
+      dsRender();
+      const next = dayStartBodyEl.querySelector('.day-start__prep-add input');
+      if (next) next.focus({ preventScroll: true });
+    };
+    addInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); add(); }
+    });
+    addRow.appendChild(addInput);
+    addRow.appendChild(dsButton('day-start__quick-btn', '추가', add));
+    prep.appendChild(addRow);
+    dayStartBodyEl.appendChild(prep);
+  }
+
+  // ③ 오늘 순서 정하기
+  function dsRenderOrder() {
+    const entries = dsBuildOrderEntries();
+    const byKey = new Map(entries.map(e => [e.key, e]));
+    const keys = dsMergeOrder(entries);
+    dayStartBodyEl.appendChild(dsEl('p', 'day-start__lead', '확정하면 gotta do에 남는 할 일이에요. 손잡이를 끌거나 ↑ ↓로 실행 순서를 바꿔요.'));
+    if (!keys.length) {
+      dayStartBodyEl.appendChild(dsEl('p', 'day-start__empty', '오늘 할 일이 아직 없어요.'));
+      return;
+    }
+    const list = dsEl('ol', 'day-start__order-list');
+    list.setAttribute('aria-label', '오늘 실행 순서');
+    const moveTo = (from, to, focusKey) => {
+      if (to < 0 || to >= keys.length || from === to) return;
+      const next = keys.slice();
+      const [k] = next.splice(from, 1);
+      next.splice(to, 0, k);
+      ds.order = next;
+      dsSaveDraft();
+      dsRender();
+      if (focusKey) {
+        const h = dayStartBodyEl.querySelector('.day-start__order-item[data-key="' + focusKey + '"] .day-start__handle');
+        if (h) h.focus({ preventScroll: true });
+      }
+    };
+    keys.forEach((key, i) => {
+      const e = byKey.get(key);
+      const li = dsEl('li', 'day-start__order-item');
+      li.dataset.key = key;
+      const handle = dsEl('button', 'day-start__handle', '⋮⋮');
+      handle.type = 'button';
+      handle.setAttribute('aria-label', '순서 이동: ' + e.text + ' (↑ ↓ 키로도 옮길 수 있어요)');
+      handle.addEventListener('keydown', (ev) => {
+        if (ev.key === 'ArrowUp') { ev.preventDefault(); moveTo(i, i - 1, key); }
+        else if (ev.key === 'ArrowDown') { ev.preventDefault(); moveTo(i, i + 1, key); }
+      });
+      dsBindDrag(handle, li, list, i, (to) => moveTo(i, to, key));
+      li.appendChild(handle);
+      li.appendChild(dsEl('span', 'day-start__num', String(i + 1)));
+      const mark = dsEl('span', 'day-start__mark');
+      mark.style.background = dsBoardMarkVar(e.board);
+      mark.setAttribute('aria-hidden', 'true');
+      li.appendChild(mark);
+      li.appendChild(dsEl('span', 'day-start__order-text', e.text));
+      li.appendChild(dsEl('span', 'day-start__chip', e.origin));
+      const up = dsButton('day-start__icon-btn', '↑', () => moveTo(i, i - 1, key));
+      up.setAttribute('aria-label', '위로');
+      up.disabled = i === 0;
+      const down = dsButton('day-start__icon-btn', '↓', () => moveTo(i, i + 1, key));
+      down.setAttribute('aria-label', '아래로');
+      down.disabled = i === keys.length - 1;
+      li.appendChild(up);
+      li.appendChild(down);
+      list.appendChild(li);
+    });
+    dayStartBodyEl.appendChild(list);
+  }
+
+  // 손잡이 끌기(마우스/터치/펜). 끝나는 자리의 위치만 계산해 onDrop(to)로 넘김.
+  function dsBindDrag(handle, li, list, from, onDrop) {
+    handle.style.touchAction = 'none';
+    handle.addEventListener('pointerdown', (e) => {
+      if (e.button != null && e.button !== 0) return;
+      e.preventDefault();
+      try { handle.setPointerCapture(e.pointerId); } catch (err) { /* 무시 */ }
+      const rows = Array.from(list.children);
+      let insertAt = from;
+      li.classList.add('is-dragging');
+      const clearMarks = () => rows.forEach(r => r.classList.remove('drop-before', 'drop-after'));
+      const move = (ev) => {
+        const edge = 36;
+        const br = dayStartBodyEl.getBoundingClientRect();
+        if (ev.clientY < br.top + edge) dayStartBodyEl.scrollTop -= 12;
+        else if (ev.clientY > br.bottom - edge) dayStartBodyEl.scrollTop += 12;
+        insertAt = rows.length;
+        for (let i = 0; i < rows.length; i++) {
+          const r = rows[i].getBoundingClientRect();
+          if (ev.clientY < r.top + r.height / 2) { insertAt = i; break; }
+        }
+        clearMarks();
+        if (insertAt < rows.length) rows[insertAt].classList.add('drop-before');
+        else rows[rows.length - 1].classList.add('drop-after');
+      };
+      const end = (ev, cancel) => {
+        handle.removeEventListener('pointermove', move);
+        handle.removeEventListener('pointerup', up);
+        handle.removeEventListener('pointercancel', cancelFn);
+        try { handle.releasePointerCapture(e.pointerId); } catch (err) { /* 무시 */ }
+        li.classList.remove('is-dragging');
+        clearMarks();
+        if (cancel) return;
+        const to = insertAt > from ? insertAt - 1 : insertAt;
+        if (to !== from) onDrop(to);
+      };
+      const up = (ev) => end(ev, false);
+      const cancelFn = (ev) => end(ev, true);
+      handle.addEventListener('pointermove', move);
+      handle.addEventListener('pointerup', up);
+      handle.addEventListener('pointercancel', cancelFn);
+    });
+  }
+
+  // ───── 확정 ─────
+  function dsNewId(counter) {
+    return counter.n++;
+  }
+
+  function dsScrub(task) {
+    delete task.dueDate;
+    delete task.replyDate;
+    delete task.from;
+    delete task.order;
+  }
+
+  function dsDetach(boardId, task) {
+    const idx = boards[boardId].indexOf(task);
+    if (idx !== -1) boards[boardId].splice(idx, 1);
+  }
+
+  function dsCompleteTask(boardId, task) {
+    const today = todayStr();
+    task.subtasks.forEach(s => { s.done = true; });
+    task.done = true;
+    task.doneAt = today;
+    delete task.order;
+    // 오늘 할 일은 당일 취소선으로 남고 다음날 스윕됨. 그 밖에는 바로 done 아카이브로.
+    const graced = boardId === 'today' || (boardId === 'scheduled' && task.dueDate === today);
+    if (!graced) {
+      dsDetach(boardId, task);
+      delete task.dueDate;
+      task.from = boardId;
+      boards.archive.push(task);
+    }
+  }
+
+  function dsNewTask(text, counter) {
+    return { id: dsNewId(counter), text, done: false, urgent: false, subtasks: [] };
+  }
+
+  // 한 항목의 처리 적용. newTasks: 새로 만든 할 일 key → task
+  function dsApplyOne(item, d, counter, newTasks) {
+    const { boardId, task } = item;
+    switch (d.action) {
+      case 'today':
+      case 'self':
+        if (boardId !== 'today') { dsDetach(boardId, task); dsScrub(task); boards.today.push(task); }
+        break;
+      case 'later':
+        if (boardId === 'scheduled') {
+          task.dueDate = d.date;
+        } else {
+          dsDetach(boardId, task);
+          dsScrub(task);
+          task.from = boardId === 'someday' ? 'someday' : 'today';
+          task.dueDate = d.date;
+          boards.scheduled.push(task);
+        }
+        break;
+      case 'toWaiting':
+      case 'toSomeday': {
+        const to = d.action === 'toWaiting' ? 'waiting' : 'someday';
+        dsDetach(boardId, task);
+        dsScrub(task);
+        if (to === 'waiting') { task.done = false; delete task.doneAt; }
+        boards[to].push(task);
+        break;
+      }
+      case 'done':
+        dsCompleteTask(boardId, task);
+        break;
+      case 'wait':
+        task.replyDate = d.date;
+        break;
+      case 'follow': {
+        task.replyDate = d.date;
+        const t = dsNewTask(d.text.trim(), counter);
+        boards.today.push(t);
+        newTasks.set('f:' + task.id, t);
+        break;
+      }
+      case 'resolved':
+        // waiting에는 완료가 없어서, gotta do로 옮겨 완료 처리 — 다음날 평소처럼 done 기록으로 넘어감
+        dsDetach('waiting', task);
+        dsScrub(task);
+        boards.today.push(task);
+        dsCompleteTask('today', task);
+        break;
+      default:
+        break;
+    }
+  }
+
+  function dsHandleDayChange() {
+    ds.date = todayStr();
+    dsSaveDraft();
+    showToast('날짜가 바뀌었어요 · 검토 대상을 새로 불러왔어요');
+    dsRender();
+  }
+
+  function dsConfirm() {
+    if (!ds) return;
+    if (ds.date !== todayStr()) { dsHandleDayChange(); return; }
+
+    // 검토 중 다른 기기에서 바뀐/사라진 항목 확인
+    let missing = 0;
+    let firstStale = null;
+    Object.keys(ds.decisions).forEach(id => {
+      const s = dsDecisionState(id);
+      if (s.state === 'missing') { missing++; delete ds.decisions[id]; }
+      else if (s.state === 'stale' && firstStale == null) firstStale = Number(id);
+    });
+    if (missing) dsSaveDraft();
+    if (firstStale != null) {
+      ds.step = 'tidy';
+      dsSelectedId = firstStale;
+      dsSaveDraft();
+      dsRender();
+      showToast('다른 곳에서 바뀐 항목이 있어요 · 다시 확인해 주세요');
+      return;
+    }
+
+    const snapshot = JSON.stringify(boards);
+    const entries = dsBuildOrderEntries();
+    const finalKeys = dsMergeOrder(entries);
+    const today = todayStr();
+    const counter = { n: Date.now() };
+    const newTasks = new Map();
+    let changed = false;
+    try {
+      dsTidyItems().forEach(item => {
+        const d = dsEffective(item.task.id);
+        if (!d || d.action === 'keep') return;
+        dsApplyOne(item, d, counter, newTasks);
+        changed = true;
+      });
+      ds.prep.forEach(p => {
+        const text = p.text.trim();
+        if (!text) return;
+        const t = dsNewTask(text, counter);
+        const date = p.date && p.date > today ? p.date : today;
+        if (date === today) {
+          boards.today.push(t);
+          newTasks.set(p.key, t);
+        } else {
+          t.dueDate = date;
+          t.from = 'today';
+          boards.scheduled.push(t);
+        }
+        changed = true;
+      });
+
+      // 오늘 목록(일반 + 오늘 마감)에 남은 할 일에 확정한 순서를 그대로 기록
+      const live = boards.today.filter(t => !t.done)
+        .concat(boards.scheduled.filter(t => !t.done && t.dueDate === today));
+      const byKey = new Map(newTasks);
+      live.forEach(t => { if (!byKey.has(String(t.id))) byKey.set(String(t.id), t); });
+      const liveSet = new Set(live);
+      let pos = 0;
+      const place = (t) => {
+        if (t.order !== pos) { t.order = pos; changed = true; }
+        pos++;
+      };
+      const placed = new Set();
+      finalKeys.forEach(k => {
+        const t = byKey.get(k);
+        if (t && liveSet.has(t) && !placed.has(t)) { placed.add(t); place(t); }
+      });
+      live.forEach(t => { if (!placed.has(t)) { placed.add(t); place(t); } });
+
+      if (changed) saveBoards();
+    } catch (err) {
+      boards = normalizeBoards(JSON.parse(snapshot));
+      showToast('저장하지 못했어요 · 초안은 그대로 있어요');
+      dsRender();
+      return;
+    }
+
+    dsClearDraft();
+    try { localStorage.setItem(DAYSTART_DONE_KEY, today); } catch (e) { /* 무시 */ }
+    ds = null;
+    closeDayStart();
+    updateDayStartBadge();
+    renderAll();
+    showToast(changed && !isTouchOnly() ? '오늘 계획을 확정했어요 · Ctrl+Z로 되돌릴 수 있어요' : '오늘 계획을 확정했어요');
+  }
+
+  // ───── 열고 닫기 ─────
+  function openDayStart() {
+    if (!dayStartEl || dayStartOpen || isFocusCountdownLocked() || isConfirmModalOpen()) return;
+    if (reorderBoard) exitReorder();
+    closeSearchPanel();
+    if (archivePanelEl.classList.contains('open')) closeArchivePanel();
+    closeOpenControls();
+    ds = dsLoadDraft();
+    dsSelectedId = null;
+    dsPrevFocus = document.activeElement;
+    dayStartOpen = true;
+    dayStartEl.hidden = false;
+    document.body.classList.add('day-start-open');
+    if (screenEl) screenEl.setAttribute('inert', '');
+    dsRender();
+    dayStartBodyEl.scrollTop = 0;
+    clearInterval(dsDayTimer);
+    dsDayTimer = setInterval(() => {
+      if (ds && ds.date !== todayStr()) dsHandleDayChange();
+    }, DAYSTART_DAY_CHECK_MS);
+    const first = dayStartStepsEl.querySelector('[aria-current="step"]') || dayStartSheetEl;
+    first.focus({ preventScroll: true });
+  }
+
+  function closeDayStart() {
+    if (!dayStartEl || !dayStartOpen) return;
+    dayStartOpen = false;
+    clearInterval(dsDayTimer);
+    dsDayTimer = null;
+    dayStartEl.hidden = true;
+    document.body.classList.remove('day-start-open');
+    if (screenEl) screenEl.removeAttribute('inert');
+    const back = dsPrevFocus && dsPrevFocus.isConnected ? dsPrevFocus : dayStartBtn;
+    dsPrevFocus = null;
+    if (back && typeof back.focus === 'function') back.focus({ preventScroll: true });
+  }
+
+  if (dayStartEl) {
+    if (dayStartBtn) dayStartBtn.addEventListener('click', openDayStart);
+    dayStartCloseBtn.addEventListener('click', closeDayStart);
+    dayStartConfirmBtn.addEventListener('click', dsConfirm);
+    dayStartDiscardBtn.addEventListener('click', async () => {
+      if (!ds) return;
+      const ok = await showConfirm({
+        title: '초안을 버릴까요?',
+        message: '아직 확정하지 않은 선택과 순서가 모두 사라져요.',
+        confirmLabel: '버리기',
+        cancelLabel: '계속 작성'
+      });
+      if (!ok || !ds) return;
+      dsClearDraft();
+      ds = dsFreshDraft();
+      dsSelectedId = null;
+      dsRender();
+    });
+    DAYSTART_STEPS.forEach(s => {
+      const b = dsButton('day-start__step', s.label, () => {
+        if (!ds) return;
+        ds.step = s.id;
+        dsSaveDraft();
+        dsRender();
+        dayStartBodyEl.scrollTop = 0;
+      });
+      b.dataset.step = s.id;
+      dayStartStepsEl.appendChild(b);
+    });
+    // Esc — 초안은 그대로 두고 닫기(확인 모달이 떠 있으면 그쪽이 먼저)
+    document.addEventListener('keydown', (e) => {
+      if (e.key !== 'Escape' || e.defaultPrevented || !dayStartOpen || isConfirmModalOpen()) return;
+      e.preventDefault();
+      closeDayStart();
+    });
+    if (dsNarrowMq && dsNarrowMq.addEventListener) {
+      dsNarrowMq.addEventListener('change', () => { if (dayStartOpen) dsRender(); });
+    }
+    document.addEventListener('visibilitychange', updateDayStartBadge);
+    updateDayStartBadge();
+  }
 
   restoreFocusSession();
   renderAll();
