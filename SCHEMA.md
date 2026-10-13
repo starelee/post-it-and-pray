@@ -124,14 +124,18 @@ type BackupFile = {
 type DayStartDraft = {
   date: string;                       // 초안을 만든 날(오늘이 아니면 버림)
   step: 'tidy' | 'order';
-  decisions: Record<string, {         // key = 항목 id(문자열). 질문에 '네/아니오'로 답한 결과
-    action: 'today' | 'toSomeday' | 'done' | 'resolved' | 'urgent' | 'follow' | 'keep';
-    date?: string;                    // follow: 원본의 다음 확인 날짜
+  decisions: Record<string, {         // key = 항목 id(문자열, 반복되는 일은 'r:<완료 기록 id>'). 질문에 '네/아니오'로 답한 결과
+    action: 'today' | 'toSomeday' | 'done' | 'resolved' | 'urgent' | 'follow' | 'keep'
+          | 'later' | 'setReply' | 'top' | 'merge' | 'repeat';
+    date?: string;                    // follow/setReply: 다음 확인 날짜, later: 다시 잡은 마감일
     text?: string;                    // follow: 후속 작업 제목
     snooze?: boolean;                 // keep: 아니오 = 3일 미루기(확정 때 snoozedAt 기록)
+    intoId?: number;                  // merge: 합쳐질(먼저 만든) 항목 id
+    prevOrder?: string[];             // top: 되돌릴 때 복원할 이전 순서
     sig: string;                      // "보드|updatedAt" — 답한 뒤 항목이 바뀌었는지 확인용
   }>;
-  log: (number | string)[];           // 답한 순서(← 이전으로 되돌리기용)
+  log: (number | string)[];           // 답한 순서(← 이전으로 되돌리기용, 'overload' 포함)
+  overload?: { ids: number[] } | { skip: true };  // '오늘 할 일이 너무 많은데 내일로 미룰래요?' 답(항목에 묶이지 않는 질문)
   prep: { key: string; text: string; date?: string }[];  // 순서 단계에서 추가한 할 일(확정 때 Task로 만들어짐)
   order: string[];                    // 오늘 순서: 항목 id 또는 'f:<원본id>'(후속)/'p:<n>'(추가) 키
   seq: number;

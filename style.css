@@ -4440,8 +4440,14 @@ body.reorder-mode .sticky:not(.reorder-active) {
     width: 100%;
   }
 
+  /* 좁은 화면: 주 버튼을 한 줄 전체로 위에, 보조 버튼 둘은 그 아래 반반 */
   .day-start__actions .confirm-btn-ok {
-    flex: 1;
+    order: -1;
+    flex: 1 1 100%;
+  }
+
+  .day-start__actions .confirm-btn-cancel {
+    flex: 1 1 0;
   }
 
   .day-start__qtitle {
