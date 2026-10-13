@@ -6701,12 +6701,37 @@
   }
 
   // 정비 대상 — 검색 제안과 같은 선정 규칙(개수 제한·무작위 없이 전부). 최근 완료는 제외.
+  // 검색 제안의 '챙길 것'은 한데 묶여 있어서, 여기서는 왜 올라왔는지 이유별로 쪼개 보여줌.
+  // 한 항목이 여러 이유에 걸리면 위쪽(더 급한) 이유 묶음에 한 번만 나오고 태그는 다 붙음.
+  const DAYSTART_GROUPS = [
+    { key: 'dueLate', title: '마감이 지난 것', test: t => /^마감 \d+일 지남$/.test(t) },
+    { key: 'replyLate', title: '회신 예정일이 지난 것', test: t => /^회신 \d+일 지남$/.test(t) },
+    { key: 'dueToday', title: '오늘 마감', test: t => t === '오늘 마감' },
+    { key: 'replyToday', title: '오늘 회신 예정', test: t => t === '오늘 회신' },
+    { key: 'finish', title: '하위 항목 마무리만 남은 것', test: t => /^하위 /.test(t) },
+    { key: 'stale', title: '오래 묵은 것', test: () => false } // 검색 제안의 '오래 묵은 것'은 그대로
+  ];
+
   function dsTidyItems() {
     const items = [];
     collectSuggestions({ all: true }).forEach(sec => {
-      sec.items.forEach(it => items.push({ task: it.task, boardId: it.boardId, tags: it.tags, section: sec.label }));
+      sec.items.forEach(it => {
+        let group = null;
+        if (sec.label === '오래 묵은 것') {
+          group = 'stale';
+        } else {
+          const g = DAYSTART_GROUPS.find(gr => it.tags.some(gr.test));
+          group = g ? g.key : 'finish';
+        }
+        items.push({ task: it.task, boardId: it.boardId, tags: it.tags, group });
+      });
     });
-    return items;
+    // 묶음 순서대로(같은 묶음 안에서는 검색 제안의 정렬 그대로)
+    const rank = k => DAYSTART_GROUPS.findIndex(g => g.key === k);
+    return items
+      .map((it, i) => ({ it, i }))
+      .sort((a, b) => rank(a.it.group) - rank(b.it.group) || a.i - b.i)
+      .map(e => e.it);
   }
 
   function dsOptionsFor(item) {
@@ -6894,14 +6919,20 @@
     }
     if (dsSelectedId != null && !items.some(i => i.task.id === dsSelectedId)) dsSelectedId = null;
 
+    // 데스크톱은 2단(CSS columns), 좁은 화면은 한 단
+    const groupsEl = dsEl('div', 'day-start__groups');
+    dayStartBodyEl.appendChild(groupsEl);
+    const counts = {};
+    items.forEach(i => { counts[i.group] = (counts[i.group] || 0) + 1; });
     let list = null;
-    let lastSection = null;
+    let lastGroup = null;
     items.forEach(item => {
-      if (item.section !== lastSection) {
-        lastSection = item.section;
-        dayStartBodyEl.appendChild(dsGroupTitle(item.section));
+      if (item.group !== lastGroup) {
+        lastGroup = item.group;
+        const g = DAYSTART_GROUPS.find(x => x.key === item.group);
+        groupsEl.appendChild(dsGroupTitle(g.title + ' ' + counts[item.group]));
         list = dsEl('ul', 'search-list');
-        dayStartBodyEl.appendChild(list);
+        groupsEl.appendChild(list);
       }
       const id = item.task.id;
       const selected = id === dsSelectedId;

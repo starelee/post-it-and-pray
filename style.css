@@ -4585,3 +4585,29 @@ body.reorder-mode .sticky:not(.reorder-active) {
   font-size: 12px;
   font-family: var(--font-ui);
 }
+
+/* 정비하기: 넓은 화면에서는 패드를 조금 넓히고 묶음을 2단으로(항목/묶음 제목이 단 사이에서 끊기지 않게) */
+@media (min-width: 900px) {
+  .day-start-panel {
+    width: min(980px, 94vw);
+  }
+
+  .day-start__groups {
+    padding-top: var(--day-start-line);
+    column-count: 2;
+    column-gap: 40px;
+    column-rule: 1px dashed var(--focus-box-border);
+  }
+
+  .day-start__groups .search-group-title {
+    break-after: avoid;
+  }
+
+  .day-start__groups .day-start__item {
+    break-inside: avoid;
+  }
+
+  .day-start__groups > .search-group-title:first-child {
+    margin-top: 0;
+  }
+}
