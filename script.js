@@ -6598,6 +6598,7 @@
   const dayStartBtn = document.getElementById('dayStartBtn');
   const dayStartDotEl = document.getElementById('dayStartDot');
   const dayStartDiscardBtn = document.getElementById('dayStartDiscard');
+  const dayStartPrevBtn = document.getElementById('dayStartPrev');
   const dayStartConfirmBtn = document.getElementById('dayStartConfirm');
   const dayStartCloseBtn = document.getElementById('dayStartClose');
 
@@ -6701,12 +6702,37 @@
   }
 
   // 정비 대상 — 검색 제안과 같은 선정 규칙(개수 제한·무작위 없이 전부). 최근 완료는 제외.
+  // 검색 제안의 '챙길 것'은 한데 묶여 있어서, 여기서는 왜 올라왔는지 이유별로 쪼개 보여줌.
+  // 한 항목이 여러 이유에 걸리면 위쪽(더 급한) 이유 묶음에 한 번만 나오고 태그는 다 붙음.
+  const DAYSTART_GROUPS = [
+    { key: 'dueLate', title: '마감이 지난 것', test: t => /^마감 \d+일 지남$/.test(t) },
+    { key: 'replyLate', title: '회신 예정일이 지난 것', test: t => /^회신 \d+일 지남$/.test(t) },
+    { key: 'dueToday', title: '오늘 마감', test: t => t === '오늘 마감' },
+    { key: 'replyToday', title: '오늘 회신 예정', test: t => t === '오늘 회신' },
+    { key: 'finish', title: '하위 항목 마무리만 남은 것', test: t => /^하위 /.test(t) },
+    { key: 'stale', title: '오래 묵은 것', test: () => false } // 검색 제안의 '오래 묵은 것'은 그대로
+  ];
+
   function dsTidyItems() {
     const items = [];
     collectSuggestions({ all: true }).forEach(sec => {
-      sec.items.forEach(it => items.push({ task: it.task, boardId: it.boardId, tags: it.tags, section: sec.label }));
+      sec.items.forEach(it => {
+        let group = null;
+        if (sec.label === '오래 묵은 것') {
+          group = 'stale';
+        } else {
+          const g = DAYSTART_GROUPS.find(gr => it.tags.some(gr.test));
+          group = g ? g.key : 'finish';
+        }
+        items.push({ task: it.task, boardId: it.boardId, tags: it.tags, group });
+      });
     });
-    return items;
+    // 묶음 순서대로(같은 묶음 안에서는 검색 제안의 정렬 그대로)
+    const rank = k => DAYSTART_GROUPS.findIndex(g => g.key === k);
+    return items
+      .map((it, i) => ({ it, i }))
+      .sort((a, b) => rank(a.it.group) - rank(b.it.group) || a.i - b.i)
+      .map(e => e.it);
   }
 
   function dsOptionsFor(item) {
@@ -6858,12 +6884,17 @@
     clearEl(dayStartBodyEl);
     const d = new Date();
     dayStartDateEl.textContent = (d.getMonth() + 1) + '/' + d.getDate() + '(' + WEEKDAY_KO[d.getDay()] + ')';
-    Array.from(dayStartStepsEl.children).forEach(btn => {
-      const on = btn.dataset.step === ds.step;
-      btn.classList.toggle('is-current', on);
-      if (on) btn.setAttribute('aria-current', 'step');
-      else btn.removeAttribute('aria-current');
+    const stepIdx = DAYSTART_STEPS.findIndex(st => st.id === ds.step);
+    Array.from(dayStartStepsEl.children).forEach((el, i) => {
+      el.classList.toggle('is-current', i === stepIdx);
+      el.classList.toggle('is-past', i < stepIdx);
+      if (i === stepIdx) el.setAttribute('aria-current', 'step');
+      else el.removeAttribute('aria-current');
     });
+    // 마지막 단계에서만 확정, 그 전에는 다음 단계로
+    const isLast = stepIdx === DAYSTART_STEPS.length - 1;
+    dayStartConfirmBtn.textContent = isLast ? '계획 확정하고 Today로' : '다음 단계 →';
+    dayStartPrevBtn.hidden = stepIdx <= 0;
     if (ds.step === 'tidy') dsRenderTidy();
     else if (ds.step === 'cal') dsRenderCalendar();
     else dsRenderOrder();
@@ -6894,14 +6925,20 @@
     }
     if (dsSelectedId != null && !items.some(i => i.task.id === dsSelectedId)) dsSelectedId = null;
 
+    // 데스크톱은 2단(CSS columns), 좁은 화면은 한 단
+    const groupsEl = dsEl('div', 'day-start__groups');
+    dayStartBodyEl.appendChild(groupsEl);
+    const counts = {};
+    items.forEach(i => { counts[i.group] = (counts[i.group] || 0) + 1; });
     let list = null;
-    let lastSection = null;
+    let lastGroup = null;
     items.forEach(item => {
-      if (item.section !== lastSection) {
-        lastSection = item.section;
-        dayStartBodyEl.appendChild(dsGroupTitle(item.section));
+      if (item.group !== lastGroup) {
+        lastGroup = item.group;
+        const g = DAYSTART_GROUPS.find(x => x.key === item.group);
+        groupsEl.appendChild(dsGroupTitle(g.title + ' ' + counts[item.group]));
         list = dsEl('ul', 'search-list');
-        dayStartBodyEl.appendChild(list);
+        groupsEl.appendChild(list);
       }
       const id = item.task.id;
       const selected = id === dsSelectedId;
@@ -7451,8 +7488,8 @@
     }, DAYSTART_DAY_CHECK_MS);
     // 패널이 접힌 상태에서 막 펼쳐지는 중이라 한 프레임 뒤에 포커스
     requestAnimationFrame(() => {
-      const first = dayStartStepsEl.querySelector('.is-current');
-      if (first) first.focus({ preventScroll: true });
+      const title = document.getElementById('dayStartTitle');
+      if (title) title.focus({ preventScroll: true });
     });
   }
 
@@ -7474,7 +7511,21 @@
     dayStartEl.setAttribute('inert', ''); // 닫혀 있는 동안은 Tab/클릭이 닿지 않게
     if (dayStartBtn) dayStartBtn.addEventListener('click', () => { if (dayStartOpen) closeDayStart(); else openDayStart(); });
     dayStartCloseBtn.addEventListener('click', closeDayStart);
-    dayStartConfirmBtn.addEventListener('click', dsConfirm);
+    const goStep = (delta) => {
+      if (!ds) return;
+      const i = DAYSTART_STEPS.findIndex(st => st.id === ds.step) + delta;
+      if (i < 0 || i >= DAYSTART_STEPS.length) return;
+      ds.step = DAYSTART_STEPS[i].id;
+      dsSaveDraft();
+      dsRender();
+      dayStartEl.scrollTop = 0;
+    };
+    // 단계는 순서대로: 마지막 단계 전까지는 '다음 단계', 마지막에서만 확정
+    dayStartConfirmBtn.addEventListener('click', () => {
+      if (ds && ds.step !== DAYSTART_STEPS[DAYSTART_STEPS.length - 1].id) goStep(1);
+      else dsConfirm();
+    });
+    dayStartPrevBtn.addEventListener('click', () => goStep(-1));
     dayStartDiscardBtn.addEventListener('click', async () => {
       if (!ds) return;
       const ok = await showConfirm({
@@ -7489,18 +7540,9 @@
       dsSelectedId = null;
       dsRender();
     });
-    DAYSTART_STEPS.forEach(st => {
-      const b = dsEl('button', 'day-start__step', st.label);
-      b.type = 'button';
-      b.dataset.step = st.id;
-      b.addEventListener('click', () => {
-        if (!ds) return;
-        ds.step = st.id;
-        dsSaveDraft();
-        dsRender();
-        dayStartEl.scrollTop = 0;
-      });
-      dayStartStepsEl.appendChild(b);
+    // 진행 표시(누르는 탭이 아님) — 지금 어느 단계인지만 보여줌
+    DAYSTART_STEPS.forEach((st, i) => {
+      dayStartStepsEl.appendChild(dsEl('li', 'day-start__step', (i + 1) + ' ' + st.label));
     });
     // Esc — 초안은 그대로 두고 닫기(확인 모달이 떠 있으면 그쪽이 먼저)
     document.addEventListener('keydown', (e) => {

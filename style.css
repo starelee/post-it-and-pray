@@ -3674,11 +3674,14 @@ body.reorder-mode .sticky:not(.reorder-active) {
   color: var(--ink-soft);
 }
 
-/* 단계: 제목 밑 한 줄, 글자만 있는 토글(trash-toggle-btn과 같은 결) */
+/* 단계: 제목 밑 한 줄. 누르는 탭이 아니라 진행 표시(다음 단계는 아래 버튼으로) */
 .day-start__steps {
   display: flex;
   flex-wrap: wrap;
-  column-gap: 2px;
+  align-items: center;
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
 .day-start__step,
@@ -3700,13 +3703,19 @@ body.reorder-mode .sticky:not(.reorder-active) {
   font-size: 15px;
   line-height: var(--day-start-line);
   border-radius: 10px;
-  opacity: 0.75;
-  transition: opacity 0.15s var(--ease-ui), color 0.15s var(--ease-ui);
+  cursor: default;
+  opacity: 0.6;
 }
 
-.day-start__step:hover {
-  opacity: 1;
-  color: var(--accent);
+.day-start__step + .day-start__step::before {
+  content: "›";
+  position: absolute;
+  left: -5px;
+  color: var(--ink-soft);
+}
+
+.day-start__step.is-past {
+  opacity: 0.85;
 }
 
 .day-start__step.is-current {
@@ -4584,4 +4593,30 @@ body.reorder-mode .sticky:not(.reorder-active) {
   color: var(--urgent);
   font-size: 12px;
   font-family: var(--font-ui);
+}
+
+/* 정비하기: 넓은 화면에서는 패드를 조금 넓히고 묶음을 2단으로(항목/묶음 제목이 단 사이에서 끊기지 않게) */
+@media (min-width: 900px) {
+  .day-start-panel {
+    width: min(980px, 94vw);
+  }
+
+  .day-start__groups {
+    padding-top: var(--day-start-line);
+    column-count: 2;
+    column-gap: 40px;
+    column-rule: 1px dashed var(--focus-box-border);
+  }
+
+  .day-start__groups .search-group-title {
+    break-after: avoid;
+  }
+
+  .day-start__groups .day-start__item {
+    break-inside: avoid;
+  }
+
+  .day-start__groups > .search-group-title:first-child {
+    margin-top: 0;
+  }
 }
