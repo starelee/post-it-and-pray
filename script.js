@@ -6133,7 +6133,7 @@
   // 선택지 앞에 붙는 아이콘 — 카드 제목/항목 아이콘 줄과 같은 기호(✿ ⏳ 🌙 📅)를 그대로 씀
   const DAYSTART_ACTION_ICON = {
     today: '✿', later: '📅', toWaiting: '⏳', toSomeday: '🌙', done: '✓',
-    wait: '⏳', self: '✿', follow: '✉️', resolved: '✓', keep: ''
+    wait: '⏳', self: '✿', follow: '✉️', resolved: '✓', keep: '💤'
   };
   // 이 처리를 고르면 gotta do 목록에서 빠짐 / 새로 들어옴
   const DAYSTART_LEAVES_TODAY = ['later', 'toWaiting', 'toSomeday', 'done'];
@@ -6435,7 +6435,7 @@
   // ① 정비하기
   function dsRenderTidy() {
     const items = dsTidyItems();
-    dayStartBodyEl.appendChild(dsLead('남아 있는 일을 한 번씩 다시 판단해 보세요. 전부 처리하지 않아도 돼요.'));
+    dayStartBodyEl.appendChild(dsLead('항목마다 아이콘으로 어떻게 할지 골라 보세요. 전부 처리하지 않아도 돼요.'));
     if (!items.length) {
       dayStartBodyEl.appendChild(dsLead('지금 챙길 게 없어요. 다음 단계로 가요 ☁️'));
       return;
@@ -6481,7 +6481,7 @@
         if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); }
       });
       li.appendChild(row);
-      if (selected) li.appendChild(dsBuildEditor(item));
+      li.appendChild(dsBuildEditor(item, selected));
       list.appendChild(li);
     });
   }
@@ -6533,8 +6533,10 @@
     return dsEl('div', 'search-snippet day-start__snippet' + (warn ? ' is-warn' : ''), text);
   }
 
-  // 선택한 항목 바로 아래에 펼쳐지는 편집 줄들 — 보드에서 아이콘 줄이 항목 밑으로 열리는 것과 같은 자리
-  function dsBuildEditor(item) {
+  // 항목 바로 아래 줄들. 보드에서는 호버해야 뜨는 아이콘 줄(❗ ➕ 📝 …)을 여기서는 항목마다 항상 펼쳐 둠 —
+  // 열어 보지 않아도 "이건 어떻게 할까?"를 하나씩 바로 고르게. 날짜/제목이 더 필요한 처리는 고르면 그 밑에 줄이 붙고,
+  // 항목을 눌러 펼치면 하위·메모 같은 참고 줄과 선택 취소가 같이 나옴.
+  function dsBuildEditor(item, expanded) {
     const id = item.task.id;
     const task = item.task;
     const st = dsDecisionState(id);
@@ -6542,30 +6544,30 @@
     box.setAttribute('role', 'group');
     box.setAttribute('aria-label', '처리 방법: ' + task.text);
 
-    const meta = [];
-    if (task.subtasks && task.subtasks.length) meta.push('하위 ' + subtaskProgressText(task));
-    if (item.boardId === 'waiting' && task.replyDate) meta.push('확인 예정 ' + dsShortDate(task.replyDate));
-    if (item.boardId === 'scheduled' && task.dueDate) meta.push('마감 ' + dsShortDate(task.dueDate));
-    if (meta.length) box.appendChild(dsSnippet(meta.join(' · ')));
-    if (task.note) {
-      const n = task.note.replace(/\s+/g, ' ');
-      box.appendChild(dsSnippet('메모: ' + (n.length > 60 ? n.slice(0, 60) + '…' : n)));
-    }
-    if (st.state === 'stale') box.appendChild(dsSnippet('다른 곳에서 바뀌었어요. 처리 방법을 다시 골라 주세요.', true));
-
     const cur = st.state === 'stale' ? null : ds.decisions[id];
-    const opts = dsEl('div', 'day-start__options');
+    const icons = dsEl('div', 'day-start__icons');
     dsOptionsFor(item).forEach(action => {
-      const b = dsTextButton('day-start__opt', DAYSTART_ACTION_ICON[action], DAYSTART_ACTION_LABEL[action], () => {
-        const patch = { action };
-        if (action === 'follow' && !(cur && cur.text)) patch.text = task.text + ' 후속 연락';
-        dsSetDecision(item, patch);
+      const b = dsEl('button', 'day-start__icon', DAYSTART_ACTION_ICON[action]);
+      b.type = 'button';
+      b.title = DAYSTART_ACTION_LABEL[action];
+      b.setAttribute('aria-label', DAYSTART_ACTION_LABEL[action]);
+      b.setAttribute('aria-pressed', cur && cur.action === action ? 'true' : 'false');
+      b.addEventListener('click', () => {
+        if (cur && cur.action === action) {
+          delete ds.decisions[id]; // 같은 아이콘을 다시 누르면 선택 취소
+        } else {
+          const patch = { action };
+          if (action === 'follow' && !(cur && cur.text)) patch.text = task.text + ' 후속 연락';
+          dsSetDecision(item, patch);
+        }
+        dsSaveDraft();
         dsRender();
       });
-      b.setAttribute('aria-pressed', cur && cur.action === action ? 'true' : 'false');
-      opts.appendChild(b);
+      icons.appendChild(b);
     });
-    box.appendChild(opts);
+    box.appendChild(icons);
+
+    if (st.state === 'stale') box.appendChild(dsSnippet('다른 곳에서 바뀌었어요. 처리 방법을 다시 골라 주세요.', true));
 
     if (cur && (cur.action === 'later' || cur.action === 'wait' || cur.action === 'follow')) {
       const setDate = (v) => { dsSetDecision(item, { date: v }); dsRender(); };
@@ -6601,12 +6603,18 @@
     if (cur && cur.action && !dsComplete(cur) && st.state !== 'stale') {
       box.appendChild(dsSnippet('날짜를 골라야 적용돼요.', true));
     }
-    if (cur) {
-      box.appendChild(dsTextButton('day-start__clear', '', '선택 취소', () => {
-        delete ds.decisions[id];
-        dsSaveDraft();
-        dsRender();
-      }));
+
+    if (expanded) {
+      const meta = [];
+      if (task.subtasks && task.subtasks.length) meta.push('하위 ' + subtaskProgressText(task));
+      if (item.boardId === 'waiting' && task.replyDate) meta.push('확인 예정 ' + dsShortDate(task.replyDate));
+      if (item.boardId === 'scheduled' && task.dueDate) meta.push('마감 ' + dsShortDate(task.dueDate));
+      if (meta.length) box.appendChild(dsSnippet(meta.join(' · ')));
+      if (task.note) {
+        const n = task.note.replace(/\s+/g, ' ');
+        box.appendChild(dsSnippet('메모: ' + (n.length > 60 ? n.slice(0, 60) + '…' : n)));
+      }
+      if (!meta.length && !task.note) box.appendChild(dsSnippet('하위 항목이나 메모는 없어요.'));
     }
     return box;
   }

@@ -3769,7 +3769,6 @@ body.reorder-mode .sticky:not(.reorder-active) {
 }
 
 /* 글자 버튼은 안쪽 여백(8px)만큼 덜 들여써서 위 줄의 글자와 시작점이 맞음 */
-.day-start__options,
 .day-start__clear {
   margin-left: 22px;
 }
@@ -3778,11 +3777,51 @@ body.reorder-mode .sticky:not(.reorder-active) {
   color: var(--urgent);
 }
 
-.day-start__options,
 .day-start__quick {
   display: flex;
   flex-wrap: wrap;
   column-gap: 4px;
+}
+
+/* 보드의 hover 아이콘 줄(.task-controls)과 같은 모양인데, 여기서는 항상 펼쳐 둠 */
+.day-start__icons {
+  display: flex;
+  align-items: center;
+  column-gap: 6px;
+  margin-left: 22px;
+  min-height: var(--day-start-line);
+}
+
+.day-start__icon {
+  flex: 0 0 auto;
+  min-width: 30px;
+  height: var(--day-start-line);
+  padding: 0 4px;
+  font-family: var(--font-ui);
+  font-size: 15px;
+  line-height: var(--day-start-line);
+  color: var(--ink);
+  background: none;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  opacity: 0.45;
+  filter: grayscale(1);
+  transition: opacity 0.15s var(--ease-ui), filter 0.15s var(--ease-ui), transform 0.15s var(--ease-ui), background 0.15s var(--ease-ui);
+}
+
+.day-start__icon:hover,
+.day-start__icon:focus-visible {
+  opacity: 0.8;
+  transform: scale(1.1);
+}
+
+.day-start__icon[aria-pressed="true"] {
+  opacity: 1;
+  filter: none;
+  color: var(--accent);
+  background: var(--focus-box-fill);
+  box-shadow: inset 0 -2px 0 var(--accent);
 }
 
 .day-start__btn {
@@ -4052,6 +4091,15 @@ body.reorder-mode .sticky:not(.reorder-active) {
 
   .day-start__btn {
     min-height: calc(var(--day-start-line) * 1.5);
+  }
+
+  .day-start__icon {
+    min-width: 40px;
+    height: calc(var(--day-start-line) * 2);
+  }
+
+  .day-start__icons {
+    min-height: calc(var(--day-start-line) * 2);
   }
 }
 
