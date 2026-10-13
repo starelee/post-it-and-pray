@@ -4140,7 +4140,7 @@ body.reorder-mode .sticky:not(.reorder-active) {
   min-height: calc(var(--day-start-line) * 9);
 }
 
-/* ① 정비하기: 질문 카드 한 장 — 제목 · 이유 칩 · 질문 · [아니오] [네] */
+/* ① 정비하기: 모든 질문을 목록으로 — 줄마다 [아이콘 · 제목 · 이유 칩] / 질문 / [아니오] [네] */
 .day-start__progress {
   margin: 0;
   position: relative;
@@ -4153,105 +4153,117 @@ body.reorder-mode .sticky:not(.reorder-active) {
   color: var(--ink-soft);
 }
 
-.day-start__card {
-  max-width: 560px;
-  margin: 0 auto;
-  padding-top: var(--day-start-line);
-  text-align: center;
+.day-start__qlist {
+  margin-top: 0;
 }
 
-.day-start__qitem {
-  display: flex;
-  align-items: flex-start;
-  justify-content: center;
-  column-gap: 8px;
+.day-start__qrow {
+  cursor: default;
+  position: relative;
+  top: 3px;
 }
 
-.day-start__qitem .search-icon {
-  font-size: 15px;
-  line-height: var(--day-start-line);
+.day-start__qrow + .day-start__qrow {
+  margin-top: var(--day-start-line);
 }
 
-.day-start__qitem .search-icon-flower {
-  font-size: 18px;
+.day-start__qrow .search-item-text {
+  flex: 0 1 auto;
 }
 
-.day-start__qtitle {
-  font-family: var(--font-task);
-  font-size: 20px;
-  line-height: var(--day-start-line);
-  overflow-wrap: anywhere;
-  text-align: left;
-}
-
-.day-start__qchips {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 0 6px;
-  min-height: var(--day-start-line);
-}
-
-.day-start__qchips .search-chip {
-  margin-top: 5px;
-}
-
-.day-start__question {
-  margin: var(--day-start-line) 0 0;
+.day-start__qtext {
+  margin: 0;
+  padding-left: 30px;
   font-family: var(--font-hand);
-  font-size: 18px;
+  font-size: 17px;
   line-height: var(--day-start-line);
   color: var(--ink);
 }
 
-.day-start__answers {
-  display: flex;
-  justify-content: center;
-  gap: 14px;
-  margin-top: var(--day-start-line);
+.day-start__qtext-alt {
+  color: var(--ink-soft);
 }
 
-.day-start__answers .confirm-btn {
-  min-width: 96px;
-  padding: 5px 22px;
-  font-size: 16px;
-}
-
-.day-start__alts {
+.day-start__qbtns {
   display: flex;
-  flex-direction: column;
-  align-items: stretch;
   gap: 8px;
-  max-width: 360px;
-  margin: var(--day-start-line) auto 0;
+  padding-left: 30px;
+  min-height: var(--day-start-line);
+  align-items: center;
 }
 
-.day-start__alts .confirm-btn {
-  padding: 5px 16px;
-  font-size: 15px;
-  text-align: left;
-  white-space: pre;
+.day-start__qbtn {
+  padding: 1px 16px;
+  font-size: 14px;
+  line-height: 22px;
 }
 
-.day-start__keys {
-  display: none;
-  margin: var(--day-start-line) 0 0;
+/* 답한 줄: 결과 한 줄 + 바꾸기 */
+.day-start__qrow.is-answered .search-item-row {
+  opacity: 0.55;
+}
+
+.day-start__result {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding-left: 30px;
   font-family: var(--font-ui);
   letter-spacing: var(--ui-letter-spacing);
-  font-size: 12px;
+  font-size: 14px;
   line-height: var(--day-start-line);
-  color: var(--ink-soft);
-  opacity: 0.7;
+  color: var(--accent);
 }
 
-@media (hover: hover) {
-  .day-start__keys {
-    display: block;
-  }
+.day-start__change {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  font-family: var(--font-ui);
+  letter-spacing: var(--ui-letter-spacing);
+  font-size: 13px;
+  line-height: var(--day-start-line);
+  color: var(--ink-soft);
+  text-decoration: underline;
+}
+
+.day-start__change:hover {
+  color: var(--accent);
+}
+
+/* '아니오' 뒤 대안: 그 줄 아래에 글자 버튼으로 */
+.day-start__alts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 6px;
+  padding-left: 22px;
+}
+
+.day-start__alt {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0 8px;
+  font-family: var(--font-ui);
+  letter-spacing: var(--ui-letter-spacing);
+  font-size: 14px;
+  line-height: var(--day-start-line);
+  color: var(--ink-soft);
+  border-radius: 10px;
+  opacity: 0.85;
+  transition: opacity 0.15s var(--ease-ui), color 0.15s var(--ease-ui), background 0.15s var(--ease-ui);
+}
+
+.day-start__alt:hover,
+.day-start__alt:focus-visible {
+  opacity: 1;
+  color: var(--accent);
+  background: var(--focus-box-fill);
 }
 
 .day-start__done {
-  margin: calc(var(--day-start-line) * 2) 0 0;
+  margin: var(--day-start-line) 0 0;
   text-align: center;
   font-family: var(--font-hand);
   font-size: 20px;
@@ -4477,17 +4489,4 @@ body.reorder-mode .sticky:not(.reorder-active) {
     flex: 1 1 0;
   }
 
-  .day-start__qtitle {
-    font-size: 17px;
-  }
-
-  .day-start__question {
-    font-size: 16px;
-  }
-
-  .day-start__answers .confirm-btn {
-    min-width: 88px;
-    padding: 4px 18px;
-    font-size: 15px;
-  }
 }
