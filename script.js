@@ -6917,18 +6917,22 @@
     const someday = { label: '언젠가로 보내기', patch: { action: 'toSomeday' } };
     const finished = (label) => ({ label, patch: { action: item.boardId === 'waiting' ? 'resolved' : 'done' } });
     const waitMore = (label, days) => ({ label, patch: { action: 'setReply', date: dsDateAfter(days) } });
+    const clearDate = { label: '날짜 지우기', patch: { action: 'clearDate' } };   // 마감을 없애 일반 항목으로
+    const clearReply = { label: '날짜 지우기', patch: { action: 'clearReply' } }; // waiting의 확인 날짜를 없앰
     const days = (re) => { for (const tag of item.tags) { const m = tag.match(re); if (m) return Number(m[1]); } return 0; };
     switch (item.group) {
       case 'dueLate':
         return days(/^마감 (\d+)일 지남$/) >= DAYSTART_BIG_OVERDUE
-          ? [tomorrow, someday, finished('이미 끝났어요 (완료)')]
-          : [tomorrow, nextWeek, someday, finished('이미 끝났어요 (완료)')];
+          ? [tomorrow, clearDate, someday, finished('이미 끝났어요 (완료)')]
+          : [tomorrow, nextWeek, clearDate, someday, finished('이미 끝났어요 (완료)')];
       case 'replyLate':
-        return [waitMore('3일 더 기다리기', 3), { label: '제가 직접 처리할게요 (오늘 할 일로)', patch: { action: 'today' } }, finished('해결됐어요')];
+        return [waitMore('3일 더 기다리기', 3), clearReply, { label: '제가 직접 처리할게요 (오늘 할 일로)', patch: { action: 'today' } }, finished('해결됐어요')];
       case 'replyToday':
-        return [waitMore('내일 다시 확인', 1), finished('해결됐어요')];
+        return [waitMore('내일 다시 확인', 1), clearReply, finished('해결됐어요')];
       case 'dueToday':
-        return [tomorrow, finished('이미 끝났어요 (완료)')];
+        return [tomorrow, clearDate, finished('이미 끝났어요 (완료)')];
+      case 'dueSoon':
+        return [clearDate];
       case 'urgentOld':
         return [{ label: '긴급 해제', patch: { action: 'unurgent' } }, tomorrow];
       case 'noReply':
@@ -7017,6 +7021,8 @@
         // 마감이 지났던 것은 오늘 급한 쪽, 마무리 한 개 남은 것은 앞쪽, 나머지는 기존 항목 뒤
         const rank = item.task.urgent ? 0 : (item.group === 'dueLate' ? 2 : (item.group === 'finish' ? 4 : 6));
         entries.push({ key: String(item.task.id), text: item.task.text, origin: '정비에서 가져옴', rank, board: 'today' });
+      } else if (d.action === 'clearDate' && !dsAlreadyInToday(item) && (item.task.dueDate && item.task.dueDate <= todayStr() ? 'today' : (item.task.from || 'today')) === 'today') {
+        entries.push({ key: String(item.task.id), text: item.task.text, origin: '', rank: 6, board: 'today' });
       } else if (d.action === 'self') {
         entries.push({ key: String(item.task.id), text: item.task.text, origin: '직접 처리', rank: 3, board: 'today' });
       } else if (d.action === 'follow') {
@@ -7047,7 +7053,7 @@
 
   // ───── 변경 요약 ─────
   function dsSummary() {
-    const c = { today: 0, done: 0, follow: 0, someday: 0, snooze: 0, urgent: 0, later: 0, reply: 0, merge: 0, repeat: 0, top: 0, unurgent: 0, waiting: 0 };
+    const c = { today: 0, done: 0, follow: 0, someday: 0, snooze: 0, urgent: 0, later: 0, reply: 0, merge: 0, repeat: 0, top: 0, unurgent: 0, waiting: 0, cleared: 0 };
     Object.keys(ds.decisions).forEach(id => {
       const s = dsDecisionState(id);
       if (s.state !== 'ok') return;
@@ -7063,6 +7069,7 @@
       else if (a === 'repeat') c.repeat++;
       else if (a === 'top') c.top++;
       else if (a === 'unurgent') c.unurgent++;
+      else if (a === 'clearDate' || a === 'clearReply') c.cleared++;
       else if (a === 'toWaiting') c.waiting++;
       else if (a === 'keep' && s.d.snooze) c.snooze++;
     });
@@ -7077,6 +7084,7 @@
     if (c.someday) parts.push('언젠가로 ' + c.someday);
     if (c.waiting) parts.push('대기중으로 ' + c.waiting);
     if (c.unurgent) parts.push('긴급 해제 ' + c.unurgent);
+    if (c.cleared) parts.push('날짜 지움 ' + c.cleared);
     if (c.later) parts.push('날짜 변경 ' + c.later);
     if (c.reply) parts.push('확인일 지정 ' + c.reply);
     if (c.merge) parts.push('합치기 ' + c.merge);
@@ -7544,6 +7552,20 @@
         break;
       case 'unurgent':
         task.urgent = false;
+        break;
+      case 'clearDate': {
+        // 마감 날짜를 지움 — 오늘 마감/지난 마감은 gotta do에 그대로 남고, 아직 안 온 마감은 원래 보드로(보드의 '날짜 지우기'와 같은 규칙)
+        if (boardId === 'scheduled') {
+          const backTo = (task.dueDate && task.dueDate <= todayStr()) ? 'today' : (task.from || 'today');
+          dsDetach('scheduled', task);
+          delete task.dueDate;
+          delete task.from;
+          boards[backTo].push(task);
+        }
+        break;
+      }
+      case 'clearReply':
+        delete task.replyDate; // waiting의 확인 날짜를 없앰
         break;
       case 'setReply':
         task.replyDate = d.date; // waiting의 다음 확인 날짜
