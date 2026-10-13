@@ -118,23 +118,24 @@ type BackupFile = {
 
 ## 하루 시작하기 초안(`boards`와 별개)
 
-하루 시작하기 오버레이는 확정 전까지의 선택을 `localStorage['postit-daystart-draft-v1']`에 둠 — `boards`/백업/클라우드에는 들어가지 않는 기기별 임시 값이라 `Task` 스키마는 바뀌지 않음. 마지막으로 확정한 날짜는 `localStorage['postit-daystart-confirmed-v1']`(`YYYY-MM-DD`, 헤더 버튼의 "미확정" 점 표시용).
+하루 시작하기 패드는 확정 전까지의 답을 `localStorage['postit-daystart-draft-v1']`에 둠 — `boards`/백업/클라우드에는 들어가지 않는 기기별 임시 값이라 `Task` 스키마는 바뀌지 않음(미루기 `snoozedAt`만 확정 때 `Task`에 기록됨). 마지막으로 확정한 날짜는 `localStorage['postit-daystart-confirmed-v1']`(`YYYY-MM-DD`, 헤더 버튼의 "미확정" 점 표시용).
 
 ```ts
 type DayStartDraft = {
   date: string;                       // 초안을 만든 날(오늘이 아니면 버림)
-  step: 'tidy' | 'cal' | 'order';
-  decisions: Record<string, {         // key = 항목 id(문자열)
-    action: 'today' | 'later' | 'toWaiting' | 'toSomeday' | 'done' | 'keep'
-          | 'wait' | 'self' | 'follow' | 'resolved';
-    date?: string;                    // later/wait/follow
-    text?: string;                    // follow(후속 작업 제목)
-    sig: string;                      // "보드|updatedAt" — 결정 후 항목이 바뀌었는지 확인용
+  step: 'tidy' | 'order';
+  decisions: Record<string, {         // key = 항목 id(문자열). 질문에 '네/아니오'로 답한 결과
+    action: 'today' | 'toSomeday' | 'done' | 'resolved' | 'urgent' | 'follow' | 'keep';
+    date?: string;                    // follow: 원본의 다음 확인 날짜
+    text?: string;                    // follow: 후속 작업 제목
+    snooze?: boolean;                 // keep: 아니오 = 3일 미루기(확정 때 snoozedAt 기록)
+    sig: string;                      // "보드|updatedAt" — 답한 뒤 항목이 바뀌었는지 확인용
   }>;
-  prep: { key: string; text: string; date?: string }[];  // 준비할 일(확정 때 Task로 만들어짐)
-  order: string[];                    // 오늘 순서: 항목 id 또는 'f:<원본id>'(후속)/'p:<n>'(준비) 키
+  log: (number | string)[];           // 답한 순서(← 이전으로 되돌리기용)
+  prep: { key: string; text: string; date?: string }[];  // 순서 단계에서 추가한 할 일(확정 때 Task로 만들어짐)
+  order: string[];                    // 오늘 순서: 항목 id 또는 'f:<원본id>'(후속)/'p:<n>'(추가) 키
   seq: number;
 };
 ```
 
-확정하면 결정을 `boards`에 한 번에 적용하고, 오늘 목록(일반 + 오늘 마감)의 미완료 항목에 `order`를 0부터 차례로 기록함. 후속 연락/준비 작업은 일반 `Task`로 생성되며 원본과의 연결 필드는 없음.
+확정하면 답을 `boards`에 한 번에 적용하고, 오늘 목록(일반 + 오늘 마감)의 미완료 항목에 `order`를 0부터 차례로 기록함. 후속 연락/추가한 할 일은 일반 `Task`로 생성되며 원본과의 연결 필드는 없음.
