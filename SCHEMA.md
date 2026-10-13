@@ -32,6 +32,7 @@ type Task = {
   urgent: boolean;
   subtasks: Subtask[];
   dueDate?: string;      // "YYYY-MM-DD" — scheduled 항목에만 존재
+  snoozedAt?: string;    // "YYYY-MM-DD" — 하루 시작하기의 '오래 묵은 것'에서 '그대로 두기(3일 미루기)'를 누른 날. updatedAt은 올리지 않음
   note?: string;         // 메모(최대 500자, 줄바꿈 허용) — 없거나 빈 문자열이면 필드 자체가 없음. 항목이 보드를 옮겨 다니거나 아카이브로 가도 그대로 따라감
   from?: string;         // 보드 id 문자열 — 아래 "from 필드의 두 가지 의미" 참고
   doneAt?: string;       // "YYYY-MM-DD" — done === true인 항목에만 존재
@@ -50,6 +51,8 @@ type Subtask = {
 ```
 
 ## 필드별 의미
+
+- **`snoozedAt`**: 하루 시작하기의 `오래 묵은 것`에서 `그대로 두기`(= 3일 미루기)를 누른 날짜. 이 날짜로부터 3일이 지나기 전에는 `오래 묵은 것`(검색 제안 포함)에 안 올라옴. '마지막으로 손댄 때'(`updatedAt`)와 '미룬 때'를 따로 관리하려고 별도 필드로 두었고, 변경 감지 서명(`stampChangedTasks`)에서 빼서 미루기만으로는 `updatedAt`이 올라가지 않음(올라가면 묵은 시계가 리셋돼 미루기가 곧 2주가 됨). 클라우드 병합에서 `updatedAt`이 같을 때는 더 나중에 미룬 쪽이 이김(`mergeBoards`). 보드를 옮기면 지워짐.
 
 - **`dueDate`**: `scheduled` 배열에 들어있는 항목만 가짐. `today`/`someday`/`waiting`/`archive`에 있는 동안엔 존재하지 않음(today/someday에서 날짜를 지정하는 순간 그 항목 자체가 `scheduled` 배열로 옮겨감).
 - **`replyDate`** (`YYYY-MM-DD`, 선택): `waiting` 전용 "회신 예정일". `dueDate`와 완전히 별개 필드라 날짜를 붙여도 항목이 `waiting`에 그대로 남고, today로 옮기는 스윕(`migrateArchive`)도 건드리지 않음. 오늘보다 뒤(내일 이후)면 waiting 카드의 접힘 구역에 표시되고, 오늘이거나 지났으면 일반 항목처럼 표시됨(렌더 시점에 매번 다시 계산, 저장된 플래그 없음). waiting에서 다른 보드로 이동하면(`moveTask`) 제거됨. 필드가 없으면 기존과 완전히 동일하게 동작.

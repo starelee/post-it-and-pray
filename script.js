@@ -64,6 +64,7 @@
   // 타이머 종이색이 빨갛게 변하기 시작하는 남은 시간(초).
   const FOCUS_URGENT_SEC = 60;
   const FOCUS_SHAKE_SEC = 10;
+  const SNOOZE_DAYS = 3; // '오래 묵은 것'에서 '그대로 두기'(미루기)를 누르면 이만큼 다시 안 올라옴
   const BOARD_IDS = ['today', 'waiting', 'someday', 'scheduled'];
   let dayStartOpen = false; // 하루 시작하기 오버레이가 열려 있는지(맨 아래 '하루 시작하기' 블록)
   // Boards a task can be manually moved between with the move buttons.
@@ -717,6 +718,7 @@
     const considerStale = (task, boardId) => {
       if (seen.has(task.id)) return;
       if (boardId === 'waiting' && task.replyDate && task.replyDate > today) return; // 일부러 미뤄 둔 것
+      if (task.snoozedAt && -daysUntilDue(task.snoozedAt) < SNOOZE_DAYS) return; // 방금 '그대로 두기'로 미룬 것
       const touched = task.updatedAt || (task.id > 1e12 ? task.id : 0);
       if (!touched) return;
       const days = Math.floor((Date.now() - touched) / 86400000);
@@ -944,6 +946,7 @@
       if (typeof t.note === 'string' && t.note.trim()) out.note = t.note.slice(0, NOTE_MAX);
       if (typeof t.from === 'string' && t.from) out.from = t.from;
       if (typeof t.order === 'number' && isFinite(t.order)) out.order = t.order;
+      if (typeof t.snoozedAt === 'string' && t.snoozedAt) out.snoozedAt = t.snoozedAt;
       if (typeof t.deletedAt === 'string' && t.deletedAt) out.deletedAt = t.deletedAt;
       if (typeof t.updatedAt === 'number' && isFinite(t.updatedAt)) out.updatedAt = t.updatedAt;
       if (out.done) {
@@ -1085,6 +1088,11 @@
       const curP = progress(cur.boardId, cur.task);
       const newP = progress(boardId, task);
       if (newP > curP || (newP === curP && (task.doneAt || '') > (cur.task.doneAt || ''))) {
+        winners.set(task.id, { task, boardId });
+        return;
+      }
+      // 미루기(snoozedAt)는 updatedAt을 올리지 않으니, 시각이 같을 때는 더 나중에 미룬 쪽이 이김
+      if (newP === curP && (task.snoozedAt || '') > (cur.task.snoozedAt || '')) {
         winners.set(task.id, { task, boardId });
       }
     }
@@ -1378,7 +1386,7 @@
     const sigs = new Map();
     BOARD_IDS.concat(['archive', 'lupin', 'trash']).forEach(boardId => {
       (boards[boardId] || []).forEach(t => {
-        const { updatedAt, ...rest } = t;
+        const { updatedAt, snoozedAt, ...rest } = t; // 미루기는 '손댄' 것으로 치지 않음
         sigs.set(t.id, boardId + '|' + JSON.stringify(rest));
       });
     });
@@ -1391,7 +1399,7 @@
     const sigs = new Map();
     BOARD_IDS.concat(['archive', 'lupin', 'trash']).forEach(boardId => {
       (boards[boardId] || []).forEach(t => {
-        const { updatedAt, ...rest } = t;
+        const { updatedAt, snoozedAt, ...rest } = t; // 미루기는 '손댄' 것으로 치지 않음
         const sig = boardId + '|' + JSON.stringify(rest);
         sigs.set(t.id, sig);
         if (lastSigs.get(t.id) !== sig) t.updatedAt = now;
@@ -3888,6 +3896,7 @@
     delete task.dueDate;
     delete task.replyDate; // 회신 예정일은 waiting에 있을 때만 의미 있음
     delete task.from;
+    delete task.snoozedAt; // 미루기는 묵은 것 목록 안에서만 의미 있음
     delete task.order; // 수동 순서는 그 보드 안에서만 의미 있음
     if (toBoardId === 'waiting') {
       // waiting has no done concept — defend against a done task landing
@@ -6779,7 +6788,7 @@
     if (s.state === 'none') return '';
     if (s.state === 'stale') return '다시 확인';
     if (s.state === 'missing') return '사라짐';
-    const label = DAYSTART_ACTION_LABEL[s.d.action];
+    const label = s.d.action === 'keep' && s.d.snooze ? SNOOZE_DAYS + '일 미루기' : DAYSTART_ACTION_LABEL[s.d.action];
     if (s.state === 'incomplete') return label + ' · 날짜 필요';
     if (s.d.action === 'later' || s.d.action === 'wait' || s.d.action === 'follow') {
       return label + ' · ' + dsShortDate(s.d.date);
@@ -6837,13 +6846,14 @@
 
   // ───── 변경 요약 ─────
   function dsSummary() {
-    const counts = { today: 0, later: 0, move: 0, done: 0, wait: 0, newTask: 0 };
+    const counts = { today: 0, later: 0, move: 0, done: 0, wait: 0, newTask: 0, snooze: 0 };
     let incomplete = 0;
     let stale = 0;
     Object.keys(ds.decisions).forEach(id => {
       const s = dsDecisionState(id);
       if (s.state === 'stale') { stale++; return; }
       if (s.state === 'incomplete') { incomplete++; return; }
+      if (s.state === 'ok' && s.d.action === 'keep' && s.d.snooze) counts.snooze++;
       if (s.state !== 'ok' || s.d.action === 'keep') return;
       const a = s.d.action;
       if (a === 'today' || a === 'self') counts.today++;
@@ -6862,6 +6872,7 @@
     if (counts.move) parts.push('옮기기 ' + counts.move);
     if (counts.done) parts.push('완료 ' + counts.done);
     if (counts.wait) parts.push('기다림 ' + counts.wait);
+    if (counts.snooze) parts.push(SNOOZE_DAYS + '일 미루기 ' + counts.snooze);
     if (counts.newTask) parts.push('새 할 일 ' + counts.newTask);
     if (orderChanged) parts.push('순서 변경');
     let text = parts.length ? parts.join(' · ') : '아직 바뀐 게 없어요';
@@ -7049,14 +7060,17 @@
         b.textContent = DAYSTART_ACTION_ICON[action];
       }
       b.type = 'button';
-      b.title = DAYSTART_ACTION_LABEL[action];
-      b.setAttribute('aria-label', DAYSTART_ACTION_LABEL[action]);
+      const actLabel = action === 'keep' && item.group === 'stale' ? SNOOZE_DAYS + '일 미루기 (그동안 다시 안 올라와요)' : DAYSTART_ACTION_LABEL[action];
+      b.title = actLabel;
+      b.setAttribute('aria-label', actLabel);
       b.setAttribute('aria-pressed', cur && cur.action === action ? 'true' : 'false');
       b.addEventListener('click', () => {
         if (cur && cur.action === action) {
           delete ds.decisions[id]; // 같은 아이콘을 다시 누르면 선택 취소
         } else {
           const patch = { action };
+          // '오래 묵은 것'의 그대로 두기는 아무것도 안 하는 게 아니라 3일 미루기
+          if (action === 'keep') patch.snooze = item.group === 'stale';
           if (action === 'follow' && !(cur && cur.text)) patch.text = task.text + ' 후속 연락';
           dsSetDecision(item, patch);
         }
@@ -7298,6 +7312,7 @@
   }
 
   function dsScrub(task) {
+    delete task.snoozedAt;
     delete task.dueDate;
     delete task.replyDate;
     delete task.from;
@@ -7421,7 +7436,12 @@
     try {
       dsTidyItems().forEach(item => {
         const d = dsEffective(item.task.id);
-        if (!d || d.action === 'keep') return;
+        if (!d) return;
+        if (d.action === 'keep') {
+          // 오래 묵은 것의 그대로 두기 = 미룬 날짜만 남김(updatedAt은 안 건드려 '손댄 때'와 섞이지 않음)
+          if (d.snooze && item.group === 'stale') { item.task.snoozedAt = today; changed = true; }
+          return;
+        }
         dsApplyOne(item, d, counter, newTasks);
         changed = true;
       });
