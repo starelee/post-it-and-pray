@@ -6700,6 +6700,13 @@
     return item.boardId === 'today' || (item.boardId === 'scheduled' && item.task.dueDate === todayStr());
   }
 
+  // 지금 어느 카드에 보이는지에 맞는 아이콘 — 오늘 마감/지난 마감인 pray later 항목은 실제로는
+  // gotta do 카드 안에 그려지므로 📅가 아니라 ✿
+  function dsIconKey(boardId, task) {
+    if (boardId === 'scheduled' && task.dueDate && task.dueDate <= todayStr()) return 'today';
+    return boardId;
+  }
+
   // 정비 대상 — 검색 제안과 같은 선정 규칙(개수 제한·무작위 없이 전부). 최근 완료는 제외.
   // 검색 제안의 '챙길 것'은 한데 묶여 있어서, 여기서는 왜 올라왔는지 이유별로 쪼개 보여줌.
   // 한 항목이 여러 이유에 걸리면 위쪽(더 급한) 이유 묶음에 한 번만 나오고 태그는 다 붙음.
@@ -6797,23 +6804,23 @@
         key: String(e.task.id),
         text: e.task.text,
         origin: e.boardId === 'scheduled' ? '오늘 마감' : '기존 Today',
-        board: e.boardId
+        board: 'today'
       });
     });
     dsTidyItems().forEach(item => {
       const d = dsEffective(item.task.id);
       if (!d) return;
       if (d.action === 'today' && !dsAlreadyInToday(item)) {
-        entries.push({ key: String(item.task.id), text: item.task.text, origin: '정비에서 가져옴', board: item.boardId });
+        entries.push({ key: String(item.task.id), text: item.task.text, origin: '정비에서 가져옴', board: 'today' });
       } else if (d.action === 'self') {
-        entries.push({ key: String(item.task.id), text: item.task.text, origin: '직접 처리', board: 'waiting' });
+        entries.push({ key: String(item.task.id), text: item.task.text, origin: '직접 처리', board: 'today' });
       } else if (d.action === 'follow') {
-        entries.push({ key: 'f:' + item.task.id, text: d.text.trim(), origin: '후속 연락', board: 'new' });
+        entries.push({ key: 'f:' + item.task.id, text: d.text.trim(), origin: '후속 연락', board: 'today' });
       }
     });
     ds.prep.forEach(p => {
       if (p.text.trim() && (p.date || todayStr()) === today) {
-        entries.push({ key: p.key, text: p.text.trim(), origin: '준비 작업', board: 'new' });
+        entries.push({ key: p.key, text: p.text.trim(), origin: '준비 작업', board: 'today' });
       }
     });
     return entries;
@@ -6920,7 +6927,7 @@
     }
     if (dsSelectedId != null && !items.some(i => i.task.id === dsSelectedId)) dsSelectedId = null;
 
-    // 데스크톱은 2단(CSS columns), 좁은 화면은 한 단
+    // 묶음마다 [제목 | 항목들] 두 칸(데스크톱), 좁은 화면은 제목 위 · 항목 아래
     const groupsEl = dsEl('div', 'day-start__groups');
     dayStartBodyEl.appendChild(groupsEl);
     const counts = {};
@@ -6931,9 +6938,11 @@
       if (item.group !== lastGroup) {
         lastGroup = item.group;
         const g = DAYSTART_GROUPS.find(x => x.key === item.group);
-        groupsEl.appendChild(dsGroupTitle(g.title + ' ' + counts[item.group]));
+        const groupEl = dsEl('section', 'day-start__group');
+        groupEl.appendChild(dsGroupTitle(g.title + ' ' + counts[item.group]));
         list = dsEl('ul', 'search-list');
-        groupsEl.appendChild(list);
+        groupEl.appendChild(list);
+        groupsEl.appendChild(groupEl);
       }
       const id = item.task.id;
       const selected = id === dsSelectedId;
@@ -6947,7 +6956,7 @@
       row.tabIndex = 0;
       row.setAttribute('role', 'button');
       row.setAttribute('aria-expanded', selected ? 'true' : 'false');
-      row.appendChild(makeBoardIcon(item.boardId));
+      row.appendChild(makeBoardIcon(dsIconKey(item.boardId, item.task)));
       row.appendChild(dsEl('span', 'search-item-text', item.task.text));
       item.tags.forEach(tag => {
         const chip = makeSearchChip(tag);
@@ -6955,7 +6964,6 @@
         row.appendChild(chip);
       });
       if (item.task.note) row.appendChild(makeSearchChip('메모'));
-      row.appendChild(dsEl('span', 'day-start__decision', dsDecisionText(id)));
       const toggle = () => {
         dsSelectedId = selected ? null : id;
         dsRender();
@@ -7031,7 +7039,15 @@
     const cur = st.state === 'stale' ? null : ds.decisions[id];
     const icons = dsEl('div', 'day-start__icons');
     dsOptionsFor(item).forEach(action => {
-      const b = dsEl('button', 'day-start__icon', DAYSTART_ACTION_ICON[action]);
+      const b = dsEl('button', 'day-start__icon');
+      if (action === 'done' || action === 'resolved') {
+        // gotta do의 완료 체크박스와 같은 모양(눌러 고르면 체크가 그려짐)
+        const box = dsEl('span', 'checkbox day-start__checkbox');
+        box.appendChild(makeCheckSvg());
+        b.appendChild(box);
+      } else {
+        b.textContent = DAYSTART_ACTION_ICON[action];
+      }
       b.type = 'button';
       b.title = DAYSTART_ACTION_LABEL[action];
       b.setAttribute('aria-label', DAYSTART_ACTION_LABEL[action]);
@@ -7049,6 +7065,8 @@
       });
       icons.appendChild(b);
     });
+    // 고른 처리 이름은 아이콘 줄 오른쪽 끝에(제목 줄은 제목과 칩만 남겨 줄바꿈이 어지럽지 않게)
+    icons.appendChild(dsEl('span', 'day-start__decision', dsDecisionText(id)));
     box.appendChild(icons);
 
     if (st.state === 'stale') box.appendChild(dsSnippet('다른 곳에서 바뀌었어요. 처리 방법을 다시 골라 주세요.', true));

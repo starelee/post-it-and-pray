@@ -3734,7 +3734,7 @@ body.reorder-mode .sticky:not(.reorder-active) {
   margin-left: auto;
   flex: 0 1 auto;
   min-width: 0;
-  max-width: 42%;
+  max-width: 60%;
   font-family: var(--font-ui);
   letter-spacing: var(--ui-letter-spacing);
   font-size: 13px;
@@ -3811,9 +3811,17 @@ body.reorder-mode .sticky:not(.reorder-active) {
 .day-start__icon[aria-pressed="true"] {
   opacity: 1;
   filter: none;
-  color: var(--accent);
-  background: var(--focus-box-fill);
-  box-shadow: inset 0 -2px 0 var(--accent);
+  transform: scale(1.18);
+}
+
+/* 밑줄/점선 테두리 없이 — 고른 아이콘은 진하고 살짝 커지는 것만으로 구분 */
+.day-start-panel .day-start__icon:focus,
+.day-start-panel .day-start__icon:focus-visible {
+  outline: none;
+}
+
+.day-start-panel .day-start__icon:focus-visible {
+  opacity: 0.9;
 }
 
 .day-start__btn {
@@ -4555,28 +4563,61 @@ body.reorder-mode .sticky:not(.reorder-active) {
   font-family: var(--font-ui);
 }
 
-/* 정비하기: 넓은 화면에서는 패드를 조금 넓히고 묶음을 2단으로(항목/묶음 제목이 단 사이에서 끊기지 않게) */
+/* 정비하기: 묶음마다 왼쪽 칸에 이유(제목), 오른쪽 칸에 항목들. 넓은 화면에서만 패드를 조금 넓힘 */
+.day-start__group + .day-start__group {
+  margin-top: var(--day-start-line);
+}
+
+.day-start__group .search-group-title {
+  margin-top: var(--day-start-line);
+}
+
+.day-start__group:first-child .search-group-title {
+  margin-top: var(--day-start-line);
+}
+
 @media (min-width: 900px) {
   .day-start-panel {
     width: min(980px, 94vw);
   }
 
   .day-start__groups {
-    padding-top: var(--day-start-line);
-    column-count: 2;
-    column-gap: 40px;
-    column-rule: 1px dashed var(--focus-box-border);
+    margin-top: var(--day-start-line);
   }
 
-  .day-start__groups .search-group-title {
-    break-after: avoid;
+  .day-start__group {
+    display: grid;
+    grid-template-columns: 170px minmax(0, 1fr);
+    column-gap: 24px;
+    align-items: start;
   }
 
-  .day-start__groups .day-start__item {
-    break-inside: avoid;
-  }
-
-  .day-start__groups > .search-group-title:first-child {
+  .day-start__group .search-group-title,
+  .day-start__group:first-child .search-group-title {
     margin-top: 0;
+    padding-top: 0;
   }
+}
+
+/* 완료 아이콘: gotta do 체크박스와 같은 상자(눌러 고르면 체크가 그려짐) */
+.day-start__checkbox {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  cursor: inherit;
+  border-width: 2px;
+  pointer-events: none;
+}
+
+.day-start__checkbox .check-icon {
+  width: 11px;
+  height: 11px;
+}
+
+.day-start__icon[aria-pressed="true"] .check-path {
+  stroke-dashoffset: 0;
+}
+
+.day-start__icon:hover .day-start__checkbox {
+  transform: none;
 }
