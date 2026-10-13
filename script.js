@@ -65,6 +65,10 @@
   const FOCUS_URGENT_SEC = 60;
   const FOCUS_SHAKE_SEC = 10;
   const SNOOZE_DAYS = 3; // '오래 묵은 것'에서 '그대로 두기'(미루기)를 누르면 이만큼 다시 안 올라옴
+  // 구글 캘린더(브라우저 OAuth — Google Identity Services). 비워 두면 캘린더 기능은 통째로 숨겨짐(앱 동작에 영향 없음).
+  // Google Cloud에서 만든 "웹 애플리케이션" OAuth 클라이언트 ID(공개값)를 넣으면 켜짐 — 설정 방법은 README의 '구글 캘린더' 참고.
+  const GOOGLE_CLIENT_ID = '';
+  const GCAL_SCOPE = 'https://www.googleapis.com/auth/calendar.readonly';
   const BOARD_IDS = ['today', 'waiting', 'someday', 'scheduled'];
   let dayStartOpen = false; // 하루 시작하기 오버레이가 열려 있는지(맨 아래 '하루 시작하기' 블록)
   // Boards a task can be manually moved between with the move buttons.
@@ -6575,6 +6579,7 @@
   const DAYSTART_DONE_KEY = 'postit-daystart-confirmed-v1'; // 마지막으로 확정한 날짜(YYYY-MM-DD)
   const DAYSTART_STEPS = [
     { id: 'tidy', label: '정비하기' },
+    { id: 'cal', label: '일정 살펴보기' }, // 구글 캘린더를 연결했을 때만(dsSteps)
     { id: 'order', label: '오늘 순서 정하기' }
   ];
   const DAYSTART_DAY_CHECK_MS = 60 * 1000; // 자정을 넘겼는지 확인하는 간격
@@ -6606,6 +6611,7 @@
   let ds = null;             // 초안 { date, step, decisions, prep, order, seq }
   let dsPrevFocus = null;
   let dsDayTimer = null;
+  let dsCal = { state: 'idle', events: [], err: '' }; // 일정 단계: idle → loading → ok | needconnect | error
   let dsAltKey = null;       // '아니오'를 눌러 대안 선택지를 보여주는 중인 질문의 키
 
   function isDayStartOpen() {
@@ -6631,6 +6637,117 @@
     if (cls) el.className = cls;
     if (text != null) el.textContent = text;
     return el;
+  }
+
+  // ───── 구글 캘린더 (브라우저 OAuth) ─────
+  // 서버 없이 브라우저가 구글에서 1시간짜리 읽기 전용 토큰을 받아 캘린더 API를 직접 부름. 처음 한 번만 동의 화면이 뜨고,
+  // 이후에는 구글에 로그인돼 있으면 팝업이 잠깐 떴다 바로 닫힘. 받은 토큰은 만료 5분 전까지 재사용해 그동안은 팝업이 없음.
+  const GCAL_TOKEN_KEY = 'postit-gcal-token';       // { token, exp }
+  const GCAL_GRANTED_KEY = 'postit-gcal-granted';   // 한 번 동의했는지
+  const GCAL_DECLINED_KEY = 'postit-gcal-declined'; // 연결 안 하고 넘어갔는지(그러면 일정 단계를 숨김)
+  const lsGet = (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } };
+  const lsSet = (k, v) => { try { if (v == null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch (e) { /* 무시 */ } };
+  const gcalConfigured = () => !!GOOGLE_CLIENT_ID;
+  const gcalGranted = () => lsGet(GCAL_GRANTED_KEY) === '1';
+  const gcalDeclined = () => lsGet(GCAL_DECLINED_KEY) === '1';
+
+  let gcalClient = null;   // GIS token client
+  let gcalPending = null;  // 진행 중인 토큰 요청의 resolve
+
+  function gcalCachedToken() {
+    try {
+      const t = JSON.parse(lsGet(GCAL_TOKEN_KEY) || 'null');
+      if (t && t.token && t.exp > Date.now()) return t.token;
+    } catch (e) { /* 무시 */ }
+    return null;
+  }
+
+  function gcalInit() {
+    if (gcalClient || !GOOGLE_CLIENT_ID || !(window.google && google.accounts && google.accounts.oauth2)) return;
+    gcalClient = google.accounts.oauth2.initTokenClient({
+      client_id: GOOGLE_CLIENT_ID,
+      scope: GCAL_SCOPE,
+      callback: (resp) => {
+        const done = gcalPending; gcalPending = null;
+        const ok = resp && resp.access_token && !resp.error
+          && (!google.accounts.oauth2.hasGrantedAllScopes || google.accounts.oauth2.hasGrantedAllScopes(resp, GCAL_SCOPE));
+        if (ok) {
+          lsSet(GCAL_TOKEN_KEY, JSON.stringify({ token: resp.access_token, exp: Date.now() + Math.max(60, (Number(resp.expires_in) || 3600) - 300) * 1000 }));
+          lsSet(GCAL_GRANTED_KEY, '1');
+          lsSet(GCAL_DECLINED_KEY, null);
+        }
+        if (done) done(ok ? resp.access_token : null);
+      },
+      error_callback: () => {
+        const done = gcalPending; gcalPending = null; // 팝업이 막혔거나 닫힘
+        if (done) done(null);
+      }
+    });
+  }
+
+  // 구글 스크립트는 하루 시작하기를 열 때 미리 받아 둠 — 팝업은 눌렀을 때 바로 열려야 브라우저가 막지 않아서
+  function gcalPreload() {
+    if (!GOOGLE_CLIENT_ID) return;
+    if (window.google && google.accounts && google.accounts.oauth2) { gcalInit(); return; }
+    if (document.getElementById('gsiScript')) return;
+    const sc = document.createElement('script');
+    sc.id = 'gsiScript';
+    sc.src = 'https://accounts.google.com/gsi/client';
+    sc.async = true;
+    sc.onload = gcalInit;
+    document.head.appendChild(sc);
+  }
+
+  // 새 토큰 요청(팝업) — 사용자가 누른 직후 동기적으로 불러야 함. 못 받으면 null.
+  function gcalRequest() {
+    return new Promise(resolve => {
+      gcalInit();
+      if (!gcalClient) { resolve(null); return; }
+      gcalPending = resolve;
+      try { gcalClient.requestAccessToken({}); } catch (e) { gcalPending = null; resolve(null); }
+    });
+  }
+
+  // 오늘 0시 ~ 모레 0시(내일까지)의 일정. { auth:false }면 토큰이 거부됨(만료·권한 취소).
+  async function gcalFetchEvents(token) {
+    const from = new Date(); from.setHours(0, 0, 0, 0);
+    const to = new Date(from); to.setDate(to.getDate() + 2);
+    const url = 'https://www.googleapis.com/calendar/v3/calendars/primary/events?' + new URLSearchParams({
+      timeMin: from.toISOString(), timeMax: to.toISOString(), singleEvents: 'true', orderBy: 'startTime', maxResults: '50'
+    }).toString();
+    const r = await fetch(url, { headers: { Authorization: 'Bearer ' + token } });
+    if (r.status === 401 || r.status === 403) { lsSet(GCAL_TOKEN_KEY, null); return { auth: false }; }
+    if (!r.ok) throw new Error('calendar ' + r.status);
+    const data = await r.json();
+    const events = (data.items || [])
+      .filter(ev => ev.status !== 'cancelled')
+      .filter(ev => !ev.eventType || ev.eventType === 'default') // 근무 위치/부재 같은 것은 제외
+      .filter(ev => !(ev.attendees || []).some(a => a.self && a.responseStatus === 'declined')) // 거절한 일정 제외
+      .map(ev => {
+        const allDay = !!(ev.start && ev.start.date);
+        return {
+          id: ev.id,
+          title: ev.summary || '(제목 없음)',
+          allDay,
+          start: allDay ? ev.start.date : (ev.start && ev.start.dateTime),
+          end: allDay ? (ev.end && ev.end.date) : (ev.end && ev.end.dateTime)
+        };
+      })
+      .filter(ev => ev.start);
+    return { events };
+  }
+
+  function gcalDisconnect() {
+    const tok = gcalCachedToken();
+    try { if (tok && window.google && google.accounts && google.accounts.oauth2 && google.accounts.oauth2.revoke) google.accounts.oauth2.revoke(tok, () => {}); } catch (e) { /* 무시 */ }
+    lsSet(GCAL_TOKEN_KEY, null);
+    lsSet(GCAL_GRANTED_KEY, null);
+    lsSet(GCAL_DECLINED_KEY, '1');
+  }
+
+  // 일정 단계는 설정돼 있고, 연결했거나 아직 거절하지 않았을 때만
+  function dsSteps() {
+    return DAYSTART_STEPS.filter(st => st.id !== 'cal' || (gcalConfigured() && (gcalGranted() || !gcalDeclined())));
   }
 
   // ───── 초안 저장/불러오기 ─────
@@ -7114,16 +7231,22 @@
     }
     clearEl(dayStartBodyEl);
     const d = new Date();
-    const stepIdx = Math.max(0, DAYSTART_STEPS.findIndex(st => st.id === ds.step));
+    const steps = dsSteps();
+    if (!steps.some(st => st.id === ds.step)) ds.step = 'tidy'; // 숨겨진 단계(캘린더 연결을 안 한 경우)에서 복원되면 처음으로
+    const stepIdx = steps.findIndex(st => st.id === ds.step);
     // 단계 표시줄은 따로 두지 않고, 제목 옆에 "날짜 · 몇 번째 단계"만 작게
     dayStartDateEl.textContent = (d.getMonth() + 1) + '/' + d.getDate() + '(' + WEEKDAY_KO[d.getDay()] + ') · '
-      + (stepIdx + 1) + '/' + DAYSTART_STEPS.length + ' ' + DAYSTART_STEPS[stepIdx].label;
-    const isLast = stepIdx === DAYSTART_STEPS.length - 1;
+      + (stepIdx + 1) + '/' + steps.length + ' ' + steps[stepIdx].label;
+    const isLast = stepIdx === steps.length - 1;
     if (ds.step === 'tidy') {
       const pending = dsPendingQuestions();
       dayStartConfirmBtn.textContent = pending.length ? '남은 ' + pending.length + '개 건너뛰기 →' : '다음 단계 →';
       dayStartPrevBtn.hidden = true; // 첫 단계 — 답은 각 줄의 '바꾸기'로 되돌림
       dsRenderQuestions();
+    } else if (ds.step === 'cal') {
+      dayStartConfirmBtn.textContent = '다음 단계 →';
+      dayStartPrevBtn.hidden = false;
+      dsRenderCalendar();
     } else {
       dayStartConfirmBtn.textContent = isLast ? '계획 확정하고 Today로' : '다음 단계 →';
       dayStartPrevBtn.hidden = false;
@@ -7360,7 +7483,133 @@
     if (!pending) dayStartBodyEl.appendChild(dsEl('p', 'day-start__done', '다 정리했어요 ✓'));
   }
 
-  // ② 오늘 순서 정하기 — 한 줄에 하나. 손잡이(⋮⋮)는 순서 바꾸기 모드와 같은 모양.
+  // ② 일정 살펴보기 — 오늘·내일 구글 캘린더 일정을 보고, 할 일로 만들 것은 ➕로 담음
+  function dsCalStart(token) {
+    dsCal.state = 'loading';
+    gcalFetchEvents(token).then(res => {
+      if (res.auth === false) { dsCal.state = 'needconnect'; dsCal.err = 'expired'; }
+      else { dsCal.state = 'ok'; dsCal.events = res.events; }
+    }).catch(() => { dsCal.state = 'error'; })
+      .then(() => { if (dayStartOpen && ds && ds.step === 'cal') dsRender(); });
+  }
+
+  // 연결(팝업) — 눌린 직후 동기적으로 불러야 해서 클릭 핸들러에서 곧장 호출
+  function dsCalConnect(goToCal) {
+    dsCal.state = 'loading';
+    if (goToCal) { ds.step = 'cal'; dsSaveDraft(); }
+    dsRender();
+    gcalRequest().then(tok => {
+      if (!tok) { dsCal.state = 'needconnect'; dsCal.err = 'blocked'; if (dayStartOpen && ds) dsRender(); return; }
+      dsCalStart(tok);
+      if (dayStartOpen && ds) dsRender();
+    });
+  }
+
+  function dsDayLabelKeys() {
+    return [{ key: todayStr(), label: '오늘' }, { key: tomorrowStr(), label: '내일' }];
+  }
+
+  function dsEventOnDay(ev, dayKey) {
+    if (ev.allDay) return ev.start <= dayKey && dayKey < (ev.end || ev.start);
+    const ds0 = new Date(dayKey + 'T00:00:00');
+    const de = new Date(ds0); de.setDate(de.getDate() + 1);
+    const st = new Date(ev.start);
+    const en = new Date(ev.end || ev.start);
+    return st < de && en > ds0 || (st >= ds0 && st < de);
+  }
+
+  function dsEventTime(ev) {
+    if (ev.allDay) return '종일';
+    const d = new Date(ev.start);
+    return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+  }
+
+  function dsRenderCalendar() {
+    if (dsCal.state === 'idle') {
+      // 단계에 들어서면 자동으로: 토큰이 있으면 바로, 이미 동의했으면 팝업(잠깐), 처음이면 연결 버튼
+      const tok = gcalCachedToken();
+      if (tok) dsCalStart(tok);
+      else if (gcalGranted()) {
+        dsCal.state = 'loading';
+        gcalRequest().then(t => {
+          if (t) dsCalStart(t); else dsCal.state = 'needconnect', dsCal.err = 'blocked';
+          if (dayStartOpen && ds && ds.step === 'cal') dsRender();
+        });
+      } else dsCal.state = 'needconnect';
+    }
+
+    if (dsCal.state === 'loading') {
+      dayStartBodyEl.appendChild(dsLead('일정을 불러오는 중…'));
+      return;
+    }
+    if (dsCal.state === 'needconnect') {
+      dayStartBodyEl.appendChild(dsLead(dsCal.err === 'expired' ? '연결이 끊겼어요. 다시 연결해 주세요.'
+        : dsCal.err === 'blocked' ? '팝업이 열리지 않았어요. 버튼을 눌러 연결해 주세요.'
+        : '구글 캘린더를 연결하면 오늘·내일 일정을 할 일로 가져올 수 있어요.'));
+      const row = dsEl('div', 'day-start__calconnect');
+      const btn = dsEl('button', 'confirm-btn confirm-btn-ok', '📅 구글 캘린더 연결');
+      btn.type = 'button';
+      btn.addEventListener('click', () => { dsCal.err = ''; dsCalConnect(false); });
+      row.appendChild(btn);
+      dayStartBodyEl.appendChild(row);
+      return;
+    }
+    if (dsCal.state === 'error') {
+      dayStartBodyEl.appendChild(dsLead('일정을 불러오지 못했어요.'));
+      const row = dsEl('div', 'day-start__calconnect');
+      const btn = dsEl('button', 'confirm-btn confirm-btn-cancel', '다시 시도');
+      btn.type = 'button';
+      btn.addEventListener('click', () => { dsCal.state = 'idle'; dsRender(); });
+      row.appendChild(btn);
+      dayStartBodyEl.appendChild(row);
+      return;
+    }
+
+    dayStartBodyEl.appendChild(dsLead('할 일로 만들 일정은 ➕를 눌러요.'));
+    const now = Date.now();
+    dsDayLabelKeys().forEach(({ key, label }) => {
+      dayStartBodyEl.appendChild(dsEl('h3', 'search-group-title', label));
+      const evs = dsCal.events.filter(ev => dsEventOnDay(ev, key));
+      if (!evs.length) { dayStartBodyEl.appendChild(dsLead(label + ' 일정이 없어요.')); return; }
+      const list = dsEl('ul', 'search-list day-start__events');
+      evs.forEach(ev => {
+        const src = ev.id + '@' + key;
+        const added = ds.prep.find(x => x.src === src);
+        const li = dsEl('li', 'day-start__event');
+        if (!ev.allDay && key === todayStr() && new Date(ev.end || ev.start).getTime() < now) li.classList.add('is-past');
+        li.appendChild(makeBoardIcon('scheduled'));
+        li.appendChild(dsEl('span', 'search-item-text', ev.title));
+        li.appendChild(makeSearchChip(dsEventTime(ev)));
+        const add = dsEl('button', 'day-start__evadd', added ? '✓' : '➕');
+        add.type = 'button';
+        add.setAttribute('aria-pressed', added ? 'true' : 'false');
+        add.setAttribute('aria-label', added ? '할 일에서 빼기: ' + ev.title : '할 일로 만들기: ' + ev.title);
+        add.addEventListener('click', () => {
+          if (added) ds.prep = ds.prep.filter(x => x.src !== src);
+          else ds.prep.push({ key: 'p:' + (ds.seq++), text: ev.allDay ? ev.title : dsEventTime(ev) + ' ' + ev.title, date: key, src });
+          dsSaveDraft();
+          dsRender();
+        });
+        li.appendChild(add);
+        list.appendChild(li);
+      });
+      dayStartBodyEl.appendChild(list);
+    });
+    const off = dsEl('button', 'day-start__change day-start__disconnect', '캘린더 연결 해제');
+    off.type = 'button';
+    off.addEventListener('click', () => {
+      gcalDisconnect();
+      dsCal = { state: 'idle', events: [], err: '' };
+      ds.prep = ds.prep.filter(x => !x.src);
+      ds.step = 'order';
+      dsSaveDraft();
+      dsRender();
+      showToast('구글 캘린더 연결을 해제했어요');
+    });
+    dayStartBodyEl.appendChild(off);
+  }
+
+  // ③ 오늘 순서 정하기 — 한 줄에 하나. 손잡이(⋮⋮)는 순서 바꾸기 모드와 같은 모양.
   function dsRenderOrder() {
     const entries = dsBuildOrderEntries();
     const byKey = new Map(entries.map(e => [e.key, e]));
@@ -7456,6 +7705,13 @@
     addRow.appendChild(plus);
     addRow.appendChild(addInput);
     dayStartBodyEl.appendChild(addRow);
+    // 일정 단계를 건너뛴(연결 안 한) 경우에만 — 나중에라도 연결할 수 있는 입구
+    if (gcalConfigured() && !gcalGranted()) {
+      const link = dsEl('button', 'day-start__change day-start__connectlink', '📅 구글 캘린더 연결하기');
+      link.type = 'button';
+      link.addEventListener('click', () => { lsSet(GCAL_DECLINED_KEY, null); dsCal = { state: 'idle', events: [], err: '' }; dsCalConnect(true); });
+      dayStartBodyEl.appendChild(link);
+    }
   }
 
   // 손잡이 끌기(마우스/터치/펜). 끝나는 자리의 위치만 계산해 onDrop(to)로 넘김.
@@ -7798,6 +8054,8 @@
     closeOpenControls();
     ds = dsLoadDraft();
     dsAltKey = null;
+    dsCal = { state: 'idle', events: [], err: '' };
+    gcalPreload();
     dsPrevFocus = document.activeElement;
     dayStartOpen = true;
     dayStartEl.removeAttribute('inert');
@@ -7837,16 +8095,19 @@
     dayStartCloseBtn.addEventListener('click', closeDayStart);
     const goStep = (delta) => {
       if (!ds) return;
-      const i = DAYSTART_STEPS.findIndex(st => st.id === ds.step) + delta;
-      if (i < 0 || i >= DAYSTART_STEPS.length) return;
-      ds.step = DAYSTART_STEPS[i].id;
+      const steps = dsSteps();
+      const i = steps.findIndex(st => st.id === ds.step) + delta;
+      if (i < 0 || i >= steps.length) return;
+      // 연결 안 한 채 일정 단계에서 넘어가면 다음부터 그 단계를 숨김(오늘 순서 단계에서 다시 연결할 수 있음)
+      if (delta > 0 && ds.step === 'cal' && !gcalGranted()) lsSet(GCAL_DECLINED_KEY, '1');
+      ds.step = steps[i].id;
       dsSaveDraft();
       dsRender();
       dayStartEl.scrollTop = 0;
     };
     // 단계는 순서대로: 마지막 단계 전까지는 '다음 단계', 마지막에서만 확정
     dayStartConfirmBtn.addEventListener('click', () => {
-      if (ds && ds.step !== DAYSTART_STEPS[DAYSTART_STEPS.length - 1].id) goStep(1);
+      if (ds && ds.step !== dsSteps()[dsSteps().length - 1].id) goStep(1);
       else dsConfirm();
     });
     dayStartPrevBtn.addEventListener('click', () => goStep(-1));

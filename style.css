@@ -4490,3 +4490,70 @@ body.reorder-mode .sticky:not(.reorder-active) {
   }
 
 }
+
+/* ② 일정 살펴보기 */
+.day-start__calconnect {
+  display: flex;
+  gap: 8px;
+  margin-top: var(--day-start-line);
+  position: relative;
+  top: 3px;
+}
+
+.day-start__events {
+  margin-top: 0;
+}
+
+.day-start__event {
+  position: relative;
+  top: 3px;
+  display: flex;
+  align-items: flex-start;
+  column-gap: 8px;
+  min-height: var(--day-start-line);
+}
+
+.day-start__event .search-item-text {
+  flex: 0 1 auto;
+}
+
+.day-start__event.is-past {
+  opacity: 0.45;
+}
+
+.day-start__evadd {
+  margin-left: auto;
+  flex: 0 0 auto;
+  height: var(--day-start-line);
+  min-width: 32px;
+  padding: 0 6px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 15px;
+  line-height: var(--day-start-line);
+  opacity: 0.55;
+  filter: grayscale(1);
+  transition: opacity 0.15s var(--ease-ui), filter 0.15s var(--ease-ui), transform 0.15s var(--ease-ui);
+}
+
+.day-start__evadd:hover,
+.day-start__evadd:focus-visible {
+  opacity: 0.9;
+  transform: scale(1.1);
+}
+
+.day-start__evadd[aria-pressed="true"] {
+  opacity: 1;
+  filter: none;
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.day-start__disconnect,
+.day-start__connectlink {
+  display: block;
+  margin-top: var(--day-start-line);
+  position: relative;
+  top: 3px;
+}
