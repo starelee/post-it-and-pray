@@ -473,7 +473,7 @@
 
   // 카드 제목에 붙은 그 아이콘(✿ gotta do, ⏳ waiting, 🌙 someday, 📅 pray later)과
   // 같은 기호 — done 기록은 done 패널 제목의 📋. 항목이 어느 보드 것인지 알려줌.
-  const BOARD_ICONS = { today: '✿', waiting: '⏳', someday: '🌙', scheduled: '📅', archive: '📋', done: '📋' };
+  const BOARD_ICONS = { today: '✿', waiting: '⏳', someday: '🌙', scheduled: '📅', archive: '📋', done: '📋', new: '➕' };
 
   function makeBoardIcon(key) {
     const icon = document.createElement('span');
@@ -6117,7 +6117,6 @@
     { id: 'cal', label: '일정 살펴보기' },
     { id: 'order', label: '오늘 순서 정하기' }
   ];
-  const DAYSTART_NARROW_MQ = '(max-width: 720px)';
   const DAYSTART_DAY_CHECK_MS = 60 * 1000; // 자정을 넘겼는지 확인하는 간격
   const DAYSTART_ACTION_LABEL = {
     today: '오늘 하기',
@@ -6127,15 +6126,19 @@
     done: '완료',
     keep: '그대로 두기',
     wait: '계속 기다리기',
-    self: '오늘 직접 처리하기',
-    follow: '후속 연락하기',
+    self: '오늘 직접 처리',
+    follow: '후속 연락',
     resolved: '해결됨'
+  };
+  // 선택지 앞에 붙는 아이콘 — 카드 제목/항목 아이콘 줄과 같은 기호(✿ ⏳ 🌙 📅)를 그대로 씀
+  const DAYSTART_ACTION_ICON = {
+    today: '✿', later: '📅', toWaiting: '⏳', toSomeday: '🌙', done: '✓',
+    wait: '⏳', self: '✿', follow: '✉️', resolved: '✓', keep: ''
   };
   // 이 처리를 고르면 gotta do 목록에서 빠짐 / 새로 들어옴
   const DAYSTART_LEAVES_TODAY = ['later', 'toWaiting', 'toSomeday', 'done'];
 
   const dayStartEl = document.getElementById('dayStart');
-  const dayStartSheetEl = dayStartEl && dayStartEl.querySelector('.day-start__sheet');
   const dayStartBodyEl = document.getElementById('dayStartBody');
   const dayStartDateEl = document.getElementById('dayStartDate');
   const dayStartStepsEl = document.getElementById('dayStartSteps');
@@ -6150,7 +6153,6 @@
   let dsSelectedId = null;   // 정비하기에서 편집 중인 항목 id
   let dsPrevFocus = null;
   let dsDayTimer = null;
-  const dsNarrowMq = window.matchMedia ? window.matchMedia(DAYSTART_NARROW_MQ) : null;
 
   function isDayStartOpen() {
     return dayStartOpen;
@@ -6175,13 +6177,6 @@
     if (cls) el.className = cls;
     if (text != null) el.textContent = text;
     return el;
-  }
-
-  function dsButton(cls, text, onClick) {
-    const b = dsEl('button', cls, text);
-    b.type = 'button';
-    if (onClick) b.addEventListener('click', onClick);
-    return b;
   }
 
   // ───── 초안 저장/불러오기 ─────
@@ -6257,7 +6252,7 @@
   function dsTidyItems() {
     const items = [];
     collectSuggestions({ all: true }).forEach(sec => {
-      sec.items.forEach(it => items.push({ task: it.task, boardId: it.boardId, tags: it.tags }));
+      sec.items.forEach(it => items.push({ task: it.task, boardId: it.boardId, tags: it.tags, section: sec.label }));
     });
     return items;
   }
@@ -6396,9 +6391,11 @@
   }
 
   // ───── 화면 그리기 ─────
+  // 검색 패드와 같은 말투로: 보드 아이콘(✿ ⏳ 🌙 📅) · 제목 · 칩을 한 줄(28px)에, 처리 선택지는
+  // done 패널의 "↻ 또 하기"처럼 아이콘 + 글자만 있는 가벼운 버튼으로.
   function dsRender() {
     if (!ds || !dayStartBodyEl) return;
-    const scroll = dayStartBodyEl.scrollTop;
+    const scroll = dayStartEl.scrollTop;
     // 다시 그려도 방금 누르던 컨트롤에 포커스가 남도록 (같은 종류 중 몇 번째인지로 기억)
     const active = document.activeElement;
     let refocus = null;
@@ -6408,9 +6405,10 @@
     }
     clearEl(dayStartBodyEl);
     const d = new Date();
-    dayStartDateEl.textContent = (d.getMonth() + 1) + '월 ' + d.getDate() + '일 ' + WEEKDAY_KO[d.getDay()] + '요일';
+    dayStartDateEl.textContent = (d.getMonth() + 1) + '/' + d.getDate() + '(' + WEEKDAY_KO[d.getDay()] + ')';
     Array.from(dayStartStepsEl.children).forEach(btn => {
       const on = btn.dataset.step === ds.step;
+      btn.classList.toggle('is-current', on);
       if (on) btn.setAttribute('aria-current', 'step');
       else btn.removeAttribute('aria-current');
     });
@@ -6418,7 +6416,7 @@
     else if (ds.step === 'cal') dsRenderCalendar();
     else dsRenderOrder();
     dsRefreshSummary();
-    dayStartBodyEl.scrollTop = scroll;
+    dayStartEl.scrollTop = scroll;
     if (refocus && refocus.idx >= 0) {
       const found = dayStartBodyEl.querySelectorAll('.' + refocus.cls);
       const el = found[Math.min(refocus.idx, found.length - 1)];
@@ -6426,80 +6424,66 @@
     }
   }
 
-  function dsBoardMarkVar(board) {
-    if (board === 'waiting') return 'var(--paper-waiting)';
-    if (board === 'someday' || board === 'scheduled') return 'var(--paper-someday)';
-    if (board === 'new') return 'var(--accent)';
-    return 'var(--paper)';
+  function dsLead(text) {
+    return dsEl('p', 'day-start__lead', text);
   }
 
-  const DAYSTART_BOARD_LABEL = { today: 'gotta do', waiting: 'waiting', someday: 'someday', scheduled: 'pray later' };
-  function dsBoardLabel(boardId) {
-    return DAYSTART_BOARD_LABEL[boardId] || boardId;
+  function dsGroupTitle(text) {
+    return dsEl('h3', 'search-group-title', text);
   }
 
   // ① 정비하기
   function dsRenderTidy() {
     const items = dsTidyItems();
-    dayStartBodyEl.appendChild(dsEl('p', 'day-start__lead', '남아 있는 일을 한 번씩 다시 판단해 보세요. 전부 처리하지 않아도 돼요.'));
+    dayStartBodyEl.appendChild(dsLead('남아 있는 일을 한 번씩 다시 판단해 보세요. 전부 처리하지 않아도 돼요.'));
     if (!items.length) {
-      dayStartBodyEl.appendChild(dsEl('p', 'day-start__empty', '지금 챙길 게 없어요. 다음 단계로 가요 ☁️'));
+      dayStartBodyEl.appendChild(dsLead('지금 챙길 게 없어요. 다음 단계로 가요 ☁️'));
       return;
     }
-    const narrow = !!(dsNarrowMq && dsNarrowMq.matches);
-    if (!narrow && !items.some(i => i.task.id === dsSelectedId)) dsSelectedId = items[0].task.id;
-    if (narrow && dsSelectedId != null && !items.some(i => i.task.id === dsSelectedId)) dsSelectedId = null;
+    if (dsSelectedId != null && !items.some(i => i.task.id === dsSelectedId)) dsSelectedId = null;
 
-    const layout = dsEl('div', 'day-start__review-layout');
-    const list = dsEl('ul', 'day-start__review-list');
-    list.setAttribute('aria-label', '정비할 항목');
+    let list = null;
+    let lastSection = null;
     items.forEach(item => {
+      if (item.section !== lastSection) {
+        lastSection = item.section;
+        dayStartBodyEl.appendChild(dsGroupTitle(item.section));
+        list = dsEl('ul', 'search-list');
+        dayStartBodyEl.appendChild(list);
+      }
       const id = item.task.id;
-      const li = dsEl('li', 'day-start__review-item');
-      li.dataset.id = id;
       const selected = id === dsSelectedId;
+      const li = dsEl('li', 'search-item day-start__item');
+      li.dataset.id = id;
       li.setAttribute('aria-selected', selected ? 'true' : 'false');
       const st = dsDecisionState(id).state;
       if (st !== 'none') li.dataset.state = st;
-      const btn = dsEl('button', 'day-start__review-btn');
-      btn.type = 'button';
-      btn.setAttribute('aria-expanded', selected ? 'true' : 'false');
-      const mark = dsEl('span', 'day-start__mark');
-      mark.style.background = dsBoardMarkVar(item.boardId);
-      mark.setAttribute('aria-hidden', 'true');
-      const main = dsEl('span', 'day-start__review-main');
-      main.appendChild(dsEl('span', 'day-start__review-title', item.task.text));
-      const tagsEl = dsEl('span', 'day-start__review-tags');
-      tagsEl.appendChild(dsEl('span', 'day-start__chip', dsBoardLabel(item.boardId)));
-      item.tags.forEach(t => tagsEl.appendChild(dsEl('span', 'day-start__chip day-start__chip-reason', t)));
-      main.appendChild(tagsEl);
-      const dec = dsEl('span', 'day-start__review-decision', dsDecisionText(id));
-      btn.appendChild(mark);
-      btn.appendChild(main);
-      btn.appendChild(dec);
-      btn.addEventListener('click', () => {
-        dsSelectedId = (narrow && dsSelectedId === id) ? null : id;
-        dsRender();
+
+      const row = dsEl('div', 'search-item-row day-start__row');
+      row.tabIndex = 0;
+      row.setAttribute('role', 'button');
+      row.setAttribute('aria-expanded', selected ? 'true' : 'false');
+      row.appendChild(makeBoardIcon(item.boardId));
+      row.appendChild(dsEl('span', 'search-item-text', item.task.text));
+      item.tags.forEach(tag => {
+        const chip = makeSearchChip(tag);
+        if (/지남/.test(tag)) chip.classList.add('search-chip-alert');
+        row.appendChild(chip);
       });
-      li.appendChild(btn);
+      if (item.task.note) row.appendChild(makeSearchChip('메모'));
+      row.appendChild(dsEl('span', 'day-start__decision', dsDecisionText(id)));
+      const toggle = () => {
+        dsSelectedId = selected ? null : id;
+        dsRender();
+      };
+      row.addEventListener('click', toggle);
+      row.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); }
+      });
+      li.appendChild(row);
+      if (selected) li.appendChild(dsBuildEditor(item));
       list.appendChild(li);
     });
-    layout.appendChild(list);
-
-    const sel = items.find(i => i.task.id === dsSelectedId);
-    if (sel) {
-      const editor = dsBuildEditor(sel);
-      if (narrow) {
-        list.querySelector('.day-start__review-item[aria-selected="true"]').appendChild(editor);
-      } else {
-        const col = dsEl('div', 'day-start__editor-col');
-        col.appendChild(editor);
-        layout.appendChild(col);
-      }
-    } else if (!narrow) {
-      layout.appendChild(dsEl('div', 'day-start__editor-col'));
-    }
-    dayStartBodyEl.appendChild(layout);
   }
 
   function dsSetDecision(item, patch) {
@@ -6512,27 +6496,44 @@
     dsSaveDraft();
   }
 
+  // 아이콘 + 글자만 있는 가벼운 버튼(done 패널의 "↻ 또 하기"와 같은 결)
+  function dsTextButton(cls, icon, text, onClick) {
+    const b = dsEl('button', 'day-start__btn ' + cls);
+    b.type = 'button';
+    if (icon) b.appendChild(dsEl('span', 'day-start__btn-icon', icon));
+    b.appendChild(document.createTextNode(text));
+    b.addEventListener('click', onClick);
+    return b;
+  }
+
   function dsQuickDates(onPick) {
     const wrap = dsEl('div', 'day-start__quick');
     [['내일', 1], ['3일 뒤', 3], ['1주 뒤', 7]].forEach(([label, n]) => {
-      wrap.appendChild(dsButton('day-start__quick-btn', label, () => onPick(dsDateAfter(n))));
+      wrap.appendChild(dsTextButton('', '', label, () => onPick(dsDateAfter(n))));
     });
     return wrap;
   }
 
-  function dsDateField(value, min, onChange, label) {
-    const row = dsEl('label', 'day-start__field');
+  function dsDateRow(label, value, min, onChange) {
+    const row = dsEl('div', 'day-start__field');
     row.appendChild(dsEl('span', 'day-start__field-label', label));
     const input = document.createElement('input');
     input.type = 'date';
-    input.className = 'day-start__input date-picker-input';
+    input.className = 'date-picker-input';
     input.min = min;
     input.value = value || '';
+    input.setAttribute('aria-label', label);
     input.addEventListener('change', () => onChange(input.value));
     row.appendChild(wrapDateInputWithHint(input));
+    row.appendChild(dsQuickDates(onChange));
     return row;
   }
 
+  function dsSnippet(text, warn) {
+    return dsEl('div', 'search-snippet day-start__snippet' + (warn ? ' is-warn' : ''), text);
+  }
+
+  // 선택한 항목 바로 아래에 펼쳐지는 편집 줄들 — 보드에서 아이콘 줄이 항목 밑으로 열리는 것과 같은 자리
   function dsBuildEditor(item) {
     const id = item.task.id;
     const task = item.task;
@@ -6541,24 +6542,21 @@
     box.setAttribute('role', 'group');
     box.setAttribute('aria-label', '처리 방법: ' + task.text);
 
-    box.appendChild(dsEl('h3', 'day-start__editor-title', task.text));
     const meta = [];
     if (task.subtasks && task.subtasks.length) meta.push('하위 ' + subtaskProgressText(task));
     if (item.boardId === 'waiting' && task.replyDate) meta.push('확인 예정 ' + dsShortDate(task.replyDate));
     if (item.boardId === 'scheduled' && task.dueDate) meta.push('마감 ' + dsShortDate(task.dueDate));
-    if (meta.length) box.appendChild(dsEl('p', 'day-start__editor-meta', meta.join(' · ')));
+    if (meta.length) box.appendChild(dsSnippet(meta.join(' · ')));
     if (task.note) {
       const n = task.note.replace(/\s+/g, ' ');
-      box.appendChild(dsEl('p', 'day-start__editor-note', '📝 ' + (n.length > 80 ? n.slice(0, 80) + '…' : n)));
+      box.appendChild(dsSnippet('메모: ' + (n.length > 60 ? n.slice(0, 60) + '…' : n)));
     }
-    if (st.state === 'stale') {
-      box.appendChild(dsEl('p', 'day-start__notice', '다른 곳에서 이 항목이 바뀌었어요. 처리 방법을 다시 골라 주세요.'));
-    }
+    if (st.state === 'stale') box.appendChild(dsSnippet('다른 곳에서 바뀌었어요. 처리 방법을 다시 골라 주세요.', true));
 
     const cur = st.state === 'stale' ? null : ds.decisions[id];
     const opts = dsEl('div', 'day-start__options');
     dsOptionsFor(item).forEach(action => {
-      const b = dsButton('day-start__opt', DAYSTART_ACTION_LABEL[action], () => {
+      const b = dsTextButton('day-start__opt', DAYSTART_ACTION_ICON[action], DAYSTART_ACTION_LABEL[action], () => {
         const patch = { action };
         if (action === 'follow' && !(cur && cur.text)) patch.text = task.text + ' 후속 연락';
         dsSetDecision(item, patch);
@@ -6570,43 +6568,41 @@
     box.appendChild(opts);
 
     if (cur && (cur.action === 'later' || cur.action === 'wait' || cur.action === 'follow')) {
-      const minDate = dsDateAfter(1);
-      const label = cur.action === 'later' ? '날짜' : '다음 확인 날짜';
       const setDate = (v) => { dsSetDecision(item, { date: v }); dsRender(); };
-      box.appendChild(dsDateField(cur.date, minDate, setDate, label));
-      box.appendChild(dsQuickDates(setDate));
+      box.appendChild(dsDateRow(cur.action === 'later' ? '날짜' : '다음 확인', cur.date, dsDateAfter(1), setDate));
     }
     if (cur && cur.action === 'follow') {
-      const row = dsEl('label', 'day-start__field');
-      row.appendChild(dsEl('span', 'day-start__field-label', '후속 작업 제목'));
+      const row = dsEl('div', 'day-start__field');
+      row.appendChild(makeBoardIcon('new'));
       const input = document.createElement('input');
       input.type = 'text';
-      input.className = 'day-start__input day-start__input-text';
+      input.className = 'day-start__text';
       input.maxLength = 100;
       input.value = cur.text || '';
+      input.setAttribute('aria-label', '후속 작업 제목');
       input.addEventListener('input', () => {
         dsSetDecision(item, { text: input.value });
         dsRefreshSummary();
-        const dec = dayStartBodyEl.querySelector('.day-start__review-item[data-id="' + id + '"] .day-start__review-decision');
+        const dec = dayStartBodyEl.querySelector('.day-start__item[data-id="' + id + '"] .day-start__decision');
         if (dec) dec.textContent = dsDecisionText(id);
       });
       row.appendChild(input);
       box.appendChild(row);
       const text = (cur.text || '').trim();
       const dup = text && boards.today.some(t => !t.done && t.text.trim() === text);
-      box.appendChild(dsEl('p', 'day-start__hint', dup
+      box.appendChild(dsSnippet(dup
         ? '오늘 gotta do에 같은 제목이 이미 있어요. 그래도 만들 수 있어요.'
         : '원본은 waiting에 남고, 오늘 할 일로 후속 작업이 새로 생겨요.'));
     }
     if (cur && (cur.action === 'done' || cur.action === 'resolved')) {
       const open = (task.subtasks || []).filter(s => !s.done).length;
-      if (open) box.appendChild(dsEl('p', 'day-start__hint', '남은 하위 항목 ' + open + '개도 함께 완료돼요.'));
+      if (open) box.appendChild(dsSnippet('남은 하위 항목 ' + open + '개도 함께 완료돼요.'));
     }
     if (cur && cur.action && !dsComplete(cur) && st.state !== 'stale') {
-      box.appendChild(dsEl('p', 'day-start__hint day-start__hint-warn', '날짜를 골라야 적용돼요.'));
+      box.appendChild(dsSnippet('날짜를 골라야 적용돼요.', true));
     }
     if (cur) {
-      box.appendChild(dsButton('day-start__clear', '선택 취소', () => {
+      box.appendChild(dsTextButton('day-start__clear', '', '선택 취소', () => {
         delete ds.decisions[id];
         dsSaveDraft();
         dsRender();
@@ -6617,20 +6613,18 @@
 
   // ② 일정 살펴보기 — 캘린더 연동 전이라 준비할 일 추가만
   function dsRenderCalendar() {
-    const cal = dsEl('section', 'day-start__calendar');
-    cal.appendChild(dsEl('h3', 'day-start__section-title', '오늘 · 내일 일정 📅'));
-    cal.appendChild(dsEl('p', 'day-start__empty', '구글 캘린더는 아직 연결 전이에요. 연결되면 오늘·내일 일정이 여기에 나와요.'));
-    dayStartBodyEl.appendChild(cal);
+    dayStartBodyEl.appendChild(dsGroupTitle('오늘 · 내일 일정'));
+    dayStartBodyEl.appendChild(dsLead('구글 캘린더는 아직 연결 전이에요. 연결되면 오늘·내일 일정이 여기에 나와요.'));
 
-    const prep = dsEl('section', 'day-start__prep');
-    prep.appendChild(dsEl('h3', 'day-start__section-title', '준비할 일'));
-    prep.appendChild(dsEl('p', 'day-start__lead', '일정이나 오늘 하루를 위해 미리 해 둘 일을 적어요. 날짜는 기본이 오늘이에요.'));
-    const list = dsEl('ul', 'day-start__prep-list');
+    dayStartBodyEl.appendChild(dsGroupTitle('준비할 일'));
+    dayStartBodyEl.appendChild(dsLead('일정이나 오늘 하루를 위해 미리 해 둘 일을 적어요. 날짜는 기본이 오늘이에요.'));
+    const list = dsEl('ul', 'search-list');
     ds.prep.forEach(p => {
       const li = dsEl('li', 'day-start__prep-item');
+      li.appendChild(makeBoardIcon('new'));
       const text = document.createElement('input');
       text.type = 'text';
-      text.className = 'day-start__input day-start__input-text';
+      text.className = 'day-start__text';
       text.maxLength = 100;
       text.value = p.text;
       text.setAttribute('aria-label', '준비할 일');
@@ -6638,29 +6632,35 @@
       li.appendChild(text);
       const date = document.createElement('input');
       date.type = 'date';
-      date.className = 'day-start__input date-picker-input';
+      date.className = 'date-picker-input';
       date.min = todayStr();
       date.value = p.date || todayStr();
       date.setAttribute('aria-label', '날짜');
       date.addEventListener('change', () => { p.date = date.value || todayStr(); dsSaveDraft(); dsRefreshSummary(); });
       li.appendChild(wrapDateInputWithHint(date));
-      const del = dsButton('day-start__icon-btn', '✕', () => {
+      const del = dsEl('button', 'delete-btn day-start__delete', '🗑️');
+      del.type = 'button';
+      del.setAttribute('aria-label', '준비할 일 삭제');
+      del.addEventListener('click', () => {
         ds.prep = ds.prep.filter(x => x !== p);
         dsSaveDraft();
         dsRender();
       });
-      del.setAttribute('aria-label', '준비할 일 삭제');
       li.appendChild(del);
       list.appendChild(li);
     });
-    prep.appendChild(list);
+    dayStartBodyEl.appendChild(list);
 
-    const addRow = dsEl('div', 'day-start__prep-add');
+    // 보드 맨 아래 "+ 끄적이기..." 줄과 같은 입력줄
+    const addRow = dsEl('div', 'add-row day-start__add');
+    const plus = dsEl('button', 'plus', '+');
+    plus.type = 'button';
+    plus.setAttribute('aria-label', '준비할 일 추가');
     const addInput = document.createElement('input');
-    addInput.type = 'text';
-    addInput.className = 'day-start__input day-start__input-text';
+    addInput.className = 'new-task-input';
     addInput.maxLength = 100;
     addInput.placeholder = '준비할 일...';
+    addInput.autocomplete = 'off';
     addInput.setAttribute('aria-label', '새 준비할 일');
     const add = () => {
       const text = addInput.value.trim();
@@ -6668,29 +6668,29 @@
       ds.prep.push({ key: 'p:' + (ds.seq++), text, date: todayStr() });
       dsSaveDraft();
       dsRender();
-      const next = dayStartBodyEl.querySelector('.day-start__prep-add input');
+      const next = dayStartBodyEl.querySelector('.day-start__add input');
       if (next) next.focus({ preventScroll: true });
     };
     addInput.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); add(); }
     });
+    plus.addEventListener('click', add);
+    addRow.appendChild(plus);
     addRow.appendChild(addInput);
-    addRow.appendChild(dsButton('day-start__quick-btn', '추가', add));
-    prep.appendChild(addRow);
-    dayStartBodyEl.appendChild(prep);
+    dayStartBodyEl.appendChild(addRow);
   }
 
-  // ③ 오늘 순서 정하기
+  // ③ 오늘 순서 정하기 — 한 줄에 하나. 손잡이(⋮⋮)는 순서 바꾸기 모드와 같은 모양.
   function dsRenderOrder() {
     const entries = dsBuildOrderEntries();
     const byKey = new Map(entries.map(e => [e.key, e]));
     const keys = dsMergeOrder(entries);
-    dayStartBodyEl.appendChild(dsEl('p', 'day-start__lead', '확정하면 gotta do에 남는 할 일이에요. 손잡이를 끌거나 ↑ ↓로 실행 순서를 바꿔요.'));
+    dayStartBodyEl.appendChild(dsLead('확정하면 gotta do에 남는 할 일이에요. 손잡이를 끌거나 ↑ ↓로 순서를 바꿔요.'));
     if (!keys.length) {
-      dayStartBodyEl.appendChild(dsEl('p', 'day-start__empty', '오늘 할 일이 아직 없어요.'));
+      dayStartBodyEl.appendChild(dsLead('오늘 할 일이 아직 없어요.'));
       return;
     }
-    const list = dsEl('ol', 'day-start__order-list');
+    const list = dsEl('ol', 'search-list day-start__order-list');
     list.setAttribute('aria-label', '오늘 실행 순서');
     const moveTo = (from, to, focusKey) => {
       if (to < 0 || to >= keys.length || from === to) return;
@@ -6709,30 +6709,31 @@
       const e = byKey.get(key);
       const li = dsEl('li', 'day-start__order-item');
       li.dataset.key = key;
+      li.appendChild(dsEl('span', 'day-start__num', String(i + 1)));
+      li.appendChild(makeBoardIcon(e.board));
+      li.appendChild(dsEl('span', 'search-item-text', e.text));
+      li.appendChild(makeSearchChip(e.origin));
+      const up = dsEl('button', 'day-start__move', '↑');
+      up.type = 'button';
+      up.setAttribute('aria-label', '위로');
+      up.disabled = i === 0;
+      up.addEventListener('click', () => moveTo(i, i - 1, key));
+      const down = dsEl('button', 'day-start__move', '↓');
+      down.type = 'button';
+      down.setAttribute('aria-label', '아래로');
+      down.disabled = i === keys.length - 1;
+      down.addEventListener('click', () => moveTo(i, i + 1, key));
+      li.appendChild(up);
+      li.appendChild(down);
       const handle = dsEl('button', 'day-start__handle', '⋮⋮');
       handle.type = 'button';
-      handle.setAttribute('aria-label', '순서 이동: ' + e.text + ' (↑ ↓ 키로도 옮길 수 있어요)');
+      handle.setAttribute('aria-label', '순서 바꾸기: ' + e.text + ' (↑ ↓ 키로 이동)');
       handle.addEventListener('keydown', (ev) => {
         if (ev.key === 'ArrowUp') { ev.preventDefault(); moveTo(i, i - 1, key); }
         else if (ev.key === 'ArrowDown') { ev.preventDefault(); moveTo(i, i + 1, key); }
       });
       dsBindDrag(handle, li, list, i, (to) => moveTo(i, to, key));
       li.appendChild(handle);
-      li.appendChild(dsEl('span', 'day-start__num', String(i + 1)));
-      const mark = dsEl('span', 'day-start__mark');
-      mark.style.background = dsBoardMarkVar(e.board);
-      mark.setAttribute('aria-hidden', 'true');
-      li.appendChild(mark);
-      li.appendChild(dsEl('span', 'day-start__order-text', e.text));
-      li.appendChild(dsEl('span', 'day-start__chip', e.origin));
-      const up = dsButton('day-start__icon-btn', '↑', () => moveTo(i, i - 1, key));
-      up.setAttribute('aria-label', '위로');
-      up.disabled = i === 0;
-      const down = dsButton('day-start__icon-btn', '↓', () => moveTo(i, i + 1, key));
-      down.setAttribute('aria-label', '아래로');
-      down.disabled = i === keys.length - 1;
-      li.appendChild(up);
-      li.appendChild(down);
       list.appendChild(li);
     });
     dayStartBodyEl.appendChild(list);
@@ -6740,7 +6741,6 @@
 
   // 손잡이 끌기(마우스/터치/펜). 끝나는 자리의 위치만 계산해 onDrop(to)로 넘김.
   function dsBindDrag(handle, li, list, from, onDrop) {
-    handle.style.touchAction = 'none';
     handle.addEventListener('pointerdown', (e) => {
       if (e.button != null && e.button !== 0) return;
       e.preventDefault();
@@ -6751,9 +6751,9 @@
       const clearMarks = () => rows.forEach(r => r.classList.remove('drop-before', 'drop-after'));
       const move = (ev) => {
         const edge = 36;
-        const br = dayStartBodyEl.getBoundingClientRect();
-        if (ev.clientY < br.top + edge) dayStartBodyEl.scrollTop -= 12;
-        else if (ev.clientY > br.bottom - edge) dayStartBodyEl.scrollTop += 12;
+        const br = dayStartEl.getBoundingClientRect();
+        if (ev.clientY < br.top + edge) dayStartEl.scrollTop -= 12;
+        else if (ev.clientY > br.bottom - edge) dayStartEl.scrollTop += 12;
         insertAt = rows.length;
         for (let i = 0; i < rows.length; i++) {
           const r = rows[i].getBoundingClientRect();
@@ -6763,7 +6763,7 @@
         if (insertAt < rows.length) rows[insertAt].classList.add('drop-before');
         else rows[rows.length - 1].classList.add('drop-after');
       };
-      const end = (ev, cancel) => {
+      const end = (cancel) => {
         handle.removeEventListener('pointermove', move);
         handle.removeEventListener('pointerup', up);
         handle.removeEventListener('pointercancel', cancelFn);
@@ -6774,8 +6774,8 @@
         const to = insertAt > from ? insertAt - 1 : insertAt;
         if (to !== from) onDrop(to);
       };
-      const up = (ev) => end(ev, false);
-      const cancelFn = (ev) => end(ev, true);
+      const up = () => end(false);
+      const cancelFn = () => end(true);
       handle.addEventListener('pointermove', move);
       handle.addEventListener('pointerup', up);
       handle.addEventListener('pointercancel', cancelFn);
@@ -6967,6 +6967,8 @@
   }
 
   // ───── 열고 닫기 ─────
+  // done/검색 리갈패드와 같은 자리·같은 모양(.archive-panel)으로 열림. 열려 있는 동안 배경 보드는
+  // inert라 클릭·Tab이 안 닿고(항목이 도중에 바뀌지 않게), 보드 단축키/Ctrl+Z도 꺼짐.
   function openDayStart() {
     if (!dayStartEl || dayStartOpen || isFocusCountdownLocked() || isConfirmModalOpen()) return;
     if (reorderBoard) exitReorder();
@@ -6977,17 +6979,21 @@
     dsSelectedId = null;
     dsPrevFocus = document.activeElement;
     dayStartOpen = true;
-    dayStartEl.hidden = false;
-    document.body.classList.add('day-start-open');
-    if (screenEl) screenEl.setAttribute('inert', '');
+    dayStartEl.removeAttribute('inert');
+    dayStartEl.classList.add('open');
+    if (dayStartBtn) dayStartBtn.setAttribute('aria-expanded', 'true');
+    if (boardRowEl) boardRowEl.setAttribute('inert', '');
     dsRender();
-    dayStartBodyEl.scrollTop = 0;
+    dayStartEl.scrollTop = 0;
     clearInterval(dsDayTimer);
     dsDayTimer = setInterval(() => {
       if (ds && ds.date !== todayStr()) dsHandleDayChange();
     }, DAYSTART_DAY_CHECK_MS);
-    const first = dayStartStepsEl.querySelector('[aria-current="step"]') || dayStartSheetEl;
-    first.focus({ preventScroll: true });
+    // 패널이 접힌 상태에서 막 펼쳐지는 중이라 한 프레임 뒤에 포커스
+    requestAnimationFrame(() => {
+      const first = dayStartStepsEl.querySelector('.is-current');
+      if (first) first.focus({ preventScroll: true });
+    });
   }
 
   function closeDayStart() {
@@ -6995,16 +7001,18 @@
     dayStartOpen = false;
     clearInterval(dsDayTimer);
     dsDayTimer = null;
-    dayStartEl.hidden = true;
-    document.body.classList.remove('day-start-open');
-    if (screenEl) screenEl.removeAttribute('inert');
-    const back = dsPrevFocus && dsPrevFocus.isConnected ? dsPrevFocus : dayStartBtn;
+    dayStartEl.classList.remove('open');
+    dayStartEl.setAttribute('inert', '');
+    if (dayStartBtn) dayStartBtn.setAttribute('aria-expanded', 'false');
+    if (boardRowEl) boardRowEl.removeAttribute('inert');
+    const back = dsPrevFocus && dsPrevFocus.isConnected && !dayStartEl.contains(dsPrevFocus) ? dsPrevFocus : dayStartBtn;
     dsPrevFocus = null;
     if (back && typeof back.focus === 'function') back.focus({ preventScroll: true });
   }
 
   if (dayStartEl) {
-    if (dayStartBtn) dayStartBtn.addEventListener('click', openDayStart);
+    dayStartEl.setAttribute('inert', ''); // 닫혀 있는 동안은 Tab/클릭이 닿지 않게
+    if (dayStartBtn) dayStartBtn.addEventListener('click', () => { if (dayStartOpen) closeDayStart(); else openDayStart(); });
     dayStartCloseBtn.addEventListener('click', closeDayStart);
     dayStartConfirmBtn.addEventListener('click', dsConfirm);
     dayStartDiscardBtn.addEventListener('click', async () => {
@@ -7021,15 +7029,17 @@
       dsSelectedId = null;
       dsRender();
     });
-    DAYSTART_STEPS.forEach(s => {
-      const b = dsButton('day-start__step', s.label, () => {
+    DAYSTART_STEPS.forEach(st => {
+      const b = dsEl('button', 'day-start__step', st.label);
+      b.type = 'button';
+      b.dataset.step = st.id;
+      b.addEventListener('click', () => {
         if (!ds) return;
-        ds.step = s.id;
+        ds.step = st.id;
         dsSaveDraft();
         dsRender();
-        dayStartBodyEl.scrollTop = 0;
+        dayStartEl.scrollTop = 0;
       });
-      b.dataset.step = s.id;
       dayStartStepsEl.appendChild(b);
     });
     // Esc — 초안은 그대로 두고 닫기(확인 모달이 떠 있으면 그쪽이 먼저)
@@ -7038,9 +7048,6 @@
       e.preventDefault();
       closeDayStart();
     });
-    if (dsNarrowMq && dsNarrowMq.addEventListener) {
-      dsNarrowMq.addEventListener('change', () => { if (dayStartOpen) dsRender(); });
-    }
     document.addEventListener('visibilitychange', updateDayStartBadge);
     updateDayStartBadge();
   }

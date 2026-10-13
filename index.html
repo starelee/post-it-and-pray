@@ -21,7 +21,7 @@
       <p class="date" id="dateText"></p>
       <p class="counter" id="taskCounter"></p>
       <div class="header-actions">
-        <button class="theme-toggle day-start-btn" id="dayStartBtn" type="button" aria-haspopup="dialog" title="하루 시작하기">하루 시작하기<span class="day-start-dot" id="dayStartDot" hidden aria-label="오늘 계획 미확정"></span></button>
+        <button class="theme-toggle day-start-btn" id="dayStartBtn" type="button" aria-expanded="false" title="하루 시작하기"><span aria-hidden="true">🌅</span> 하루 시작하기<span class="day-start-dot" id="dayStartDot" hidden aria-label="오늘 계획 미확정"></span></button>
         <div class="auth-row" id="authRow"></div>
         <button class="theme-toggle" id="themeToggle" type="button" aria-label="테마 전환"></button>
         <button class="theme-toggle backup-btn" id="backupBtn" type="button" aria-label="백업 / 복구" title="백업 / 복구">💾</button>
@@ -65,6 +65,24 @@
             <input class="search-input" id="searchInput" type="text" placeholder="검색..." autocomplete="off" maxlength="100">
           </div>
           <div class="search-results" id="searchResults"></div>
+        </div>
+      </div>
+
+      <div class="archive-panel day-start-panel" id="dayStart" role="region" aria-label="하루 시작하기">
+        <div class="archive-panel-inner">
+          <button class="archive-close-btn" id="dayStartClose" type="button" aria-label="닫기 (초안은 그대로 남아요)">✕</button>
+          <div class="day-start__head">
+            <h2 class="archive-title">하루 시작하기 🌅<span class="day-start__date" id="dayStartDate"></span></h2>
+          </div>
+          <nav class="day-start__steps" id="dayStartSteps" aria-label="단계"></nav>
+          <div class="day-start__body" id="dayStartBody"></div>
+          <div class="day-start__footer">
+            <p class="day-start__summary" id="dayStartSummary" role="status" aria-live="polite"></p>
+            <div class="day-start__actions">
+              <button class="confirm-btn confirm-btn-cancel" id="dayStartDiscard" type="button">초안 버리기</button>
+              <button class="confirm-btn confirm-btn-ok" id="dayStartConfirm" type="button">계획 확정하고 Today로</button>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -190,27 +208,6 @@
         </div>
       </div>
       </div>
-    </div>
-  </div>
-
-  <div class="day-start" id="dayStart" hidden>
-    <div class="day-start__sheet" role="dialog" aria-modal="true" aria-labelledby="dayStartTitle" tabindex="-1">
-      <header class="day-start__header">
-        <div class="day-start__heading">
-          <h2 class="day-start__title" id="dayStartTitle">하루 시작하기 ☀️</h2>
-          <p class="day-start__date" id="dayStartDate"></p>
-        </div>
-        <nav class="day-start__steps" id="dayStartSteps" aria-label="단계"></nav>
-        <button class="day-start__close" id="dayStartClose" type="button" aria-label="닫기 (초안은 그대로 남아요)">✕</button>
-      </header>
-      <div class="day-start__body" id="dayStartBody"></div>
-      <footer class="day-start__footer">
-        <p class="day-start__summary" id="dayStartSummary" role="status" aria-live="polite"></p>
-        <div class="day-start__actions">
-          <button class="day-start__discard" id="dayStartDiscard" type="button">초안 버리기</button>
-          <button class="day-start__confirm" id="dayStartConfirm" type="button">계획 확정하고 Today로</button>
-        </div>
-      </footer>
     </div>
   </div>
 
