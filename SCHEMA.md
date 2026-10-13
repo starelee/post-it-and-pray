@@ -126,7 +126,7 @@ type DayStartDraft = {
   step: 'tidy' | 'order';
   decisions: Record<string, {         // key = 항목 id(문자열, 반복되는 일은 'r:<완료 기록 id>'). 질문에 '네/아니오'로 답한 결과
     action: 'today' | 'toSomeday' | 'done' | 'resolved' | 'urgent' | 'follow' | 'keep'
-          | 'later' | 'setReply' | 'top' | 'merge' | 'repeat';
+          | 'later' | 'setReply' | 'top' | 'merge' | 'repeat' | 'unurgent';
     date?: string;                    // follow/setReply: 다음 확인 날짜, later: 다시 잡은 마감일
     text?: string;                    // follow: 후속 작업 제목
     snooze?: boolean;                 // keep: 아니오 = 3일 미루기(확정 때 snoozedAt 기록)

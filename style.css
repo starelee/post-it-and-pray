@@ -4096,6 +4096,7 @@ body.reorder-mode .sticky:not(.reorder-active) {
   display: flex;
   align-items: baseline;
   height: var(--day-start-line);
+  padding-right: 24px; /* 닫기 버튼 자리 */
 }
 
 .day-start-panel .archive-title {
@@ -4107,6 +4108,11 @@ body.reorder-mode .sticky:not(.reorder-active) {
 }
 
 .day-start__date {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
   margin-left: 10px;
   font-family: var(--font-ui);
   letter-spacing: var(--ui-letter-spacing);
@@ -4157,18 +4163,18 @@ body.reorder-mode .sticky:not(.reorder-active) {
 }
 
 .day-start__qitem .search-icon {
-  font-size: 20px;
-  line-height: calc(var(--day-start-line) * 2);
+  font-size: 15px;
+  line-height: var(--day-start-line);
 }
 
 .day-start__qitem .search-icon-flower {
-  font-size: 24px;
+  font-size: 18px;
 }
 
 .day-start__qtitle {
   font-family: var(--font-task);
-  font-size: 26px;
-  line-height: calc(var(--day-start-line) * 2);
+  font-size: 20px;
+  line-height: var(--day-start-line);
   overflow-wrap: anywhere;
   text-align: left;
 }
@@ -4188,7 +4194,7 @@ body.reorder-mode .sticky:not(.reorder-active) {
 .day-start__question {
   margin: var(--day-start-line) 0 0;
   font-family: var(--font-hand);
-  font-size: 22px;
+  font-size: 18px;
   line-height: var(--day-start-line);
   color: var(--ink);
 }
@@ -4201,9 +4207,25 @@ body.reorder-mode .sticky:not(.reorder-active) {
 }
 
 .day-start__answers .confirm-btn {
-  min-width: 112px;
-  padding: 7px 26px;
-  font-size: 20px;
+  min-width: 96px;
+  padding: 5px 22px;
+  font-size: 16px;
+}
+
+.day-start__alts {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  max-width: 360px;
+  margin: var(--day-start-line) auto 0;
+}
+
+.day-start__alts .confirm-btn {
+  padding: 5px 16px;
+  font-size: 15px;
+  text-align: left;
+  white-space: pre;
 }
 
 .day-start__keys {
@@ -4227,7 +4249,7 @@ body.reorder-mode .sticky:not(.reorder-active) {
   margin: calc(var(--day-start-line) * 2) 0 0;
   text-align: center;
   font-family: var(--font-hand);
-  font-size: 24px;
+  font-size: 20px;
   line-height: var(--day-start-line);
   color: var(--accent);
 }
@@ -4451,6 +4473,16 @@ body.reorder-mode .sticky:not(.reorder-active) {
   }
 
   .day-start__qtitle {
-    font-size: 22px;
+    font-size: 17px;
+  }
+
+  .day-start__question {
+    font-size: 16px;
+  }
+
+  .day-start__answers .confirm-btn {
+    min-width: 88px;
+    padding: 4px 18px;
+    font-size: 15px;
   }
 }
