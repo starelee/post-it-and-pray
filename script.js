@@ -871,6 +871,8 @@
   // 순서 바꾸기 모드 — 지금 모드에 들어가 있는 보드 id(today/waiting/someday) 또는 null.
   // updateCounter가 모든 렌더 끝에서 불리므로, 거기서 모서리 버튼/손잡이를 다시 맞춤.
   let reorderBoard = null;
+  let reorderSubId = null;    // 하위 항목 순서 바꾸기 모드일 때: 대상 상위 항목 id(아니면 null)
+  let reorderSubBoard = null; // 그 항목이 들어 있는 보드(scheduled일 수 있음)
   const REORDER_BOARDS = ['today', 'waiting', 'someday'];
 
   function updateCounter() {
@@ -1096,6 +1098,19 @@
     return merged;
   }
 
+  // 보드 내용 비교용 키 — 항목 순서와 updatedAt은 무시(병합이 순서를 바꾸고 시각만 다를 수 있음).
+  function boardsContentKey(b) {
+    return BOARD_IDS.concat(['archive', 'lupin', 'trash']).map(id =>
+      (b[id] || []).slice().sort((x, y) => (x.id < y.id ? -1 : x.id > y.id ? 1 : 0))
+        .map(t => { const { updatedAt, ...rest } = t; return JSON.stringify(rest); }).join('|')
+    ).join('||');
+  }
+
+  // 다른 기기의 변경을 합쳐 화면을 다시 그리면 안 되는 순간 — 항목 글자를 고치는 중, 순서를 끄는 중.
+  function isCloudMergeBusy() {
+    return document.body.classList.contains('is-editing') || reorderDragging;
+  }
+
   async function pushToCloudNow() {
     if (!cloudClient || !activeRowId) return;
     const newUpdatedAt = new Date().toISOString();
@@ -1128,16 +1143,29 @@
         lastKnownServerUpdatedAt = newUpdatedAt;
         return;
       }
-      boards = mergeBoards(normalizeBoards(current.data), boards);
-      migrateArchive(boards);
-      resetHistory();
-      try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(boards));
-      } catch (e) {
-        /* ignore */
+      // 글자를 고치는 중이거나 순서를 끄는 중이면 지금 화면을 통째로 갈아엎지 않고 잠깐 뒤에 다시 시도
+      // (이 시점의 current는 다음 시도 때 다시 읽어 옴).
+      if (isCloudMergeBusy()) {
+        clearTimeout(cloudPushTimer);
+        cloudPushTimer = setTimeout(pushToCloudNow, 800);
+        return;
       }
-      renderAll();
+      const merged = mergeBoards(normalizeBoards(current.data), boards);
+      migrateArchive(merged);
       lastKnownServerUpdatedAt = current.updated_at;
+      // 합쳐도 내용이 그대로면(다른 기기가 저장했지만 이 화면에 보일 변화가 없는 경우) 화면을 다시
+      // 그리지도, 되돌리기 기록을 비우지도 않음 — 예전엔 이때도 전체가 새로 그려져 "혼자 새로고침"처럼 보였음.
+      const changed = boardsContentKey(merged) !== boardsContentKey(boards);
+      if (changed) {
+        boards = merged;
+        resetHistory();
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(boards));
+        } catch (e) {
+          /* ignore */
+        }
+        renderAll();
+      }
       pushToCloud(); // retry with the merged state, now conditioned on the version we just saw
     } catch (e) {
       /* offline or cloud unavailable — local state is still saved; the
@@ -1233,14 +1261,18 @@
         } else {
           markUserSynced(rowId);
         }
-        boards = cloudBoards;
-        resetHistory();
-        try {
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(boards));
-        } catch (e) {
-          /* ignore */
+        // 화면에 이미 있는 내용과 같으면(보통 새로고침 직후) 다시 그리지 않음 — 안 그러면 열자마자 한 번
+        // 더 전체가 갈아엎어져 "혼자 새로고침"처럼 보임.
+        if (boardsContentKey(cloudBoards) !== boardsContentKey(boards)) {
+          boards = cloudBoards;
+          resetHistory();
+          try {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(boards));
+          } catch (e) {
+            /* ignore */
+          }
+          renderAll();
         }
-        renderAll();
         lastKnownServerUpdatedAt = data.updated_at;
       } else {
         markUserSynced(rowId);
@@ -1254,8 +1286,14 @@
 
   const authRowEl = document.getElementById('authRow');
 
+  // supabase가 탭으로 돌아올 때마다 같은 로그인 상태로 이벤트를 또 보내는데, 그때마다 헤더의 로그인
+  // 영역을 지웠다 다시 그리면 화면이 깜빡이며 "새로고침"처럼 보임 — 같은 상태면 그대로 둠.
+  let renderedAuthKey = null;
   function renderAuthUI(user) {
     if (!authRowEl) return;
+    const key = user ? 'u:' + user.id + ':' + (user.email || '') : 'guest';
+    if (key === renderedAuthKey && authRowEl.childNodes.length) return;
+    renderedAuthKey = key;
     authRowEl.innerHTML = '';
     if (!cloudClient) return;
 
@@ -1528,6 +1566,11 @@
       autoCloseTimer = setTimeout(() => {
         autoCloseTimer = null;
         if (body.hidden) return;
+        // 순서 바꾸는 중에는 구역이 저절로 접히면 안 됨
+        if (document.body.classList.contains('reorder-mode') && body.closest('.reorder-active')) {
+          scheduleAutoClose(COLLAPSE_AUTO_CLOSE_RETRY_MS);
+          return;
+        }
         if (body.contains(document.activeElement)) {
           scheduleAutoClose(COLLAPSE_AUTO_CLOSE_RETRY_MS);
           return;
@@ -1816,6 +1859,46 @@
     layoutStrikeLines(listEl);
   }
 
+  // "oops, still here"(지난 마감) 아래 미완료 항목들의 마감일을 오늘로 — 확인창을 거침.
+  async function moveOopsToToday(anchorEl) {
+    const today = todayStr();
+    const overdue = boards.scheduled.filter(t => !t.done && t.dueDate && t.dueDate < today);
+    if (!overdue.length) return;
+    // 어떤 항목이 바뀌는지 제목과 원래 마감일(○일 지남)을 보여줌
+    const list = document.createElement('ul');
+    list.className = 'oops-confirm-list';
+    overdue.slice().sort(byDueDate).forEach(t => {
+      const li = document.createElement('li');
+      const name = document.createElement('span');
+      name.textContent = t.text;
+      const when = document.createElement('small');
+      when.textContent = -daysUntilDue(t.dueDate) + '일 지남';
+      li.appendChild(name);
+      li.appendChild(when);
+      list.appendChild(li);
+    });
+    const ok = await showConfirm({
+      title: '오늘 할 일로 바꿀까요?',
+      message: '마감이 지난 항목 ' + overdue.length + '개의 날짜를 오늘로 바꿔서, 오늘 할 일로 옮겨요.',
+      content: list,
+      confirmLabel: '오늘로 변경',
+      cancelLabel: '취소',
+      anchorEl
+    });
+    if (!ok) return;
+    // 확인창이 떠 있던 사이 상태가 바뀌었을 수 있어 다시 골라 반영
+    let changed = 0;
+    boards.scheduled.forEach(t => {
+      if (!t.done && t.dueDate && t.dueDate < today) { t.dueDate = today; changed++; }
+    });
+    if (!changed) return;
+    saveBoards();
+    render('today');
+    render('scheduled');
+    if (archivePanelEl.classList.contains('open')) renderUpcoming();
+    showToast('오늘 할 일로 바꿨어요');
+  }
+
   function renderToday() {
     const listEl = getListEl('today');
     if (!listEl) return;
@@ -1859,6 +1942,15 @@
       const divider = document.createElement('li');
       divider.className = 'divider divider-oops';
       divider.textContent = 'oops, still here';
+      // 누르면 아래 지난 항목들을 한꺼번에 오늘로 옮길지 물어봄
+      divider.setAttribute('role', 'button');
+      divider.tabIndex = 0;
+      divider.title = '눌러서 아래 항목을 오늘 할 일로 바꾸기';
+      const askMoveOopsToToday = () => moveOopsToToday(divider);
+      divider.addEventListener('click', askMoveOopsToToday);
+      divider.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); askMoveOopsToToday(); }
+      });
       listEl.appendChild(divider);
       oops.forEach(t => listEl.appendChild(renderItem('scheduled', t, { showFocusBtn: true })));
     }
@@ -1921,6 +2013,9 @@
       moveHighlight = null;
     }
     li.dataset.id = task.id;
+    li.addEventListener('pointerenter', () => placeEditChip(li));
+    li.addEventListener('focusin', () => placeEditChip(li));
+    li.addEventListener('touchstart', () => placeEditChip(li), { passive: true });
 
     const row = document.createElement('div');
     row.className = 'task-row';
@@ -2038,7 +2133,7 @@
     // 열림 상태는 .controls-open 클래스(항목이 다시 그려지면 닫힘).
     row.addEventListener('click', (e) => {
       if (!isTouchOnly()) return;
-      if (e.target.closest('.checkbox, button, input, .subtask-progress')) return;
+      if (e.target.closest('.checkbox, button, input, .subtask-progress, .subtask-chip')) return;
       if (!li.classList.contains('controls-open')) {
         closeOpenControls();
         li.classList.add('controls-open');
@@ -2053,8 +2148,8 @@
       const subList = document.createElement('ul');
       subList.className = 'subtask-list';
       task.subtasks.forEach(sub => subList.appendChild(renderSubtaskItem(boardId, task.id, sub)));
-      const completeAll = task.done ? null : makeCompleteAllItem(boardId, task);
-      if (completeAll) subList.appendChild(completeAll);
+      const editChip = (task.done || boardId === 'lupin') ? null : makeEditSubtasksItem(boardId, task);
+      if (editChip) subList.appendChild(editChip);
       // 목록을 grid 래퍼로 감싸서 CSS가 실제 높이만큼 0fr <-> 1fr로 접고
       // 펼 수 있게 함(.subtask-collapse 참고) — max-height 방식은 목표 값이
       // 실제 높이와 안 맞아 애니메이션 타이밍이 어긋났음.
@@ -3057,7 +3152,7 @@
     const pending = (task.subtasks || []).filter(s => !s.done).length;
     if (pending < 2) return null;
     const li = document.createElement('li');
-    li.className = 'complete-all-item';
+    li.className = 'subtask-item complete-all-item'; // 다른 하위 항목 칩과 같은 배치/간격 규칙을 그대로 씀
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'subtask-chip complete-all-btn';
@@ -3068,14 +3163,64 @@
     return li;
   }
 
+  // [✎ 편집] 칩이 마지막 하위 항목 줄의 남는 자리에 들어가면 그 줄 오른쪽에 붙이고(폭으로 나타남),
+  // 안 들어가면 다음 줄에 놓음(높이로 나타남). 마우스를 올리거나 포커스할 때 그 항목의 칩을 재서 정함.
+  function placeEditChip(taskLi) {
+    const chipLi = taskLi.querySelector('.subtask-collapse > .subtask-list > .complete-all-item');
+    if (!chipLi) return;
+    const list = chipLi.parentElement;
+    const btn = chipLi.querySelector('.complete-all-btn');
+    const chips = Array.from(list.children).filter(c => c !== chipLi && c.classList.contains('subtask-item') && c.offsetParent !== null && c.offsetWidth > 0);
+    const last = chips[chips.length - 1];
+    if (!btn || !last) return;
+    const cs = getComputedStyle(list);
+    const listRight = list.getBoundingClientRect().right - parseFloat(cs.paddingRight || 0);
+    const need = btn.offsetWidth + 6; // 칩 폭 + 칩 사이 간격
+    const fits = last.getBoundingClientRect().right + need <= listRight;
+    chipLi.classList.toggle('edit-inline', fits);
+  }
+
+  // 하위 항목 줄 끝의 [✎ 편집] 칩 — 눌러서 하위 항목 편집 모드로(수정/삭제/순서/모두 완료를 한 번에).
+  function makeEditSubtasksItem(boardId, task) {
+    if (!(task.subtasks || []).length) return null;
+    const li = document.createElement('li');
+    li.className = 'subtask-item complete-all-item'; // 보이는 방식(hover 때 지연 후 나타남)은 [✓ 모두 완료] 칩과 같음
+    // 다른 하위 항목 칩과 똑같은 구조(li > .subtask-line > span.subtask-chip)로 만들어 글자 높이가 어긋나지 않게 함
+    // (<button>은 안쪽 글자를 자기 상자 가운데에 맞춰서 span 칩과 1px 정도 높이가 달라 보였음).
+    const line = document.createElement('div');
+    line.className = 'subtask-line';
+    const btn = document.createElement('span');
+    btn.className = 'subtask-chip complete-all-btn';
+    btn.setAttribute('role', 'button');
+    btn.tabIndex = 0;
+    btn.setAttribute('aria-label', '하위 항목 편집');
+    btn.innerHTML = '[<span class="chip-ico">✎</span> 편집]'; // 연필 글리프만 작게(글자는 다른 칩과 같은 크기)
+    const open = () => enterSubReorder(boardId, task.id);
+    btn.addEventListener('click', open);
+    btn.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); }
+    });
+    line.appendChild(btn);
+    li.appendChild(line);
+    return li;
+  }
+
   function renderSubtaskItem(boardId, taskId, sub) {
     const li = document.createElement('li');
     li.className = 'subtask-item' + (sub.done ? ' done' : '');
     li.dataset.id = sub.id;
 
-    const chip = document.createElement('button');
+    // 두 줄 이상이어도 ✎ ⇄ × 버튼이 맨 마지막 글자 바로 옆에 붙도록, 칩은 줄바꿈되는 span으로 두고
+    // 버튼들과 함께 한 덩어리(.subtask-line)의 인라인 흐름에 놓음(button은 통째로 한 덩어리라 글자 옆에 못 붙음).
+    const line = document.createElement('div');
+    line.className = 'subtask-line';
+    const chip = document.createElement('span');
     chip.className = 'subtask-chip';
-    chip.type = 'button';
+    chip.setAttribute('role', 'button');
+    chip.tabIndex = 0;
+    chip.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); chip.click(); }
+    });
     chip.setAttribute('aria-label', sub.done ? '완료 취소' : '완료 표시');
     chip.textContent = '[' + sub.text + ']';
     // 더블클릭으로 이름을 바꾸려는 순간에도 그 앞의 두 번의 click이 먼저
@@ -3098,26 +3243,9 @@
       startEditSubtask(boardId, taskId, sub.id);
     });
 
-    // 더블클릭으로 편집 들어가는 게 클릭 타이밍과 겹쳐서 헷갈린다는 피드백
-    // 때문에 추가한, 호버하면 삭제(×) 옆에 같이 뜨는 명시적 수정 버튼 —
-    // 더블클릭은 그대로 남겨두되(익숙한 사람은 계속 씀) 이게 기본 경로.
-    const edit = document.createElement('button');
-    edit.className = 'subtask-edit-btn';
-    edit.type = 'button';
-    edit.setAttribute('aria-label', '수정');
-    edit.textContent = '✎';
-    edit.addEventListener('click', () => startEditSubtask(boardId, taskId, sub.id));
-
-    const del = document.createElement('button');
-    del.className = 'subtask-delete-btn';
-    del.type = 'button';
-    del.setAttribute('aria-label', '삭제');
-    del.textContent = '×';
-    del.addEventListener('click', () => deleteSubtask(boardId, taskId, sub.id));
-
-    li.appendChild(chip);
-    li.appendChild(edit);
-    li.appendChild(del);
+    // 칩 하나만 고치는 건 더블클릭(위), 여러 개를 한꺼번에 고치고 지우고 순서를 바꾸는 건 항목 맨 끝 [✎ 편집] 칩.
+    line.appendChild(chip);
+    li.appendChild(line);
     return li;
   }
 
@@ -3911,7 +4039,10 @@
       corner.setAttribute('aria-pressed', active ? 'true' : 'false');
       corner.querySelector('.reorder-icon').textContent = active ? '✓' : '⇅';
     });
-    if (reorderBoard) decorateReorderList();
+    if (reorderBoard) {
+      if (reorderSubId != null) decorateSubReorder();
+      else decorateReorderList();
+    }
   }
 
   function decorateReorderList() {
@@ -3938,7 +4069,7 @@
     return sticky.querySelector('.sticky-title-toggle-spaced');
   }
 
-  function setReorderBadge(boardId, on) {
+  function setReorderBadge(boardId, on, text) {
     const title = reorderTitleEl(boardId);
     if (!title) return;
     const old = title.querySelector('.reorder-badge');
@@ -3947,7 +4078,7 @@
     const badge = document.createElement('span');
     badge.className = 'reorder-badge';
     // 평소엔 "순서 바꾸는 중", 마우스를 올리면 "완료하기"로 바뀜(CSS가 둘을 겹쳐 두고 전환)
-    badge.innerHTML = '<span class="reorder-badge-idle">⇅ 순서 바꾸는 중</span><span class="reorder-badge-done">✓ 완료하기</span>';
+    badge.innerHTML = '<span class="reorder-badge-idle">' + (text || '⇅ 순서 바꾸는 중') + '</span><span class="reorder-badge-done">✓ 완료하기</span>';
     // 누르면 순서 바꾸기 끝(모서리 ✓와 같음). 제목이 접기 버튼인 someday에서 접히지 않게 전파 차단.
     badge.setAttribute('role', 'button');
     badge.tabIndex = 0;
@@ -3969,11 +4100,24 @@
     else title.appendChild(badge);
   }
 
-  function enterReorder(boardId) {
-    if (reorderBoard) exitReorder();
+  // 3분 동안 아무것도 안 하면 순서 바꾸기 모드는 저절로 꺼짐(깜빡 잊고 흐린 화면이 남지 않게).
+  const REORDER_IDLE_MS = 3 * 60 * 1000;
+  let reorderIdleTimer = null;
+  function touchReorderIdle() {
+    clearTimeout(reorderIdleTimer);
+    reorderIdleTimer = null;
+    if (reorderBoard) reorderIdleTimer = setTimeout(exitReorder, REORDER_IDLE_MS);
+  }
+  ['pointerdown', 'pointermove', 'keydown', 'wheel', 'touchstart'].forEach(type => {
+    window.addEventListener(type, () => { if (reorderBoard) touchReorderIdle(); }, { capture: true, passive: true });
+  });
+
+  // 순서 바꾸기 모드 공통 시작(메인 목록 / 하위 항목 둘 다) — 그 보드만 남기고 나머지는 흐리게.
+  function startReorderState(boardId, badgeText) {
     reorderBoard = boardId;
+    touchReorderIdle();
     const sticky = getReorderSticky(boardId);
-    setReorderBadge(boardId, true);
+    setReorderBadge(boardId, true, badgeText);
     document.body.classList.add('reorder-mode');
     sticky.classList.add('reorder-active');
     document.querySelectorAll('.header, .sticky:not(.reorder-active)').forEach(el => el.setAttribute('inert', ''));
@@ -3983,26 +4127,311 @@
     closeOpenControls();
     updateReorderUI();
     haptic(HAPTIC_TAP);
+    return sticky;
+  }
+
+  function enterReorder(boardId) {
+    if (reorderBoard) exitReorder();
+    reorderSubId = null;
+    const sticky = startReorderState(boardId, '⇅ 순서 바꾸는 중');
     const first = sticky.querySelector('.reorder-handle');
     if (first) first.focus({ preventScroll: true });
   }
 
+  // 하위 항목 순서 바꾸기 — 그 상위 항목의 하위 항목 칩만 끌 수 있게 함.
+  function enterSubReorder(taskBoardId, taskId) {
+    const li = findTaskLi(taskId);
+    const sticky = li && li.closest('.sticky');
+    const stickyBoard = sticky && sticky.dataset.board;
+    if (!sticky || !REORDER_BOARDS.includes(stickyBoard)) return;
+    if (reorderBoard) exitReorder();
+    reorderSubId = taskId;
+    reorderSubBoard = taskBoardId;
+    sticky.classList.add('reorder-sub');
+    startReorderState(stickyBoard, '✎ 하위 항목 편집 중');
+  }
+
+  function decorateSubReorder() {
+    const li = findTaskLi(reorderSubId);
+    if (!li) { exitReorder(); return; }
+    li.classList.add('sub-reorder-target');
+    // 모드 중에도 상위 항목 글자를 탭/클릭하면 바로 수정(터치는 한 번에)
+    const parentText = li.querySelector('.task-text');
+    if (parentText && !parentText.dataset.subEditBound) {
+      parentText.dataset.subEditBound = '1';
+      parentText.addEventListener('click', (e) => {
+        if (!reorderSubId) return;
+        e.stopPropagation(); // 터치에서 행 탭이 "아이콘 줄 열기"로 가로채지 않게
+        if (isTouchOnly()) startEditTask(reorderSubBoard, reorderSubId);
+      });
+    }
+    const task = boards[reorderSubBoard] && boards[reorderSubBoard].find(t => t.id === reorderSubId);
+    const list = li.querySelector('.subtask-list');
+    if (!task || !list || list.dataset.subEditing) return;
+    list.dataset.subEditing = '1';
+
+    // 칩마다: 글자를 바로 고치는 입력창 + 항상 보이는 지우기(×). 칩을 6px 넘게 끌면 순서 바꾸기.
+    list.querySelectorAll(':scope > li.subtask-item:not(.complete-all-item)').forEach(sli => {
+      const sub = task.subtasks.find(x => String(x.id) === sli.dataset.id);
+      const line = sli.querySelector('.subtask-line');
+      if (!sub || !line) return;
+      sli.classList.add('sub-draggable');
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.className = 'subtask-edit-input sub-edit-input';
+      input.value = sub.text;
+      input.maxLength = 100;
+      input.dataset.subId = sub.id;
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
+      });
+      input.addEventListener('blur', commitSubEditInputs);
+      const del = document.createElement('button');
+      del.type = 'button';
+      del.className = 'sub-edit-del';
+      del.setAttribute('aria-label', '하위 항목 삭제');
+      del.textContent = '×';
+      del.addEventListener('click', () => {
+        commitSubEditInputs();
+        task.subtasks = task.subtasks.filter(x => x.id !== sub.id);
+        saveBoards();
+        render(reorderSubBoard);
+        if (reorderSubBoard === 'scheduled') render('today');
+      });
+      // [ 글자 ] × ⇄ — 평소 칩과 같은 [] 표시를 유지, ⇄를 잡고 끌면(또는 포커스 후 ←/→) 이 칩만 순서 변경
+      const mover = document.createElement('button');
+      mover.type = 'button';
+      mover.className = 'sub-edit-move';
+      mover.setAttribute('aria-label', '순서 바꾸기 (끌거나 ← → 키)');
+      mover.textContent = '⇄';
+      mover.addEventListener('pointerdown', (e) => {
+        if (e.button != null && e.button !== 0) return;
+        mover.focus({ preventScroll: true });
+        startSubDrag(e, sli);
+      });
+      const lb = document.createElement('span');
+      lb.className = 'sub-br';
+      lb.textContent = '[';
+      const rb = document.createElement('span');
+      rb.className = 'sub-br';
+      rb.textContent = ']';
+      line.appendChild(lb);
+      line.appendChild(input);
+      line.appendChild(rb);
+      line.appendChild(del);
+      line.appendChild(mover);
+      fitSubtaskEditInput(input, null, 2); // 대괄호 `]`가 글자 바로 옆에 붙게 여백을 최소로
+    });
+
+    // 맨 끝: [+추가](누르면 그 자리에서 입력창) + 모두 완료
+    const addLi = document.createElement('li');
+    addLi.className = 'subtask-item sub-add-item';
+    const addBtn = document.createElement('button');
+    addBtn.type = 'button';
+    addBtn.className = 'subtask-chip sub-add-btn';
+    addBtn.textContent = '[+추가]';
+    const addField = document.createElement('span');
+    addField.className = 'sub-add-field';
+    addField.hidden = true;
+    const addInput = document.createElement('input');
+    addInput.type = 'text';
+    addInput.className = 'sub-add-input';
+    addInput.placeholder = '하위 항목...';
+    addInput.maxLength = 100;
+    ['[', ']'].forEach((ch, i) => {
+      const br = document.createElement('span');
+      br.className = 'sub-br';
+      br.textContent = ch;
+      if (i === 0) { addField.appendChild(br); addField.appendChild(addInput); } else addField.appendChild(br);
+    });
+    const closeAdd = () => { addInput.value = ''; addField.hidden = true; addBtn.hidden = false; };
+    addBtn.addEventListener('click', () => {
+      addBtn.hidden = true;
+      addField.hidden = false;
+      addInput.focus({ preventScroll: true });
+    });
+    addInput.addEventListener('blur', () => { if (!addInput.value) closeAdd(); });
+    addInput.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter') return;
+      e.preventDefault();
+      const text = addInput.value.trim();
+      if (!text) return;
+      commitSubEditInputs();
+      task.subtasks.push({ id: Date.now(), text, done: false });
+      saveBoards();
+      render(reorderSubBoard);
+      if (reorderSubBoard === 'scheduled') render('today');
+      // 이어서 여러 개 넣을 수 있게 새로 그려진 [+추가]를 바로 다시 엶
+      const fresh = findTaskLi(reorderSubId);
+      const nextBtn = fresh && fresh.querySelector('.sub-add-btn');
+      if (nextBtn) nextBtn.click();
+    });
+    addLi.appendChild(addBtn);
+    addLi.appendChild(addField);
+    list.appendChild(addLi);
+    if (task.subtasks.filter(x => !x.done).length >= 2) {
+      const allLi = document.createElement('li');
+      allLi.className = 'subtask-item sub-complete-all';
+      const allBtn = document.createElement('button');
+      allBtn.type = 'button';
+      allBtn.className = 'subtask-chip complete-all-btn';
+      allBtn.textContent = '[✓ 모두 완료]';
+      allBtn.addEventListener('click', () => {
+        commitSubEditInputs();
+        completeAllSubtasks(reorderSubBoard, reorderSubId);
+      });
+      allLi.appendChild(allBtn);
+      list.appendChild(allLi);
+    }
+  }
+
+  // 편집 입력창의 글자를 항목에 반영(비우면 원래 글자 유지 — 지우기는 ×로).
+  function commitSubEditInputs() {
+    if (!reorderSubId) return;
+    const task = boards[reorderSubBoard] && boards[reorderSubBoard].find(t => t.id === reorderSubId);
+    const li = findTaskLi(reorderSubId);
+    if (!task || !li) return;
+    let changed = false;
+    li.querySelectorAll('.sub-edit-input').forEach(input => {
+      const sub = task.subtasks.find(x => String(x.id) === input.dataset.subId);
+      if (!sub) return;
+      const text = input.value.trim();
+      if (!text) { input.value = sub.text; return; }
+      if (text !== sub.text) { sub.text = text; changed = true; }
+    });
+    if (changed) saveBoards();
+  }
+
+  // 칩은 가로로 줄바꿈되며 흐르므로 포인터가 올라간 다른 칩 자리로 옮김(2차원), 밀려난 칩은 짧게 미끄러짐.
+  function startSubDrag(e, sli) {
+    if (!reorderSubId || (e.button != null && e.button !== 0)) return;
+    e.preventDefault();
+    try { sli.setPointerCapture(e.pointerId); } catch (err) { /* 이미 끝난 포인터 */ }
+    const list = sli.parentElement;
+    const r0 = sli.getBoundingClientRect();
+    const gx = e.clientX - r0.left, gy = e.clientY - r0.top;
+    let lx = e.clientX, ly = e.clientY, tx = 0, ty = 0, raf = 0, prevX = null, prevY = null, prevScroll = null;
+    sli.classList.add('sub-dragging');
+    reorderDragging = true;
+    const chips = () => Array.from(list.children).filter(c => c.classList.contains('sub-draggable'));
+    const place = () => {
+      const r = sli.getBoundingClientRect();
+      tx = lx - gx - (r.left - tx);
+      ty = ly - gy - (r.top - ty);
+      sli.style.transform = 'translate(' + tx + 'px,' + ty + 'px)';
+    };
+    const swap = () => {
+      const all = chips();
+      const others = all.filter(c => c !== sli);
+      // 포인터가 올라간 칩이 목적지. 칩과 칩 사이/끝 빈 곳이면 가장 가까운 칩을 고르고, 그 칩을 지나쳐
+      // 간 방향일 때만 자리를 바꿈(끝까지 끌어도 마지막 칩 뒤로 갈 수 있게).
+      const myIdx = all.indexOf(sli);
+      let target = null, best = Infinity;
+      others.forEach(c => {
+        const r = c.getBoundingClientRect();
+        const dx = lx < r.left ? r.left - lx : (lx > r.right ? lx - r.right : 0);
+        const dy = ly < r.top ? r.top - ly : (ly > r.bottom ? ly - r.bottom : 0);
+        const d = dx * dx + dy * dy * 4;
+        if (d >= best) return;
+        if (d > 0) {
+          const after = all.indexOf(c) > myIdx;
+          const passed = after ? (lx > r.right || ly > r.bottom) : (lx < r.left || ly < r.top);
+          if (!passed) return;
+        }
+        best = d; target = c;
+      });
+      if (!target) return false;
+      const before = new Map(others.map(c => [c, c.getBoundingClientRect()]));
+      if (all.indexOf(target) < all.indexOf(sli)) list.insertBefore(sli, target);
+      else list.insertBefore(sli, target.nextSibling);
+      place();
+      others.forEach(c => {
+        const a = before.get(c), b = c.getBoundingClientRect();
+        const dx = a.left - b.left, dy = a.top - b.top;
+        if (!dx && !dy) return;
+        c.style.transition = 'none';
+        c.style.transform = 'translate(' + dx + 'px,' + dy + 'px)';
+        requestAnimationFrame(() => {
+          c.style.transition = 'transform 0.14s ease-out';
+          c.style.transform = '';
+          setTimeout(() => { c.style.transition = ''; }, 180);
+        });
+      });
+      return true;
+    };
+    let dirty = false; // 한 프레임에 한 칸씩만 옮기므로, 포인터가 멈춰도 더 옮길 게 남았으면 계속 처리
+    const tick = () => {
+      const edge = 70;
+      if (ly < edge) window.scrollBy(0, -Math.ceil((edge - ly) / 5));
+      else if (ly > window.innerHeight - edge) window.scrollBy(0, Math.ceil((ly - (window.innerHeight - edge)) / 5));
+      if (dirty || lx !== prevX || ly !== prevY || window.scrollY !== prevScroll) {
+        prevX = lx; prevY = ly; prevScroll = window.scrollY;
+        place();
+        dirty = swap();
+      }
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    // 칩을 DOM에서 옮기면 포인터 캡처가 풀릴 수 있어서, 이동/종료는 document에서 받음
+    const onMove = (ev) => { lx = ev.clientX; ly = ev.clientY; };
+    const finish = () => {
+      cancelAnimationFrame(raf);
+      reorderDragging = false;
+      document.removeEventListener('pointermove', onMove, true);
+      document.removeEventListener('pointerup', finish, true);
+      document.removeEventListener('pointercancel', finish, true);
+      sli.classList.remove('sub-dragging');
+      sli.style.transform = '';
+      commitSubEditInputs();
+      commitSubReorder(chips().map(c => Number(c.dataset.id)));
+    };
+    document.addEventListener('pointermove', onMove, true);
+    document.addEventListener('pointerup', finish, true);
+    document.addEventListener('pointercancel', finish, true);
+  }
+
+  function commitSubReorder(ids) {
+    const task = boards[reorderSubBoard] && boards[reorderSubBoard].find(t => t.id === reorderSubId);
+    if (!task) return;
+    const byId = new Map(task.subtasks.map(sub => [sub.id, sub]));
+    const next = ids.map(id => byId.get(id)).filter(Boolean);
+    if (next.length !== task.subtasks.length) return;
+    if (next.every((sub, i) => sub === task.subtasks[i])) return;
+    task.subtasks = next;
+    saveBoards();
+    render(reorderSubBoard);
+    if (reorderSubBoard === 'scheduled') render('today');
+    haptic(HAPTIC_TAP);
+  }
+
   function exitReorder() {
     if (!reorderBoard) return;
+    const wasSub = reorderSubId != null;
+    const subBoard = reorderSubBoard;
+    if (wasSub) commitSubEditInputs();
     const sticky = getReorderSticky(reorderBoard);
     setReorderBadge(reorderBoard, false);
     reorderBoard = null;
+    reorderSubId = null;
+    reorderSubBoard = null;
+    clearTimeout(reorderIdleTimer);
+    reorderIdleTimer = null;
     document.body.classList.remove('reorder-mode');
     document.querySelectorAll('[inert]').forEach(el => {
       if (el.matches('.header, .sticky')) el.removeAttribute('inert');
     });
     if (sticky) {
-      sticky.classList.remove('reorder-active');
+      sticky.classList.remove('reorder-active', 'reorder-sub');
+      sticky.querySelectorAll('.sub-reorder-target, .sub-draggable').forEach(el => el.classList.remove('sub-reorder-target', 'sub-draggable'));
       sticky.querySelectorAll('.reorder-handle').forEach(el => el.remove());
       sticky.querySelectorAll('.reorder-item').forEach(el => el.classList.remove('reorder-item'));
     }
     updateReorderUI();
     haptic(HAPTIC_TAP);
+    if (wasSub && subBoard) {
+      render(subBoard);
+      if (subBoard === 'scheduled') render('today');
+    }
   }
 
   // 화면의 현재 항목 순서(DOM)를 task.order로 저장하고 다시 그림. 바뀐 게 없으면 그대로 둠.
@@ -4117,20 +4546,21 @@
               setTimeout(() => { other.style.transition = ''; }, 180);
             });
           }
-          return;
+          return true;
         }
       }
+      return false;
     };
-    let prevY = null, prevScroll = null;
+    let prevY = null, prevScroll = null, dirty = false;
     const tick = () => {
       // 화면 위/아래 가장자리 근처에서 끌면 페이지가 따라 스크롤됨
       const edge = 70;
       if (lastY < edge) window.scrollBy(0, -Math.ceil((edge - lastY) / 5));
       else if (lastY > window.innerHeight - edge) window.scrollBy(0, Math.ceil((lastY - (window.innerHeight - edge)) / 5));
-      if (lastY !== prevY || window.scrollY !== prevScroll) {
+      if (dirty || lastY !== prevY || window.scrollY !== prevScroll) {
         prevY = lastY; prevScroll = window.scrollY;
         place();
-        swap();
+        dirty = swap();
       }
       raf = requestAnimationFrame(tick);
     };
@@ -4140,17 +4570,18 @@
     const finish = () => {
       cancelAnimationFrame(raf);
       reorderDragging = false;
-      handle.removeEventListener('pointermove', onMove);
-      handle.removeEventListener('pointerup', finish);
-      handle.removeEventListener('pointercancel', finish);
+      document.removeEventListener('pointermove', onMove, true);
+      document.removeEventListener('pointerup', finish, true);
+      document.removeEventListener('pointercancel', finish, true);
       li.classList.remove('dragging');
       li.style.transform = '';
       li.style.willChange = '';
       commitReorder(li.dataset.id);
     };
-    handle.addEventListener('pointermove', onMove);
-    handle.addEventListener('pointerup', finish);
-    handle.addEventListener('pointercancel', finish);
+    // 항목을 DOM에서 옮기면 포인터 캡처가 풀릴 수 있어서, 이동/종료는 document에서 받음
+    document.addEventListener('pointermove', onMove, true);
+    document.addEventListener('pointerup', finish, true);
+    document.addEventListener('pointercancel', finish, true);
   }
 
   // 모드 중에는 ↑/↓(손잡이에 포커스가 있을 때)와 Esc, Tab, Ctrl/Cmd 조합(되돌리기 등)만 통과 —
@@ -4165,6 +4596,26 @@
     }
     if (e.ctrlKey || e.metaKey || e.altKey || e.key === 'Tab') return;
     const active = document.activeElement;
+    // 하위 항목 편집 모드: ⇄에 포커스가 있을 때 ←/→(↑/↓)로 그 칩만 한 칸씩 이동
+    if (reorderSubId != null && active && active.closest && active.closest('.sub-edit-move')
+        && ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)) {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      const sli = active.closest('li.sub-draggable');
+      const list = sli.parentElement;
+      const chips = Array.from(list.children).filter(c => c.classList.contains('sub-draggable'));
+      const dir = (e.key === 'ArrowLeft' || e.key === 'ArrowUp') ? -1 : 1;
+      const target = chips[chips.indexOf(sli) + dir];
+      if (!target) return;
+      const id = sli.dataset.id;
+      list.insertBefore(sli, dir < 0 ? target : target.nextSibling);
+      commitSubEditInputs();
+      commitSubReorder(Array.from(list.children).filter(c => c.classList.contains('sub-draggable')).map(c => Number(c.dataset.id)));
+      const fresh = findTaskLi(reorderSubId);
+      const nh = fresh && fresh.querySelector('li.sub-draggable[data-id="' + id + '"] .sub-edit-move');
+      if (nh) nh.focus({ preventScroll: true });
+      return;
+    }
     const handle = active && active.closest ? active.closest('.reorder-handle') : null;
     if (handle && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
       e.preventDefault();
@@ -4284,7 +4735,8 @@
   // 실제보다 훨씬 좁게 잡혀 글자가 잘렸음. 원래 칩 너비에서 시작해 글자를
   // 입력하는 만큼 같은 글꼴로 실제 폭을 재서 늘림. chipEl은 아직 DOM에
   // 붙어 있을 때(replaceWith 전에) 넘겨야 너비를 잴 수 있음.
-  function fitSubtaskEditInput(input, chipEl) {
+  function fitSubtaskEditInput(input, chipEl, pad) {
+    const extra = pad == null ? 8 : pad;
     const startW = chipEl && chipEl.offsetWidth ? chipEl.offsetWidth : 0;
     const probe = document.createElement('span');
     probe.style.cssText = 'position:absolute;visibility:hidden;white-space:pre;left:-9999px;top:0;';
@@ -4298,7 +4750,7 @@
       const textW = probe.getBoundingClientRect().width;
       probe.remove();
       input.style.boxSizing = 'content-box';
-      input.style.width = Math.ceil(Math.max(startW, textW + 8)) + 'px';
+      input.style.width = Math.ceil(Math.max(startW, textW + extra)) + 'px';
     };
     input.addEventListener('input', fit);
     // 붙은 직후(replaceWith 다음 틱)에 한 번 맞춤 — 그때부터 폰트가 계산됨
