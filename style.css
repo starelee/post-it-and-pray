@@ -3618,542 +3618,6 @@ body.reorder-mode .sticky:not(.reorder-active) {
   display: none;
 }
 
-/* ─────────────────────────────────────────────
-   하루 시작하기 (.day-start-panel)
-   done/검색 리갈패드와 같은 .archive-panel 위에서 열리고, 안쪽도 같은 말투를 씀:
-   보드 아이콘(✿ ⏳ 🌙 📅) · 제목 · 칩(.search-chip)을 한 줄(28px)에, 선택지는 done 패널의 "↻ 또 하기"처럼
-   아이콘+글자만 있는 가벼운 버튼으로. 줄 높이는 전부 28px 단위라 종이줄에 글씨가 얹힘.
-   전역 button/.card/.modal 규칙은 건드리지 않고 .day-start* 안에서만 차이를 둠.
-   ───────────────────────────────────────────── */
-:root {
-  --day-start-line: 28px;
-}
-
-.day-start-btn {
-  position: relative;
-}
-
-.day-start-dot {
-  position: absolute;
-  top: -3px;
-  right: -3px;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--accent);
-}
-
-.day-start-dot[hidden] {
-  display: none;
-}
-
-.day-start-panel .archive-panel-inner {
-  padding-top: var(--day-start-line);
-  padding-bottom: 0;
-}
-
-.day-start__head {
-  display: flex;
-  align-items: baseline;
-  height: var(--day-start-line);
-}
-
-.day-start-panel .archive-title {
-  height: var(--day-start-line);
-  margin: 0;
-  line-height: var(--day-start-line);
-  position: relative;
-  top: 3px;
-}
-
-.day-start__date {
-  margin-left: 10px;
-  font-family: var(--font-ui);
-  letter-spacing: var(--ui-letter-spacing);
-  font-size: 14px;
-  color: var(--ink-soft);
-}
-
-/* 단계: 제목 밑 한 줄. 누르는 탭이 아니라 진행 표시(다음 단계는 아래 버튼으로) */
-.day-start__steps {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.day-start__step,
-.day-start__btn,
-.day-start__handle,
-.day-start__move {
-  background: none;
-  border: none;
-  cursor: pointer;
-  font-family: var(--font-ui);
-  letter-spacing: var(--ui-letter-spacing);
-  color: var(--ink-soft);
-}
-
-.day-start__step {
-  position: relative;
-  top: 3px;
-  padding: 0 9px;
-  font-size: 15px;
-  line-height: var(--day-start-line);
-  border-radius: 10px;
-  cursor: default;
-  opacity: 0.6;
-}
-
-.day-start__step + .day-start__step::before {
-  content: "›";
-  position: absolute;
-  left: -5px;
-  color: var(--ink-soft);
-}
-
-.day-start__step.is-past {
-  opacity: 0.85;
-}
-
-.day-start__step.is-current {
-  opacity: 1;
-  color: var(--accent);
-  font-weight: 700;
-  background: var(--focus-box-fill);
-}
-
-.day-start__lead {
-  margin: 0;
-  position: relative;
-  top: 3px;
-  font-family: var(--font-ui);
-  letter-spacing: var(--ui-letter-spacing);
-  font-size: 14px;
-  line-height: var(--day-start-line);
-  color: var(--ink-soft);
-}
-
-.day-start__body .search-group-title {
-  position: relative;
-  top: 3px;
-}
-
-/* 정비 항목: 검색 제안(.search-item)과 같은 줄 + 오른쪽에 고른 처리 */
-.day-start__item[aria-selected="true"] {
-  background: var(--focus-box-fill);
-}
-
-.day-start__row {
-  position: relative;
-  top: 3px;
-  outline: none;
-}
-
-.day-start__row:focus-visible {
-  outline: 1.5px dashed var(--accent);
-  outline-offset: 2px;
-  border-radius: 6px;
-}
-
-.day-start__row .search-icon,
-.day-start__row .search-item-text,
-.day-start__order-item .search-icon,
-.day-start__order-item .search-item-text {
-  position: relative;
-  top: 0;
-}
-
-.day-start__row .search-item-text {
-  flex: 0 1 auto;
-}
-
-.day-start__decision {
-  margin-left: auto;
-  flex: 0 1 auto;
-  min-width: 0;
-  max-width: 42%;
-  font-family: var(--font-ui);
-  letter-spacing: var(--ui-letter-spacing);
-  font-size: 13px;
-  line-height: var(--day-start-line);
-  color: var(--accent);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.day-start__item[data-state="stale"] .day-start__decision,
-.day-start__item[data-state="incomplete"] .day-start__decision {
-  color: var(--urgent);
-}
-
-/* 선택한 항목 밑에 열리는 편집 줄들 — 보드에서 아이콘 줄이 열리는 자리와 같은 들여쓰기 */
-.day-start__editor {
-  position: relative;
-  top: 3px;
-}
-
-.day-start__field {
-  margin-left: 30px;
-}
-
-/* 글자 버튼은 안쪽 여백(8px)만큼 덜 들여써서 위 줄의 글자와 시작점이 맞음 */
-.day-start__clear {
-  margin-left: 22px;
-}
-
-.day-start__snippet.is-warn {
-  color: var(--urgent);
-}
-
-.day-start__quick {
-  display: flex;
-  flex-wrap: wrap;
-  column-gap: 4px;
-}
-
-/* 보드의 hover 아이콘 줄(.task-controls)과 같은 모양인데, 여기서는 항상 펼쳐 둠 */
-.day-start__icons {
-  display: flex;
-  align-items: center;
-  column-gap: 6px;
-  margin-left: 22px;
-  min-height: var(--day-start-line);
-}
-
-.day-start__icon {
-  flex: 0 0 auto;
-  min-width: 30px;
-  height: var(--day-start-line);
-  padding: 0 4px;
-  font-family: var(--font-ui);
-  font-size: 15px;
-  line-height: var(--day-start-line);
-  color: var(--ink);
-  background: none;
-  border: none;
-  border-radius: 10px;
-  cursor: pointer;
-  opacity: 0.45;
-  filter: grayscale(1);
-  transition: opacity 0.15s var(--ease-ui), filter 0.15s var(--ease-ui), transform 0.15s var(--ease-ui), background 0.15s var(--ease-ui);
-}
-
-.day-start__icon:hover,
-.day-start__icon:focus-visible {
-  opacity: 0.8;
-  transform: scale(1.1);
-}
-
-.day-start__icon[aria-pressed="true"] {
-  opacity: 1;
-  filter: none;
-  color: var(--accent);
-  background: var(--focus-box-fill);
-  box-shadow: inset 0 -2px 0 var(--accent);
-}
-
-.day-start__btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 0 8px;
-  font-size: 14px;
-  line-height: var(--day-start-line);
-  border-radius: 10px;
-  opacity: 0.8;
-  white-space: nowrap;
-  transition: opacity 0.15s var(--ease-ui), color 0.15s var(--ease-ui), background 0.15s var(--ease-ui);
-}
-
-.day-start__btn:hover,
-.day-start__btn:focus-visible {
-  opacity: 1;
-  color: var(--accent);
-}
-
-.day-start__btn[aria-pressed="true"] {
-  opacity: 1;
-  color: var(--accent);
-  font-weight: 700;
-  background: var(--focus-box-fill);
-}
-
-.day-start__btn-icon {
-  font-size: 13px;
-}
-
-.day-start__clear {
-  font-size: 13px;
-  text-decoration: underline;
-}
-
-.day-start__field {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  column-gap: 8px;
-  min-height: var(--day-start-line);
-}
-
-.day-start__field .date-picker-input {
-  height: 24px;
-  box-sizing: border-box;
-}
-
-.day-start__field-label {
-  flex: 0 0 auto;
-  font-family: var(--font-ui);
-  letter-spacing: var(--ui-letter-spacing);
-  font-size: 13px;
-  color: var(--ink-soft);
-}
-
-/* 한 줄 입력창: 리갈패드의 줄이 곧 밑줄(검색 입력창과 같음) */
-.day-start__text {
-  flex: 1 1 160px;
-  min-width: 0;
-  box-sizing: border-box;
-  height: var(--day-start-line);
-  margin: 0;
-  padding: 0;
-  font-family: var(--font-task);
-  font-size: 16px;
-  line-height: var(--day-start-line);
-  color: var(--ink);
-  background: transparent;
-  border: none;
-  outline: none;
-}
-
-/* 준비할 일 / 새 항목 줄 */
-.day-start__prep-item {
-  display: flex;
-  align-items: center;
-  column-gap: 8px;
-  min-height: var(--day-start-line);
-  position: relative;
-  top: 3px;
-}
-
-.day-start__prep-item .search-icon {
-  flex: 0 0 22px;
-}
-
-.day-start__delete {
-  font-size: 14px;
-  padding: 0 4px;
-  opacity: 0.5;
-}
-
-.day-start__delete:hover {
-  opacity: 1;
-}
-
-.day-start__add {
-  margin-top: var(--day-start-line);
-  padding-top: 0;
-  border-top: none;
-  min-height: var(--day-start-line);
-  position: relative;
-  top: 3px;
-}
-
-/* 오늘 순서: 한 줄에 하나 */
-.day-start__order-list {
-  counter-reset: none;
-}
-
-.day-start__order-item {
-  position: relative;
-  top: 3px;
-  display: flex;
-  align-items: flex-start;
-  column-gap: 8px;
-  min-height: var(--day-start-line);
-  margin: 0 -6px;
-  padding: 0 6px;
-  border-radius: 6px;
-}
-
-.day-start__order-item .search-item-text {
-  flex: 1 1 auto;
-}
-
-.day-start__order-item .search-chip {
-  align-self: flex-start;
-}
-
-.day-start__num {
-  flex: 0 0 22px;
-  font-family: var(--font-hand);
-  font-size: 18px;
-  line-height: var(--day-start-line);
-  text-align: center;
-  color: var(--accent);
-}
-
-.day-start__move {
-  flex: 0 0 auto;
-  height: var(--day-start-line);
-  padding: 0 4px;
-  font-size: 14px;
-  line-height: var(--day-start-line);
-  opacity: 0.5;
-}
-
-.day-start__move:hover:not(:disabled),
-.day-start__move:focus-visible {
-  opacity: 1;
-  color: var(--accent);
-}
-
-.day-start__move:disabled {
-  opacity: 0.18;
-  cursor: default;
-}
-
-/* 순서 바꾸기 모드의 ⋮⋮ 손잡이와 같은 모양 */
-.day-start__handle {
-  flex: 0 0 auto;
-  width: 28px;
-  height: var(--day-start-line);
-  padding: 0;
-  color: var(--ink);
-  font-size: 15px;
-  line-height: 1;
-  letter-spacing: -3px;
-  opacity: 0.6;
-  cursor: grab;
-  touch-action: none;
-  user-select: none;
-  -webkit-tap-highlight-color: transparent;
-}
-
-.day-start__handle:hover,
-.day-start__handle:focus {
-  opacity: 1;
-  outline: none;
-}
-
-.day-start__order-item:has(.day-start__handle:focus) {
-  outline: 1.5px dashed var(--accent);
-  outline-offset: 2px;
-}
-
-/* 끌고 있는 줄은 순서 바꾸기 모드(.task-item.dragging)처럼 종이가 살짝 떠오름 */
-.day-start__order-item.is-dragging {
-  z-index: 5;
-  background: var(--legal-paper);
-  box-shadow: 0 6px 14px -4px var(--paper-shadow);
-}
-
-.day-start__order-item.drop-before::before,
-.day-start__order-item.drop-after::after {
-  content: "";
-  position: absolute;
-  left: 0;
-  right: 0;
-  height: 2px;
-  border-radius: 2px;
-  background: var(--accent);
-  pointer-events: none;
-}
-
-.day-start__order-item.drop-before::before {
-  top: -1px;
-}
-
-.day-start__order-item.drop-after::after {
-  bottom: -1px;
-}
-
-/* 푸터: 변경 요약 + 확정(확인 모달의 버튼을 그대로 씀). 스크롤해도 아래에 붙어 있어 확정 버튼이 가려지지 않음 */
-.day-start__footer {
-  position: sticky;
-  bottom: 0;
-  z-index: 3;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px 14px;
-  margin: var(--day-start-line) -20px 0 -40px;
-  padding: 10px 20px calc(12px + env(safe-area-inset-bottom)) 40px;
-  background: var(--legal-paper);
-  border-top: 1px dashed var(--focus-box-border);
-}
-
-.day-start__summary {
-  flex: 1 1 100%;
-  margin: 0;
-  font-family: var(--font-ui);
-  letter-spacing: var(--ui-letter-spacing);
-  font-size: 13px;
-  line-height: 1.5;
-  color: var(--ink-soft);
-}
-
-.day-start__actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-left: auto;
-}
-
-.day-start-panel :focus-visible {
-  outline: 1.5px dashed var(--accent);
-  outline-offset: 2px;
-}
-
-/* 손가락 기기: 줄 두 칸(56px) 단위로 키워 누르기 쉽게(종이줄과는 계속 맞음) */
-@media (hover: none) {
-  .day-start__order-item {
-    min-height: calc(var(--day-start-line) * 2);
-    align-items: center;
-  }
-
-  .day-start__handle,
-  .day-start__move {
-    height: calc(var(--day-start-line) * 2);
-  }
-
-  .day-start__btn {
-    min-height: calc(var(--day-start-line) * 1.5);
-  }
-
-  .day-start__icon {
-    min-width: 40px;
-    height: calc(var(--day-start-line) * 2);
-  }
-
-  .day-start__icons {
-    min-height: calc(var(--day-start-line) * 2);
-  }
-}
-
-@media (max-width: 480px) {
-  .day-start-panel .archive-panel-inner {
-    padding-right: 14px;
-  }
-
-  .day-start__footer {
-    margin-right: -14px;
-    padding-right: 14px;
-  }
-
-  .day-start__actions {
-    width: 100%;
-  }
-
-  .day-start__actions .confirm-btn-ok {
-    flex: 1;
-  }
-}
-
 /* ───────── 하위 항목 순서 바꾸기 (⇄) ───────── */
 .reorder-active.reorder-sub .add-row {
   pointer-events: none;
@@ -4595,28 +4059,398 @@ body.reorder-mode .sticky:not(.reorder-active) {
   font-family: var(--font-ui);
 }
 
-/* 정비하기: 넓은 화면에서는 패드를 조금 넓히고 묶음을 2단으로(항목/묶음 제목이 단 사이에서 끊기지 않게) */
-@media (min-width: 900px) {
-  .day-start-panel {
-    width: min(980px, 94vw);
+/* ─────────────────────────────────────────────
+   하루 시작하기 (.day-start-panel)
+   done/검색 리갈패드와 같은 .archive-panel 위에서 열림(같은 자리·그림자·종이줄·여백선).
+   ① 정비하기는 질문 카드 하나에 예/아니오, ② 오늘 순서는 한 줄에 하나(순서 바꾸기 모드의 ⋮⋮ 손잡이).
+   전역 button/.card/.modal 규칙은 건드리지 않고 .day-start* 안에서만 차이를 둠.
+   ───────────────────────────────────────────── */
+:root {
+  --day-start-line: 28px;
+}
+
+.day-start-btn {
+  position: relative;
+}
+
+.day-start-dot {
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+.day-start-dot[hidden] {
+  display: none;
+}
+
+.day-start-panel .archive-panel-inner {
+  padding-top: var(--day-start-line);
+  padding-bottom: 0;
+}
+
+.day-start__head {
+  display: flex;
+  align-items: baseline;
+  height: var(--day-start-line);
+}
+
+.day-start-panel .archive-title {
+  height: var(--day-start-line);
+  margin: 0;
+  line-height: var(--day-start-line);
+  position: relative;
+  top: 3px;
+}
+
+.day-start__date {
+  margin-left: 10px;
+  font-family: var(--font-ui);
+  letter-spacing: var(--ui-letter-spacing);
+  font-size: 14px;
+  color: var(--ink-soft);
+}
+
+.day-start__lead {
+  margin: 0;
+  position: relative;
+  top: 3px;
+  font-family: var(--font-ui);
+  letter-spacing: var(--ui-letter-spacing);
+  font-size: 14px;
+  line-height: var(--day-start-line);
+  color: var(--ink-soft);
+}
+
+.day-start__body {
+  min-height: calc(var(--day-start-line) * 9);
+}
+
+/* ① 정비하기: 질문 카드 한 장 — 제목 · 이유 칩 · 질문 · [아니오] [네] */
+.day-start__progress {
+  margin: 0;
+  position: relative;
+  top: 3px;
+  text-align: right;
+  font-family: var(--font-ui);
+  letter-spacing: var(--ui-letter-spacing);
+  font-size: 13px;
+  line-height: var(--day-start-line);
+  color: var(--ink-soft);
+}
+
+.day-start__card {
+  max-width: 560px;
+  margin: 0 auto;
+  padding-top: var(--day-start-line);
+  text-align: center;
+}
+
+.day-start__qitem {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  column-gap: 8px;
+}
+
+.day-start__qitem .search-icon {
+  font-size: 20px;
+  line-height: calc(var(--day-start-line) * 2);
+}
+
+.day-start__qitem .search-icon-flower {
+  font-size: 24px;
+}
+
+.day-start__qtitle {
+  font-family: var(--font-task);
+  font-size: 26px;
+  line-height: calc(var(--day-start-line) * 2);
+  overflow-wrap: anywhere;
+  text-align: left;
+}
+
+.day-start__qchips {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0 6px;
+  min-height: var(--day-start-line);
+}
+
+.day-start__qchips .search-chip {
+  margin-top: 5px;
+}
+
+.day-start__question {
+  margin: var(--day-start-line) 0 0;
+  font-family: var(--font-hand);
+  font-size: 22px;
+  line-height: var(--day-start-line);
+  color: var(--ink);
+}
+
+.day-start__answers {
+  display: flex;
+  justify-content: center;
+  gap: 14px;
+  margin-top: var(--day-start-line);
+}
+
+.day-start__answers .confirm-btn {
+  min-width: 112px;
+  padding: 7px 26px;
+  font-size: 20px;
+}
+
+.day-start__keys {
+  display: none;
+  margin: var(--day-start-line) 0 0;
+  font-family: var(--font-ui);
+  letter-spacing: var(--ui-letter-spacing);
+  font-size: 12px;
+  line-height: var(--day-start-line);
+  color: var(--ink-soft);
+  opacity: 0.7;
+}
+
+@media (hover: hover) {
+  .day-start__keys {
+    display: block;
+  }
+}
+
+.day-start__done {
+  margin: calc(var(--day-start-line) * 2) 0 0;
+  text-align: center;
+  font-family: var(--font-hand);
+  font-size: 24px;
+  line-height: var(--day-start-line);
+  color: var(--accent);
+}
+
+/* ② 오늘 순서: 한 줄에 하나 */
+.day-start__order-list {
+  margin-top: var(--day-start-line);
+}
+
+.day-start__order-item {
+  position: relative;
+  top: 3px;
+  display: flex;
+  align-items: flex-start;
+  column-gap: 8px;
+  min-height: var(--day-start-line);
+  margin: 0 -6px;
+  padding: 0 6px;
+  border-radius: 6px;
+}
+
+.day-start__order-item .search-item-text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.day-start__order-item .search-chip {
+  align-self: flex-start;
+}
+
+.day-start__num {
+  flex: 0 0 22px;
+  font-family: var(--font-hand);
+  font-size: 18px;
+  line-height: var(--day-start-line);
+  text-align: center;
+  color: var(--accent);
+}
+
+.day-start__move,
+.day-start__handle {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: var(--font-ui);
+  letter-spacing: var(--ui-letter-spacing);
+  color: var(--ink-soft);
+}
+
+.day-start__move {
+  flex: 0 0 auto;
+  height: var(--day-start-line);
+  padding: 0 4px;
+  font-size: 14px;
+  line-height: var(--day-start-line);
+  opacity: 0.5;
+}
+
+.day-start__move:hover:not(:disabled),
+.day-start__move:focus-visible {
+  opacity: 1;
+  color: var(--accent);
+}
+
+.day-start__move:disabled {
+  opacity: 0.18;
+  cursor: default;
+}
+
+.day-start__delete {
+  align-self: flex-start;
+  height: var(--day-start-line);
+  font-size: 14px;
+  line-height: var(--day-start-line);
+  padding: 0 4px;
+  opacity: 0.5;
+}
+
+.day-start__delete:hover {
+  opacity: 1;
+}
+
+/* 순서 바꾸기 모드의 ⋮⋮ 손잡이와 같은 모양 */
+.day-start__handle {
+  flex: 0 0 auto;
+  width: 28px;
+  height: var(--day-start-line);
+  padding: 0;
+  color: var(--ink);
+  font-size: 15px;
+  line-height: 1;
+  letter-spacing: -3px;
+  opacity: 0.6;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.day-start__handle:hover,
+.day-start__handle:focus {
+  opacity: 1;
+  outline: none;
+}
+
+.day-start__order-item:has(.day-start__handle:focus) {
+  outline: 1.5px dashed var(--accent);
+  outline-offset: 2px;
+}
+
+/* 끌고 있는 줄은 순서 바꾸기 모드(.task-item.dragging)처럼 종이가 살짝 떠오름 */
+.day-start__order-item.is-dragging {
+  z-index: 5;
+  background: var(--legal-paper);
+  box-shadow: 0 6px 14px -4px var(--paper-shadow);
+}
+
+.day-start__order-item.drop-before::before,
+.day-start__order-item.drop-after::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--accent);
+  pointer-events: none;
+}
+
+.day-start__order-item.drop-before::before {
+  top: -1px;
+}
+
+.day-start__order-item.drop-after::after {
+  bottom: -1px;
+}
+
+/* 보드 맨 아래 "+ 끄적이기..." 줄과 같은 입력줄 */
+.day-start__add {
+  margin-top: var(--day-start-line);
+  padding-top: 0;
+  border-top: none;
+  min-height: var(--day-start-line);
+  position: relative;
+  top: 3px;
+}
+
+/* 푸터: 변경 요약 + 버튼(확인 모달의 버튼을 그대로 씀). 스크롤해도 아래에 붙어 있어 가려지지 않음 */
+.day-start__footer {
+  position: sticky;
+  bottom: 0;
+  z-index: 3;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 14px;
+  margin: var(--day-start-line) -20px 0 -40px;
+  padding: 10px 20px calc(12px + env(safe-area-inset-bottom)) 40px;
+  background: var(--legal-paper);
+  border-top: 1px dashed var(--focus-box-border);
+}
+
+.day-start__summary {
+  flex: 1 1 100%;
+  margin: 0;
+  font-family: var(--font-ui);
+  letter-spacing: var(--ui-letter-spacing);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ink-soft);
+}
+
+.day-start__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.day-start-panel :focus-visible {
+  outline: 1.5px dashed var(--accent);
+  outline-offset: 2px;
+}
+
+/* 손가락 기기: 줄 두 칸(56px) 단위로 키워 누르기 쉽게(종이줄과는 계속 맞음) */
+@media (hover: none) {
+  .day-start__order-item {
+    min-height: calc(var(--day-start-line) * 2);
+    align-items: center;
   }
 
-  .day-start__groups {
-    padding-top: var(--day-start-line);
-    column-count: 2;
-    column-gap: 40px;
-    column-rule: 1px dashed var(--focus-box-border);
+  .day-start__handle,
+  .day-start__move {
+    height: calc(var(--day-start-line) * 2);
+  }
+}
+
+@media (max-width: 480px) {
+  .day-start-panel .archive-panel-inner {
+    padding-right: 14px;
   }
 
-  .day-start__groups .search-group-title {
-    break-after: avoid;
+  .day-start__footer {
+    margin-right: -14px;
+    padding-right: 14px;
   }
 
-  .day-start__groups .day-start__item {
-    break-inside: avoid;
+  .day-start__actions {
+    width: 100%;
   }
 
-  .day-start__groups > .search-group-title:first-child {
-    margin-top: 0;
+  /* 좁은 화면: 주 버튼을 한 줄 전체로 위에, 보조 버튼 둘은 그 아래 반반 */
+  .day-start__actions .confirm-btn-ok {
+    order: -1;
+    flex: 1 1 100%;
+  }
+
+  .day-start__actions .confirm-btn-cancel {
+    flex: 1 1 0;
+  }
+
+  .day-start__qtitle {
+    font-size: 22px;
   }
 }
