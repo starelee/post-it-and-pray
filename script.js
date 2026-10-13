@@ -6780,8 +6780,9 @@
     });
     // 마감이 곧 다가옴(내일·모레) — 아직 오늘 목록에 없는 것
     // 오늘 이미 할 일이 많으면 미리 시작하자는 질문은 건너뜀(질문 도중 사라지지 않게 답과 무관한 현재 개수 기준)
+    // 지금 gotta do 카드에 보이는 미완료 개수: 일반 항목 + 오늘 마감 + oops(마감 지난 것)
     const busyCount = boards.today.filter(t => !t.done).length
-      + boards.scheduled.filter(t => !t.done && t.dueDate === today).length;
+      + boards.scheduled.filter(t => !t.done && t.dueDate && t.dueDate <= today).length;
     boards.scheduled.forEach(t => {
       if (t.done || byTask.has(t.id) || !t.dueDate) return;
       const dd = daysUntilDue(t.dueDate);

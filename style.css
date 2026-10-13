@@ -4100,6 +4100,8 @@ body.reorder-mode .sticky:not(.reorder-active) {
 }
 
 .day-start-panel .archive-title {
+  flex: 0 0 auto;
+  white-space: nowrap;
   height: var(--day-start-line);
   margin: 0;
   line-height: var(--day-start-line);
@@ -4108,6 +4110,9 @@ body.reorder-mode .sticky:not(.reorder-active) {
 }
 
 .day-start__date {
+  position: relative;
+  top: 3px;
+  line-height: var(--day-start-line);
   flex: 0 1 auto;
   min-width: 0;
   overflow: hidden;
