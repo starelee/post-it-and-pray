@@ -69,6 +69,7 @@
   // Google Cloud에서 만든 "웹 애플리케이션" OAuth 클라이언트 ID(공개값)를 넣으면 켜짐 — 설정 방법은 README의 '구글 캘린더' 참고.
   const GOOGLE_CLIENT_ID = '';
   const GCAL_SCOPE = 'https://www.googleapis.com/auth/calendar.readonly';
+  let gcalHint = ''; // 로그인한 구글 계정 이메일 — 토큰을 조용히 받을 때 계정 선택 창이 안 뜨게 힌트로 넘김
   const BOARD_IDS = ['today', 'waiting', 'someday', 'scheduled'];
   let dayStartOpen = false; // 하루 시작하기 오버레이가 열려 있는지(맨 아래 '하루 시작하기' 블록)
   // Boards a task can be manually moved between with the move buttons.
@@ -1334,7 +1335,10 @@
           // #access_token=... hash is still sitting in the address bar
           // (see clearAuthHash below), baking it into this redirect target
           // corrupts the round trip and the next login silently fails.
-          options: { redirectTo: window.location.origin + window.location.pathname }
+          // 구글 캘린더를 켜 둔 경우, 로그인 때 읽기 전용 캘린더 권한까지 한 번에 동의받음(별도 '연결' 단계가 필요 없어짐)
+          options: GOOGLE_CLIENT_ID
+            ? { redirectTo: window.location.origin + window.location.pathname, scopes: GCAL_SCOPE }
+            : { redirectTo: window.location.origin + window.location.pathname }
         });
       });
 
@@ -1359,6 +1363,8 @@
 
   async function handleAuthChange(session) {
     const user = session && session.user ? session.user : null;
+    gcalHint = (user && user.email) || '';
+    gcalCaptureSession(session);
     renderAuthUI(user);
     clearAuthHash();
     if (user) {
@@ -6704,7 +6710,7 @@
       gcalInit();
       if (!gcalClient) { resolve(null); return; }
       gcalPending = resolve;
-      try { gcalClient.requestAccessToken({}); } catch (e) { gcalPending = null; resolve(null); }
+      try { gcalClient.requestAccessToken(gcalHint ? { hint: gcalHint } : {}); } catch (e) { gcalPending = null; resolve(null); }
     });
   }
 
@@ -6743,6 +6749,19 @@
     lsSet(GCAL_TOKEN_KEY, null);
     lsSet(GCAL_GRANTED_KEY, null);
     lsSet(GCAL_DECLINED_KEY, '1');
+  }
+
+  // 로그인 직후에만 오는 구글 토큰(Supabase가 OAuth 콜백에서 session.provider_token으로 줌, 캘린더 권한 포함)을 받아
+  // 둠 — 그 직후 한 시간 안에는 팝업 없이 바로 일정을 읽을 수 있음. Supabase는 탭에 돌아올 때마다 같은 세션을 다시
+  // 보내므로, 이미 본 토큰이면 만료 시각을 늘리지 않음(오래된 토큰을 새것으로 착각하지 않게).
+  const GCAL_SEEN_KEY = 'postit-gcal-seen';
+  function gcalCaptureSession(session) {
+    if (!GOOGLE_CLIENT_ID || !session || !session.provider_token) return;
+    if (lsGet(GCAL_SEEN_KEY) === session.provider_token) return;
+    lsSet(GCAL_SEEN_KEY, session.provider_token);
+    lsSet(GCAL_TOKEN_KEY, JSON.stringify({ token: session.provider_token, exp: Date.now() + 50 * 60 * 1000 }));
+    lsSet(GCAL_GRANTED_KEY, '1');
+    lsSet(GCAL_DECLINED_KEY, null);
   }
 
   // 일정 단계는 설정돼 있고, 연결했거나 아직 거절하지 않았을 때만
