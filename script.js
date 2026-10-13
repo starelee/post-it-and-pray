@@ -6593,7 +6593,6 @@
   const dayStartEl = document.getElementById('dayStart');
   const dayStartBodyEl = document.getElementById('dayStartBody');
   const dayStartDateEl = document.getElementById('dayStartDate');
-  const dayStartStepsEl = document.getElementById('dayStartSteps');
   const dayStartSummaryEl = document.getElementById('dayStartSummary');
   const dayStartBtn = document.getElementById('dayStartBtn');
   const dayStartDotEl = document.getElementById('dayStartDot');
@@ -6883,14 +6882,10 @@
     }
     clearEl(dayStartBodyEl);
     const d = new Date();
-    dayStartDateEl.textContent = (d.getMonth() + 1) + '/' + d.getDate() + '(' + WEEKDAY_KO[d.getDay()] + ')';
     const stepIdx = DAYSTART_STEPS.findIndex(st => st.id === ds.step);
-    Array.from(dayStartStepsEl.children).forEach((el, i) => {
-      el.classList.toggle('is-current', i === stepIdx);
-      el.classList.toggle('is-past', i < stepIdx);
-      if (i === stepIdx) el.setAttribute('aria-current', 'step');
-      else el.removeAttribute('aria-current');
-    });
+    // 단계 표시줄은 따로 두지 않고, 제목 옆에 "날짜 · 몇 번째 단계"만 작게
+    dayStartDateEl.textContent = (d.getMonth() + 1) + '/' + d.getDate() + '(' + WEEKDAY_KO[d.getDay()] + ') · '
+      + (stepIdx + 1) + '/' + DAYSTART_STEPS.length + ' ' + DAYSTART_STEPS[stepIdx].label;
     // 마지막 단계에서만 확정, 그 전에는 다음 단계로
     const isLast = stepIdx === DAYSTART_STEPS.length - 1;
     dayStartConfirmBtn.textContent = isLast ? '계획 확정하고 Today로' : '다음 단계 →';
@@ -7539,10 +7534,6 @@
       ds = dsFreshDraft();
       dsSelectedId = null;
       dsRender();
-    });
-    // 진행 표시(누르는 탭이 아님) — 지금 어느 단계인지만 보여줌
-    DAYSTART_STEPS.forEach((st, i) => {
-      dayStartStepsEl.appendChild(dsEl('li', 'day-start__step', (i + 1) + ' ' + st.label));
     });
     // Esc — 초안은 그대로 두고 닫기(확인 모달이 떠 있으면 그쪽이 먼저)
     document.addEventListener('keydown', (e) => {

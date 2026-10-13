@@ -3674,17 +3674,6 @@ body.reorder-mode .sticky:not(.reorder-active) {
   color: var(--ink-soft);
 }
 
-/* 단계: 제목 밑 한 줄. 누르는 탭이 아니라 진행 표시(다음 단계는 아래 버튼으로) */
-.day-start__steps {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.day-start__step,
 .day-start__btn,
 .day-start__handle,
 .day-start__move {
@@ -3694,35 +3683,6 @@ body.reorder-mode .sticky:not(.reorder-active) {
   font-family: var(--font-ui);
   letter-spacing: var(--ui-letter-spacing);
   color: var(--ink-soft);
-}
-
-.day-start__step {
-  position: relative;
-  top: 3px;
-  padding: 0 9px;
-  font-size: 15px;
-  line-height: var(--day-start-line);
-  border-radius: 10px;
-  cursor: default;
-  opacity: 0.6;
-}
-
-.day-start__step + .day-start__step::before {
-  content: "›";
-  position: absolute;
-  left: -5px;
-  color: var(--ink-soft);
-}
-
-.day-start__step.is-past {
-  opacity: 0.85;
-}
-
-.day-start__step.is-current {
-  opacity: 1;
-  color: var(--accent);
-  font-weight: 700;
-  background: var(--focus-box-fill);
 }
 
 .day-start__lead {
