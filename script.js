@@ -6583,6 +6583,8 @@
   // 이 처리를 고르면 gotta do 목록에서 빠짐
   const DAYSTART_LEAVES_TODAY = ['toSomeday', 'done', 'later', 'merge'];
   const DAYSTART_DUE_SOON_DAYS = 2;        // 마감이 이만큼 안으로 다가오면 '오늘 미리 시작할래요?'
+  // 오늘 이미 일이 이만큼 많으면 '마감이 곧 다가와요' 질문은 안 물음(모레 마감은 BUSY, 내일 마감은 한도까지 봐줌)
+  const DAYSTART_BUSY_TODAY = 5;
   const DAYSTART_BIG_OVERDUE = 7;          // 마감이 이만큼 넘게 지났으면 '다시 잡을래요?'
   const DAYSTART_URGENT_DAYS = 3;          // 긴급(❗)인데 이만큼 그대로면 '오늘 첫 번째로 할래요?'
   const DAYSTART_NOREPLY_DAYS = 7;         // 확인 날짜 없는 waiting이 이만큼 묵으면 '3일 뒤에 확인할까요?'
@@ -6604,6 +6606,7 @@
   let ds = null;             // 초안 { date, step, decisions, prep, order, seq }
   let dsPrevFocus = null;
   let dsDayTimer = null;
+  let dsAltKey = null;       // '아니오'를 눌러 대안 선택지를 보여주는 중인 질문의 키
 
   function isDayStartOpen() {
     return dayStartOpen;
@@ -6776,9 +6779,13 @@
       if (days >= DAYSTART_CARRY_DAYS) push({ task: t, boardId: 'today', tags: [days + '일째'], group: 'carry' });
     });
     // 마감이 곧 다가옴(내일·모레) — 아직 오늘 목록에 없는 것
+    // 오늘 이미 할 일이 많으면 미리 시작하자는 질문은 건너뜀(질문 도중 사라지지 않게 답과 무관한 현재 개수 기준)
+    const busyCount = boards.today.filter(t => !t.done).length
+      + boards.scheduled.filter(t => !t.done && t.dueDate === today).length;
     boards.scheduled.forEach(t => {
       if (t.done || byTask.has(t.id) || !t.dueDate) return;
       const dd = daysUntilDue(t.dueDate);
+      if (busyCount >= (dd >= 2 ? DAYSTART_BUSY_TODAY : DAYSTART_TODAY_LIMIT)) return;
       if (dd >= 1 && dd <= DAYSTART_DUE_SOON_DAYS) push({ task: t, boardId: 'scheduled', tags: [dd === 1 ? '내일 마감' : '모레 마감'], group: 'dueSoon' });
     });
     // 확인 날짜 없이 오래 기다리는 waiting
@@ -6845,7 +6852,7 @@
 
   // 규칙 하나 = "상황인데, 제안?" 질문 하나. yes/no는 초안에 그대로 저장되는 처리(action).
   // 물어볼 게 없으면(이미 오늘 목록에 있는데 '오늘 하기'를 묻는 식) null.
-  function dsQuestionFor(item) {
+  function dsQuestionBase(item) {
     const t = item.task;
     const num = (re) => {
       for (const tag of item.tags) { const m = tag.match(re); if (m) return Number(m[1]); }
@@ -6878,6 +6885,8 @@
         return { text: (weekend ? '이번 주말' : (dd === 1 ? '내일' : '모레')) + ' 마감인데, 오늘 미리 ' + (weekend ? '처리할래요?' : '시작할래요?'), yes: { action: 'today' }, no: noop };
       }
       case 'finish': {
+        // waiting 항목은 하위 항목이 끝나도 '완료'를 묻지 않음(기다리는 일은 상대가 답해야 끝나므로)
+        if (item.boardId === 'waiting') return null;
         const open = (t.subtasks || []).filter(x => !x.done).length;
         if (open === 0) {
           return { text: '하위 항목을 모두 끝냈는데, 완료 처리할래요?', yes: { action: item.boardId === 'waiting' ? 'resolved' : 'done' }, no: noop };
@@ -6901,11 +6910,52 @@
     }
   }
 
+  // '아니오'를 누르면 같은 카드에서 보여줄 대안들. 마지막에는 늘 '그대로 두기'(또는 3일 미루기)가 따로 붙음.
+  function dsAlternatives(item) {
+    const tomorrow = { label: '내일로 미루기', patch: { action: 'later', date: tomorrowStr() } };
+    const nextWeek = { label: '다음 주로 미루기', patch: { action: 'later', date: dsNextMonday() } };
+    const someday = { label: '언젠가로 보내기', patch: { action: 'toSomeday' } };
+    const finished = (label) => ({ label, patch: { action: item.boardId === 'waiting' ? 'resolved' : 'done' } });
+    const waitMore = (label, days) => ({ label, patch: { action: 'setReply', date: dsDateAfter(days) } });
+    const days = (re) => { for (const tag of item.tags) { const m = tag.match(re); if (m) return Number(m[1]); } return 0; };
+    switch (item.group) {
+      case 'dueLate':
+        return days(/^마감 (\d+)일 지남$/) >= DAYSTART_BIG_OVERDUE
+          ? [tomorrow, someday, finished('이미 끝났어요 (완료)')]
+          : [tomorrow, nextWeek, someday, finished('이미 끝났어요 (완료)')];
+      case 'replyLate':
+        return [waitMore('3일 더 기다리기', 3), { label: '제가 직접 처리할게요 (오늘 할 일로)', patch: { action: 'today' } }, finished('해결됐어요')];
+      case 'replyToday':
+        return [waitMore('내일 다시 확인', 1), finished('해결됐어요')];
+      case 'dueToday':
+        return [tomorrow, finished('이미 끝났어요 (완료)')];
+      case 'urgentOld':
+        return [{ label: '긴급 해제', patch: { action: 'unurgent' } }, tomorrow];
+      case 'noReply':
+        return [waitMore('1주 뒤에 확인', 7)];
+      case 'stale':
+        return item.boardId === 'waiting'
+          ? [waitMore('1주 더 기다리기', 7), finished('해결됐어요')]
+          : [tomorrow, finished('이미 끝났어요 (완료)')];
+      case 'carry':
+        return [tomorrow, { label: '대기중으로 옮기기', patch: { action: 'toWaiting' } }, finished('이미 끝났어요 (완료)')];
+      default:
+        return [];
+    }
+  }
+
+  function dsQuestionFor(item) {
+    const q = dsQuestionBase(item);
+    if (!q) return null;
+    q.alts = dsAlternatives(item);
+    return q;
+  }
+
   function dsQuestions() {
     const out = [];
     dsTidyItems().forEach(item => {
       const q = dsQuestionFor(item);
-      if (q) out.push({ item, text: q.text, yes: q.yes, no: q.no });
+      if (q) out.push({ item, text: q.text, yes: q.yes, no: q.no, alts: q.alts });
     });
     return out;
   }
@@ -6947,10 +6997,14 @@
       const d = dsEffective(e.task.id);
       if (d && DAYSTART_LEAVES_TODAY.includes(d.action)) return;
       if (postponed.has(e.task.id)) return; // '내일로 미룰래요?'에 네
+      // 이미 있던 항목은 출처 칩 없이(긴급만 표시) — 순서 제안용 rank: 긴급 → 오늘 마감 → 마무리만 남은 것 → 나머지
+      const subs = e.task.subtasks || [];
+      const finishing = subs.length >= 2 && subs.filter(x => !x.done).length === 1;
       entries.push({
         key: String(e.task.id),
         text: e.task.text,
-        origin: e.boardId === 'scheduled' ? '오늘 마감' : '기존 Today',
+        origin: e.task.urgent ? '긴급' : '',
+        rank: e.task.urgent ? 0 : (e.boardId === 'scheduled' ? 1 : (finishing ? 4 : 5)),
         board: 'today'
       });
     });
@@ -6958,18 +7012,20 @@
       const d = dsEffective(item.key);
       if (!d) return;
       if (d.action === 'repeat') {
-        entries.push({ key: item.key, text: item.task.text, origin: '반복', board: 'today' });
+        entries.push({ key: item.key, text: item.task.text, origin: '반복', rank: 7, board: 'today' });
       } else if (d.action === 'today' && !dsAlreadyInToday(item)) {
-        entries.push({ key: String(item.task.id), text: item.task.text, origin: '정비에서 가져옴', board: 'today' });
+        // 마감이 지났던 것은 오늘 급한 쪽, 마무리 한 개 남은 것은 앞쪽, 나머지는 기존 항목 뒤
+        const rank = item.task.urgent ? 0 : (item.group === 'dueLate' ? 2 : (item.group === 'finish' ? 4 : 6));
+        entries.push({ key: String(item.task.id), text: item.task.text, origin: '정비에서 가져옴', rank, board: 'today' });
       } else if (d.action === 'self') {
-        entries.push({ key: String(item.task.id), text: item.task.text, origin: '직접 처리', board: 'today' });
+        entries.push({ key: String(item.task.id), text: item.task.text, origin: '직접 처리', rank: 3, board: 'today' });
       } else if (d.action === 'follow') {
-        entries.push({ key: 'f:' + item.task.id, text: d.text.trim(), origin: '후속 연락', board: 'today' });
+        entries.push({ key: 'f:' + item.task.id, text: d.text.trim(), origin: '후속 연락', rank: 3, board: 'today' });
       }
     });
     ds.prep.forEach(p => {
       if (p.text.trim() && (p.date || todayStr()) === today) {
-        entries.push({ key: p.key, text: p.text.trim(), origin: '준비 작업', board: 'today' });
+        entries.push({ key: p.key, text: p.text.trim(), origin: '추가', rank: 8, board: 'today' });
       }
     });
     return entries;
@@ -6980,13 +7036,18 @@
     const byKey = new Map(entries.map(e => [e.key, e]));
     const keys = [];
     ds.order.forEach(k => { if (byKey.has(k) && !keys.includes(k)) keys.push(k); });
-    entries.forEach(e => { if (!keys.includes(e.key)) keys.push(e.key); });
+    // 직접 정하지 않은 항목은 제안 순서(rank 낮은 순, 같으면 원래 순서)로 뒤에 붙임
+    entries
+      .map((e, i) => ({ e, i }))
+      .filter(x => !keys.includes(x.e.key))
+      .sort((a, b) => (a.e.rank - b.e.rank) || (a.i - b.i))
+      .forEach(x => keys.push(x.e.key));
     return keys;
   }
 
   // ───── 변경 요약 ─────
   function dsSummary() {
-    const c = { today: 0, done: 0, follow: 0, someday: 0, snooze: 0, urgent: 0, later: 0, reply: 0, merge: 0, repeat: 0, top: 0 };
+    const c = { today: 0, done: 0, follow: 0, someday: 0, snooze: 0, urgent: 0, later: 0, reply: 0, merge: 0, repeat: 0, top: 0, unurgent: 0, waiting: 0 };
     Object.keys(ds.decisions).forEach(id => {
       const s = dsDecisionState(id);
       if (s.state !== 'ok') return;
@@ -7001,6 +7062,8 @@
       else if (a === 'merge') c.merge++;
       else if (a === 'repeat') c.repeat++;
       else if (a === 'top') c.top++;
+      else if (a === 'unurgent') c.unurgent++;
+      else if (a === 'toWaiting') c.waiting++;
       else if (a === 'keep' && s.d.snooze) c.snooze++;
     });
     const postponed = ds.overload && ds.overload.ids ? ds.overload.ids.length : 0;
@@ -7012,6 +7075,8 @@
     if (c.urgent) parts.push('긴급 ' + c.urgent);
     if (c.done) parts.push('완료 ' + c.done);
     if (c.someday) parts.push('언젠가로 ' + c.someday);
+    if (c.waiting) parts.push('대기중으로 ' + c.waiting);
+    if (c.unurgent) parts.push('긴급 해제 ' + c.unurgent);
     if (c.later) parts.push('날짜 변경 ' + c.later);
     if (c.reply) parts.push('확인일 지정 ' + c.reply);
     if (c.merge) parts.push('합치기 ' + c.merge);
@@ -7019,7 +7084,7 @@
     if (postponed) parts.push('내일로 ' + postponed);
     if (c.snooze) parts.push(SNOOZE_DAYS + '일 미루기 ' + c.snooze);
     if (newTask) parts.push('새 할 일 ' + newTask);
-    if (orderChanged) parts.push('순서 변경');
+    if (orderChanged) parts.push('순서 제안');
     return parts.length ? parts.join(' · ') : '아직 바뀐 게 없어요';
   }
 
@@ -7048,7 +7113,7 @@
     if (ds.step === 'tidy') {
       const pending = dsPendingQuestions();
       dayStartConfirmBtn.textContent = pending.length ? '남은 ' + pending.length + '개 건너뛰기 →' : '다음 단계 →';
-      dayStartPrevBtn.hidden = !dsLastAnswered();
+      dayStartPrevBtn.hidden = !(dsAltKey || dsLastAnswered());
       dsRenderQuestions();
     } else {
       dayStartConfirmBtn.textContent = isLast ? '계획 확정하고 Today로' : '다음 단계 →';
@@ -7115,7 +7180,25 @@
     return null;
   }
 
-  function dsAnswer(q, yes) {
+  // '아니오' — 대안이 있으면 같은 카드에서 고르게 하고, 없으면 바로 '그대로 두기'
+  function dsSayNo(q) {
+    if (q.kind !== 'overload' && q.alts && q.alts.length) {
+      dsAltKey = q.item.key;
+      dsRender();
+      return;
+    }
+    dsAnswer(q, false);
+  }
+
+  // 대안 하나를 고름(patch가 null이면 그대로 두기/3일 뒤에 다시 = 원래 '아니오')
+  function dsAnswerAlt(q, patch) {
+    dsAltKey = null;
+    if (!patch) { dsAnswer(q, false); return; }
+    dsAnswer(q, false, patch);
+  }
+
+  function dsAnswer(q, yes, patchOverride) {
+    dsAltKey = null;
     if (q.kind === 'overload') {
       ds.overload = yes ? { ids: q.picks.map(t => t.id) } : { skip: true };
       ds.log = ds.log.filter(x => x !== 'overload').concat('overload');
@@ -7124,7 +7207,7 @@
       return;
     }
     const id = q.item.key;
-    const d = Object.assign({}, yes ? q.yes : q.no, { sig: dsSig(q.item.boardId, q.item.task) });
+    const d = Object.assign({}, patchOverride || (yes ? q.yes : q.no), { sig: dsSig(q.item.boardId, q.item.task) });
     if (d.action === 'top') {
       // 오늘 순서 맨 위로 — 되돌리면 원래 순서로
       d.prevOrder = ds.order.slice();
@@ -7139,6 +7222,7 @@
   }
 
   function dsUndoAnswer() {
+    if (dsAltKey) { dsAltKey = null; dsRender(); return; } // 대안을 고르는 중이면 먼저 질문으로 돌아감
     const id = dsLastAnswered();
     if (id == null) return;
     if (id === 'overload') {
@@ -7191,11 +7275,28 @@
     }
     card.appendChild(head);
     card.appendChild(chips);
+    if (q.kind !== 'overload' && dsAltKey === q.item.key && q.alts && q.alts.length) {
+      // '아니오' 뒤: 그럼 어떻게 할까요? — 대안 + 그대로 두기
+      card.appendChild(dsEl('p', 'day-start__question', '그럼 어떻게 할까요?'));
+      const alts = dsEl('div', 'day-start__alts');
+      const options = q.alts.map(a => ({ label: a.label, patch: a.patch }))
+        .concat([{ label: q.no.snooze ? SNOOZE_DAYS + '일 뒤에 다시' : '그대로 두기', patch: null }]);
+      options.forEach((o, i) => {
+        const b = dsEl('button', 'confirm-btn confirm-btn-cancel day-start__alt', (i + 1) + '  ' + o.label);
+        b.type = 'button';
+        b.addEventListener('click', () => dsAnswerAlt(q, o.patch));
+        alts.appendChild(b);
+      });
+      card.appendChild(alts);
+      card.appendChild(dsEl('p', 'day-start__keys', '1–' + options.length + ' 선택 · Backspace 뒤로'));
+      dayStartBodyEl.appendChild(card);
+      return;
+    }
     card.appendChild(dsEl('p', 'day-start__question', q.text));
     const answers = dsEl('div', 'day-start__answers');
     const no = dsEl('button', 'confirm-btn confirm-btn-cancel day-start__no', '아니오');
     no.type = 'button';
-    no.addEventListener('click', () => dsAnswer(q, false));
+    no.addEventListener('click', () => dsSayNo(q));
     const yes = dsEl('button', 'confirm-btn confirm-btn-ok day-start__yes', '네');
     yes.type = 'button';
     yes.addEventListener('click', () => dsAnswer(q, true));
@@ -7212,7 +7313,7 @@
     const byKey = new Map(entries.map(e => [e.key, e]));
     const keys = dsMergeOrder(entries);
     dayStartBodyEl.appendChild(dsLead(keys.length
-      ? '해야 할 순서대로 놓아 주세요. 손잡이를 끌거나 ↑ ↓로 바꿔요.'
+      ? '급한 것부터 순서를 제안했어요. 바꾸고 싶으면 끌어 주세요.'
       : '오늘 할 일이 아직 없어요. 아래에서 추가할 수 있어요.'));
     if (keys.length) {
       const list = dsEl('ol', 'search-list day-start__order-list');
@@ -7237,7 +7338,7 @@
         li.appendChild(dsEl('span', 'day-start__num', String(i + 1)));
         li.appendChild(makeBoardIcon(e.board));
         li.appendChild(dsEl('span', 'search-item-text', e.text));
-        li.appendChild(makeSearchChip(e.origin));
+        if (e.origin) li.appendChild(makeSearchChip(e.origin));
         if (key.indexOf('p:') === 0) {
           const del = dsEl('button', 'delete-btn day-start__delete', '🗑️');
           del.type = 'button';
@@ -7430,8 +7531,19 @@
         task.urgent = true; // 오늘 마감을 긴급(❗)으로
         break;
       case 'later':
-        // 마감을 다음 주로 다시 잡기(보드는 그대로)
-        if (boardId === 'scheduled') task.dueDate = d.date;
+        // 날짜를 다시 잡기 — pray later 항목은 날짜만, 다른 보드 항목은 그 날짜로 pray later에 보냄
+        if (boardId === 'scheduled') {
+          task.dueDate = d.date;
+        } else {
+          dsDetach(boardId, task);
+          dsScrub(task);
+          task.from = boardId === 'someday' ? 'someday' : 'today';
+          task.dueDate = d.date;
+          boards.scheduled.push(task);
+        }
+        break;
+      case 'unurgent':
+        task.urgent = false;
         break;
       case 'setReply':
         task.replyDate = d.date; // waiting의 다음 확인 날짜
@@ -7618,6 +7730,7 @@
     if (archivePanelEl.classList.contains('open')) closeArchivePanel();
     closeOpenControls();
     ds = dsLoadDraft();
+    dsAltKey = null;
     dsPrevFocus = document.activeElement;
     dayStartOpen = true;
     dayStartEl.removeAttribute('inert');
@@ -7694,8 +7807,19 @@
       const pending = dsPendingQuestions();
       if (e.code === 'Backspace') { e.preventDefault(); dsUndoAnswer(); return; }
       if (!pending.length) return;
-      if (e.code === 'KeyY' || e.code === 'ArrowRight') { e.preventDefault(); dsAnswer(pending[0], true); }
-      else if (e.code === 'KeyN' || e.code === 'ArrowLeft') { e.preventDefault(); dsAnswer(pending[0], false); }
+      const q0 = pending[0];
+      if (dsAltKey && q0.item && dsAltKey === q0.item.key) {
+        // 대안 고르는 중: 숫자 키로 선택(마지막 번호 = 그대로 두기/3일 뒤에 다시)
+        const m = e.code.match(/^(?:Digit|Numpad)(\d)$/);
+        if (m) {
+          const n = Number(m[1]);
+          const total = q0.alts.length + 1;
+          if (n >= 1 && n <= total) { e.preventDefault(); dsAnswerAlt(q0, n <= q0.alts.length ? q0.alts[n - 1].patch : null); }
+        }
+        return;
+      }
+      if (e.code === 'KeyY' || e.code === 'ArrowRight') { e.preventDefault(); dsAnswer(q0, true); }
+      else if (e.code === 'KeyN' || e.code === 'ArrowLeft') { e.preventDefault(); dsSayNo(q0); }
     });
     // Esc — 초안은 그대로 두고 닫기(확인 모달이 떠 있으면 그쪽이 먼저)
     document.addEventListener('keydown', (e) => {
