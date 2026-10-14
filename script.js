@@ -6653,6 +6653,7 @@
   // 이후에는 구글에 로그인돼 있으면 팝업이 잠깐 떴다 바로 닫힘. 받은 토큰은 만료 5분 전까지 재사용해 그동안은 팝업이 없음.
   const GCAL_TOKEN_KEY = 'postit-gcal-token';       // { token, exp }
   const GCAL_GRANTED_KEY = 'postit-gcal-granted';   // 한 번 동의했는지
+  const GCAL_ACCOUNT_KEY = 'postit-gcal-account';   // 캘린더를 읽는 구글 계정(로그인 계정과 다를 때만 저장)
   const GCAL_DECLINED_KEY = 'postit-gcal-declined'; // 연결 안 하고 넘어갔는지(그러면 일정 단계를 숨김)
   const lsGet = (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } };
   const lsSet = (k, v) => { try { if (v == null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch (e) { /* 무시 */ } };
@@ -6708,12 +6709,14 @@
   }
 
   // 새 토큰 요청(팝업) — 사용자가 누른 직후 동기적으로 불러야 함. 못 받으면 null.
-  function gcalRequest() {
+  // pick: 계정 선택창을 띄워 로그인 계정과 다른 구글 계정을 고르게 함
+  function gcalRequest(pick) {
     return new Promise(resolve => {
       gcalInit();
       if (!gcalClient) { resolve(null); return; }
       gcalPending = resolve;
-      try { gcalClient.requestAccessToken(gcalHint ? { hint: gcalHint } : {}); } catch (e) { gcalPending = null; resolve(null); }
+      const hint = lsGet(GCAL_ACCOUNT_KEY) || gcalHint;
+      try { gcalClient.requestAccessToken(pick ? { prompt: 'select_account' } : (hint ? { hint } : {})); } catch (e) { gcalPending = null; resolve(null); }
     });
   }
 
@@ -6743,7 +6746,8 @@
         };
       })
       .filter(ev => ev.start);
-    return { events };
+    // events.list의 summary는 기본 캘린더 이름 = 계정 이메일
+    return { events, account: /@/.test(data.summary || '') ? data.summary : '' };
   }
 
   function gcalDisconnect() {
@@ -6751,6 +6755,7 @@
     try { if (tok && window.google && google.accounts && google.accounts.oauth2 && google.accounts.oauth2.revoke) google.accounts.oauth2.revoke(tok, () => {}); } catch (e) { /* 무시 */ }
     lsSet(GCAL_TOKEN_KEY, null);
     lsSet(GCAL_GRANTED_KEY, null);
+    lsSet(GCAL_ACCOUNT_KEY, null);
     lsSet(GCAL_DECLINED_KEY, '1');
   }
 
@@ -6760,6 +6765,7 @@
   const GCAL_SEEN_KEY = 'postit-gcal-seen';
   function gcalCaptureSession(session) {
     if (!GOOGLE_CLIENT_ID || !session || !session.provider_token) return;
+    if (lsGet(GCAL_ACCOUNT_KEY)) return; // 다른 계정의 캘린더를 연결해 둔 경우 로그인 토큰으로 덮어쓰지 않음
     if (lsGet(GCAL_SEEN_KEY) === session.provider_token) return;
     lsSet(GCAL_SEEN_KEY, session.provider_token);
     lsSet(GCAL_TOKEN_KEY, JSON.stringify({ token: session.provider_token, exp: Date.now() + 50 * 60 * 1000 }));
@@ -7504,20 +7510,21 @@
 
     li.appendChild(dsEl('p', 'day-start__qtext', q.text));
     const btns = dsEl('div', 'day-start__qbtns');
-    btns.appendChild(dsSmallButton('confirm-btn-cancel day-start__no', '아니오', () => dsSayNo(q)));
     const showAlts = !overload && dsAltKey === key && q.alts && q.alts.length;
-    if (!showAlts) btns.appendChild(dsSmallButton('confirm-btn-ok day-start__yes', '네', () => dsAnswer(q, true)));
+    if (!showAlts) {
+      btns.appendChild(dsSmallButton('confirm-btn-cancel day-start__no', '아니오', () => dsSayNo(q)));
+      btns.appendChild(dsSmallButton('confirm-btn-ok day-start__yes', '네', () => dsAnswer(q, true)));
+    }
     li.appendChild(btns);
 
     if (showAlts) {
-      // '아니오' 뒤: '네'가 있던 자리에 대안 + 그대로 두기가 같은 줄로 이어짐
+      // '아니오' 뒤: 아니오/네 버튼이 사라지고 그 자리에 대안 + 그대로 두기가 버튼으로 나타남
       li.classList.add('has-alts');
       btns.classList.add('has-alts');
       q.alts.map(a => ({ label: a.label, patch: a.patch, pickDate: a.pickDate }))
         .concat([{ label: q.no.snooze ? SNOOZE_DAYS + '일 뒤에 다시' : '그대로 두기', patch: null }])
         .forEach(o => {
-          const b = dsEl('button', 'day-start__alt', o.label);
-          b.type = 'button';
+          const b = dsSmallButton('confirm-btn-cancel day-start__alt', o.label, () => {});
           if (o.pickDate) {
             // 날짜를 직접 고르는 대안 — 그 줄 아래에 날짜 입력이 펼쳐지고, 고르면 바로 적용
             b.addEventListener('click', () => { dsAltPick = key; dsRender(); });
@@ -7573,17 +7580,22 @@
     dsCal.state = 'loading';
     gcalFetchEvents(token).then(res => {
       if (res.auth === false) { dsCal.state = 'needconnect'; dsCal.err = 'expired'; }
-      else { dsCal.state = 'ok'; dsCal.events = res.events; }
+      else {
+        dsCal.state = 'ok'; dsCal.events = res.events; dsCal.account = res.account || '';
+        if (dsCal.pick && res.account) lsSet(GCAL_ACCOUNT_KEY, res.account); // 계정을 직접 고른 경우만 기억
+        dsCal.pick = false;
+      }
     }).catch(() => { dsCal.state = 'error'; })
       .then(() => { if (dayStartOpen && ds && ds.step === 'cal') dsRender(); });
   }
 
   // 연결(팝업) — 눌린 직후 동기적으로 불러야 해서 클릭 핸들러에서 곧장 호출
-  function dsCalConnect(goToCal) {
+  function dsCalConnect(goToCal, pick) {
     dsCal.state = 'loading';
+    dsCal.pick = !!pick;
     if (goToCal) { ds.step = 'cal'; dsSaveDraft(); }
     dsRender();
-    gcalRequest().then(tok => {
+    gcalRequest(pick).then(tok => {
       if (!tok) { dsCal.state = 'needconnect'; dsCal.err = 'blocked'; if (dayStartOpen && ds) dsRender(); return; }
       dsCalStart(tok);
       if (dayStartOpen && ds) dsRender();
@@ -7636,6 +7648,10 @@
       btn.type = 'button';
       btn.addEventListener('click', () => { dsCal.err = ''; dsCalConnect(false); });
       row.appendChild(btn);
+      const other = dsEl('button', 'confirm-btn confirm-btn-cancel', '다른 구글 계정으로 연결');
+      other.type = 'button';
+      other.addEventListener('click', () => { dsCal.err = ''; dsCalConnect(false, true); });
+      row.appendChild(other);
       dayStartBodyEl.appendChild(row);
       return;
     }
@@ -7680,6 +7696,12 @@
       });
       dayStartBodyEl.appendChild(list);
     });
+    const acct = dsEl('p', 'day-start__calacct', dsCal.account ? '연결된 계정: ' + dsCal.account : '');
+    if (dsCal.account) dayStartBodyEl.appendChild(acct);
+    const sw = dsEl('button', 'day-start__change day-start__switch', '다른 계정으로 연결');
+    sw.type = 'button';
+    sw.addEventListener('click', () => dsCalConnect(false, true));
+    dayStartBodyEl.appendChild(sw);
     const off = dsEl('button', 'day-start__change day-start__disconnect', '캘린더 연결 해제');
     off.type = 'button';
     off.addEventListener('click', () => {
