@@ -138,10 +138,11 @@ type DayStartDraft = {
   overload?: { ids: number[] } | { skip: true };  // '오늘 할 일이 너무 많은데 내일로 미룰래요?' 답(항목에 묶이지 않는 질문)
   prep: { key: string; text: string; date?: string; src?: string }[];  // 순서 단계에서 추가한/캘린더 일정에서 담은 할 일(확정 때 Task로 만들어짐, 날짜가 내일 이후면 pray later로). src = '<구글 일정 id>@<날짜>'(캘린더에서 담은 것)
   order: string[];                    // 오늘 순서: 항목 id 또는 'f:<원본id>'(후속)/'p:<n>'(추가) 키
+  orderW: string[];                   // 기다리는 중(waiting) 순서 — 항목 id 키, 직접 바꾼 경우만 확정 때 task.order로 기록
   seq: number;
 };
 ```
 
 확정하면 답을 `boards`에 한 번에 적용하고, 오늘 목록(일반 + 오늘 마감)의 미완료 항목에 `order`를 0부터 차례로 기록함. 후속 연락/추가한 할 일은 일반 `Task`로 생성되며 원본과의 연결 필드는 없음.
 
-구글 캘린더 연결 상태는 이 기기의 `localStorage`에만 둠(`boards`/백업/클라우드에는 안 들어감): `postit-gcal-token`(`{ token, exp }` — 1시간짜리 읽기 전용 액세스 토큰), `postit-gcal-granted`(한 번 동의했는지), `postit-gcal-declined`(연결 없이 넘어가서 일정 단계를 숨기는지).
+구글 캘린더 연결 상태는 이 기기의 `localStorage`에만 둠(`boards`/백업/클라우드에는 안 들어감): `postit-gcal-token`(`{ token, exp }` — 1시간짜리 읽기 전용 액세스 토큰), `postit-gcal-granted`(한 번 동의했는지), `postit-gcal-declined`(연결 없이 넘어가서 일정 단계를 숨기는지). 로그인 직후 받은 구글 토큰은 `postit-gcal-seen`(이미 본 `provider_token`)으로 중복 반영을 막음.
