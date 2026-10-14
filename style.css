@@ -4557,3 +4557,24 @@ body.reorder-mode .sticky:not(.reorder-active) {
   position: relative;
   top: 3px;
 }
+
+/* '다음에 확인하기'의 날짜 입력(대안 줄 아래) */
+.day-start__pick {
+  margin-left: 22px;
+  display: flex;
+  align-items: center;
+  column-gap: 8px;
+  min-height: var(--day-start-line);
+}
+
+.day-start__pick .date-picker-input {
+  height: 24px;
+  box-sizing: border-box;
+}
+
+.day-start__pick .day-start__field-label {
+  font-family: var(--font-ui);
+  letter-spacing: var(--ui-letter-spacing);
+  font-size: 13px;
+  color: var(--ink-soft);
+}
