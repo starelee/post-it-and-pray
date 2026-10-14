@@ -4173,12 +4173,21 @@ body.reorder-mode .sticky:not(.reorder-active) {
 }
 
 .day-start__qtext {
+  position: relative;
   margin: 0;
   padding-left: 30px;
   font-family: var(--font-hand);
   font-size: 17px;
   line-height: var(--day-start-line);
   color: var(--ink);
+}
+
+.day-start__qtext::before {
+  content: 'ㄴ';
+  position: absolute;
+  left: 12px;
+  color: var(--ink-soft);
+  font-size: 14px;
 }
 
 .day-start__qbtns {
