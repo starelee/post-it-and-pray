@@ -7141,11 +7141,13 @@
       // 이미 있던 항목은 출처 칩 없이(긴급만 표시) — 순서 제안용 rank: 긴급 → 오늘 마감 → 마무리만 남은 것 → 나머지
       const subs = e.task.subtasks || [];
       const finishing = subs.length >= 2 && subs.filter(x => !x.done).length === 1;
+      const urgent = !!e.task.urgent || !!(d && d.action === 'urgent'); // '긴급건으로 처리할래요?'에 네한 것도 긴급
       entries.push({
         key: String(e.task.id),
         text: e.task.text,
-        origin: e.task.urgent ? '긴급' : '',
-        rank: e.task.urgent ? 0 : (e.boardId === 'scheduled' ? 1 : (finishing ? 4 : 5)),
+        origin: '',
+        urgent,
+        rank: urgent ? 0 : (e.boardId === 'scheduled' ? 1 : (finishing ? 4 : 5)),
         board: 'today'
       });
     });
@@ -7153,22 +7155,22 @@
       const d = dsEffective(item.key);
       if (!d) return;
       if (d.action === 'repeat') {
-        entries.push({ key: item.key, text: item.task.text, origin: '반복', rank: 7, board: 'today' });
+        entries.push({ key: item.key, text: item.task.text, origin: '', urgent: false, rank: 7, board: 'today' });
       } else if (d.action === 'today' && !dsAlreadyInToday(item)) {
         // 마감이 지났던 것은 오늘 급한 쪽, 마무리 한 개 남은 것은 앞쪽, 나머지는 기존 항목 뒤
         const rank = item.task.urgent ? 0 : (item.group === 'dueLate' ? 2 : (item.group === 'finish' ? 4 : 6));
-        entries.push({ key: String(item.task.id), text: item.task.text, origin: '정비에서 가져옴', rank, board: 'today' });
+        entries.push({ key: String(item.task.id), text: item.task.text, origin: '', urgent: !!item.task.urgent, rank, board: 'today' });
       } else if (d.action === 'clearDate' && !dsAlreadyInToday(item) && (item.task.dueDate && item.task.dueDate <= todayStr() ? 'today' : (item.task.from || 'today')) === 'today') {
         entries.push({ key: String(item.task.id), text: item.task.text, origin: '', rank: 6, board: 'today' });
       } else if (d.action === 'self') {
-        entries.push({ key: String(item.task.id), text: item.task.text, origin: '직접 처리', rank: 3, board: 'today' });
+        entries.push({ key: String(item.task.id), text: item.task.text, origin: '', urgent: !!item.task.urgent, rank: 3, board: 'today' });
       } else if (d.action === 'follow') {
-        entries.push({ key: 'f:' + item.task.id, text: d.text.trim(), origin: '후속 연락', rank: 3, board: 'today' });
+        entries.push({ key: 'f:' + item.task.id, text: d.text.trim(), origin: '', urgent: false, rank: 3, board: 'today' });
       }
     });
     ds.prep.forEach(p => {
       if (p.text.trim() && (p.date || todayStr()) === today) {
-        entries.push({ key: p.key, text: p.text.trim(), origin: '추가', rank: 8, board: 'today' });
+        entries.push({ key: p.key, text: p.text.trim(), origin: '', urgent: false, rank: 8, board: 'today' });
       }
     });
     return entries;
@@ -7659,7 +7661,7 @@
         li.appendChild(dsEl('span', 'day-start__num', String(i + 1)));
         li.appendChild(makeBoardIcon(e.board));
         li.appendChild(dsEl('span', 'search-item-text', e.text));
-        if (e.origin) li.appendChild(makeSearchChip(e.origin));
+        if (e.urgent) li.appendChild(makeSearchChip('긴급')); // 출처 칩(정비에서 가져옴 등)은 없앰 — 긴급만
         if (key.indexOf('p:') === 0) {
           const del = dsEl('button', 'delete-btn day-start__delete', '🗑️');
           del.type = 'button';
