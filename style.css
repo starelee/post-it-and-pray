@@ -4169,6 +4169,7 @@ body.reorder-mode .sticky:not(.reorder-active) {
 
 .day-start__qrow .search-item-text {
   flex: 0 1 auto;
+  font-size: 17px;
 }
 
 .day-start__qtext {
@@ -4180,13 +4181,10 @@ body.reorder-mode .sticky:not(.reorder-active) {
   color: var(--ink);
 }
 
-.day-start__qtext-alt {
-  color: var(--ink-soft);
-}
-
 .day-start__qbtns {
   display: flex;
-  gap: 8px;
+  flex-wrap: wrap;
+  gap: 0 8px;
   padding-left: 30px;
   min-height: var(--day-start-line);
   align-items: center;
@@ -4232,12 +4230,9 @@ body.reorder-mode .sticky:not(.reorder-active) {
   color: var(--accent);
 }
 
-/* '아니오' 뒤 대안: 그 줄 아래에 글자 버튼으로 */
-.day-start__alts {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0 6px;
-  padding-left: 22px;
+/* '아니오' 뒤 대안: '네' 자리에 글자 버튼으로 이어짐 */
+.day-start__qbtns.has-alts {
+  gap: 0 2px;
 }
 
 .day-start__alt {
