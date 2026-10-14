@@ -6592,7 +6592,7 @@
   const DAYSTART_CARRY_DAYS = 7;           // 이만큼 오늘 목록에 그대로 있으면 '언젠가로 미룰까요?'를 물음
   const DAYSTART_FOLLOW_DAYS = 3;          // 후속 연락을 고르면 원본의 다음 확인 날짜를 이만큼 뒤로
   // 이 처리를 고르면 gotta do 목록에서 빠짐
-  const DAYSTART_LEAVES_TODAY = ['toSomeday', 'done', 'later', 'merge'];
+  const DAYSTART_LEAVES_TODAY = ['toSomeday', 'drop', 'done', 'later', 'merge'];
   const DAYSTART_DUE_SOON_DAYS = 2;        // 마감이 이만큼 안으로 다가오면 '오늘 미리 시작할래요?'
   // 오늘 이미 일이 이만큼 많으면 '마감이 곧 다가와요' 질문은 안 물음(모레 마감은 BUSY, 내일 마감은 한도까지 봐줌)
   const DAYSTART_BUSY_TODAY = 5;
@@ -7071,7 +7071,7 @@
     const tomorrow = { label: '내일로 미루기', patch: { action: 'later', date: tomorrowStr() } };
     const nextWeek = { label: '다음 주로 미루기', patch: { action: 'later', date: dsNextMonday() } };
     const someday = { label: '언젠가로 보내기', patch: { action: 'toSomeday' } };
-    const skip = { label: '안 할래요 (someday로)', patch: { action: 'toSomeday' } };
+    const skip = { label: '안 할래요 (삭제)', patch: { action: 'drop' } };
     const finished = (label) => ({ label, patch: { action: item.boardId === 'waiting' ? 'resolved' : 'done' } });
     // waiting의 확인일 대안: 내일 확인하기 / 다음에 확인하기(날짜를 직접 고름)
     const checkTomorrow = { label: '내일 확인하기', patch: { action: 'setReply', date: dsDateAfter(1) } };
@@ -7095,7 +7095,7 @@
       case 'urgentOld':
         return [{ label: '긴급 해제', patch: { action: 'unurgent' } }, tomorrow, skip];
       case 'noReply':
-        return [checkTomorrow, checkLater, finished('해결됐어요')];
+        return [checkTomorrow, checkLater, finished('해결됐어요'), skip];
       case 'waitIdle':
         return [checkTomorrow, checkLater].concat(item.task.replyDate ? [clearReply] : [], [finished('해결됐어요'), skip]);
       case 'stale':
@@ -7202,7 +7202,7 @@
 
   // 확정 뒤 waiting 카드에 그대로 보일 항목들 — 지금 보이는 것(확인일이 아직 안 온 것은 접힌 구역이라 제외)에서
   // 정비 답으로 빠져나가는 것(오늘로/해결/미룸)과 확인일이 미래로 잡히는 것(후속 연락/다음에 확인)을 뺀 것.
-  const DAYSTART_LEAVES_WAITING = ['today', 'self', 'toSomeday', 'done', 'resolved', 'later', 'merge', 'follow', 'setReply'];
+  const DAYSTART_LEAVES_WAITING = ['today', 'self', 'toSomeday', 'drop', 'done', 'resolved', 'later', 'merge', 'follow', 'setReply'];
   function dsBuildWaitingEntries() {
     const today = todayStr();
     return sortByOrder(boards.waiting.filter(t => !(t.replyDate && t.replyDate > today)))
@@ -7229,7 +7229,7 @@
 
   // ───── 변경 요약 ─────
   function dsSummary() {
-    const c = { today: 0, done: 0, follow: 0, someday: 0, snooze: 0, urgent: 0, later: 0, reply: 0, merge: 0, repeat: 0, top: 0, unurgent: 0, waiting: 0, cleared: 0 };
+    const c = { today: 0, done: 0, follow: 0, someday: 0, snooze: 0, urgent: 0, later: 0, reply: 0, merge: 0, repeat: 0, top: 0, unurgent: 0, waiting: 0, cleared: 0, drop: 0 };
     Object.keys(ds.decisions).forEach(id => {
       const s = dsDecisionState(id);
       if (s.state !== 'ok') return;
@@ -7238,6 +7238,7 @@
       else if (a === 'done' || a === 'resolved') c.done++;
       else if (a === 'follow') c.follow++;
       else if (a === 'toSomeday') c.someday++;
+      else if (a === 'drop') c.drop++;
       else if (a === 'urgent') c.urgent++;
       else if (a === 'later') c.later++;
       else if (a === 'setReply') c.reply++;
@@ -7260,6 +7261,7 @@
     if (c.urgent) parts.push('긴급 ' + c.urgent);
     if (c.done) parts.push('완료 ' + c.done);
     if (c.someday) parts.push('언젠가로 ' + c.someday);
+    if (c.drop) parts.push('삭제 ' + c.drop);
     if (c.waiting) parts.push('대기중으로 ' + c.waiting);
     if (c.unurgent) parts.push('긴급 해제 ' + c.unurgent);
     if (c.cleared) parts.push('날짜 지움 ' + c.cleared);
@@ -7441,6 +7443,7 @@
       case 'merge': return '하나로 합침';
       case 'repeat': return '오늘 할 일로 복제';
       case 'toSomeday': return '언젠가로';
+      case 'drop': return '삭제 (휴지통)';
       case 'toWaiting': return '대기중으로';
       case 'clearDate':
       case 'clearReply': return '날짜 지움';
@@ -7910,6 +7913,12 @@
           task.dueDate = d.date;
           boards.scheduled.push(task);
         }
+        break;
+      case 'drop':
+        dsDetach(boardId, task);
+        task.from = boardId;
+        task.deletedAt = todayStr();
+        boards.trash.push(task);
         break;
       case 'toWaiting':
       case 'toSomeday': {
