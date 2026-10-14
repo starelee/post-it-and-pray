@@ -145,4 +145,4 @@ type DayStartDraft = {
 
 확정하면 답을 `boards`에 한 번에 적용하고, 오늘 목록(일반 + 오늘 마감)의 미완료 항목에 `order`를 0부터 차례로 기록함. 후속 연락/추가한 할 일은 일반 `Task`로 생성되며 원본과의 연결 필드는 없음.
 
-구글 캘린더 연결 상태는 이 기기의 `localStorage`에만 둠(`boards`/백업/클라우드에는 안 들어감): `postit-gcal-token`(`{ token, exp }` — 1시간짜리 읽기 전용 액세스 토큰), `postit-gcal-granted`(한 번 동의했는지), `postit-gcal-declined`(연결 없이 넘어가서 일정 단계를 숨기는지). 로그인 직후 받은 구글 토큰은 `postit-gcal-seen`(이미 본 `provider_token`)으로 중복 반영을 막음.
+구글 캘린더 연결 상태는 이 기기의 `localStorage`에만 둠(`boards`/백업/클라우드에는 안 들어감): `postit-gcal-token`(`{ token, exp }` — 1시간짜리 읽기 전용 액세스 토큰), `postit-gcal-granted`(한 번 동의했는지), `postit-gcal-account`(로그인 계정과 다른 계정을 직접 골랐을 때 그 이메일), `postit-gcal-declined`(연결 없이 넘어가서 일정 단계를 숨기는지). 로그인 직후 받은 구글 토큰은 `postit-gcal-seen`(이미 본 `provider_token`)으로 중복 반영을 막음.

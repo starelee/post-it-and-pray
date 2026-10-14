@@ -4173,12 +4173,21 @@ body.reorder-mode .sticky:not(.reorder-active) {
 }
 
 .day-start__qtext {
+  position: relative;
   margin: 0;
   padding-left: 30px;
   font-family: var(--font-hand);
   font-size: 17px;
   line-height: var(--day-start-line);
   color: var(--ink);
+}
+
+.day-start__qtext::before {
+  content: 'ㄴ';
+  position: absolute;
+  left: 12px;
+  color: var(--ink-soft);
+  font-size: 14px;
 }
 
 .day-start__qbtns {
@@ -4232,29 +4241,7 @@ body.reorder-mode .sticky:not(.reorder-active) {
 
 /* '아니오' 뒤 대안: '네' 자리에 글자 버튼으로 이어짐 */
 .day-start__qbtns.has-alts {
-  gap: 0 2px;
-}
-
-.day-start__alt {
-  background: none;
-  border: none;
-  cursor: pointer;
-  padding: 0 8px;
-  font-family: var(--font-ui);
-  letter-spacing: var(--ui-letter-spacing);
-  font-size: 14px;
-  line-height: var(--day-start-line);
-  color: var(--ink-soft);
-  border-radius: 10px;
-  opacity: 0.85;
-  transition: opacity 0.15s var(--ease-ui), color 0.15s var(--ease-ui), background 0.15s var(--ease-ui);
-}
-
-.day-start__alt:hover,
-.day-start__alt:focus-visible {
-  opacity: 1;
-  color: var(--accent);
-  background: var(--focus-box-fill);
+  gap: 2px 8px;
 }
 
 .day-start__done {
@@ -4546,6 +4533,7 @@ body.reorder-mode .sticky:not(.reorder-active) {
 }
 
 .day-start__disconnect,
+.day-start__switch,
 .day-start__connectlink {
   display: block;
   margin-top: var(--day-start-line);
@@ -4579,4 +4567,13 @@ body.reorder-mode .sticky:not(.reorder-active) {
   margin-top: var(--day-start-line);
   position: relative;
   top: 3px;
+}
+
+.day-start__calacct {
+  margin: 0;
+  font-family: var(--font-ui);
+  letter-spacing: var(--ui-letter-spacing);
+  font-size: 13px;
+  line-height: var(--day-start-line);
+  color: var(--ink-soft);
 }
