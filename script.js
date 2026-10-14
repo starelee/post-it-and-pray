@@ -7071,6 +7071,7 @@
     const tomorrow = { label: '내일로 미루기', patch: { action: 'later', date: tomorrowStr() } };
     const nextWeek = { label: '다음 주로 미루기', patch: { action: 'later', date: dsNextMonday() } };
     const someday = { label: '언젠가로 보내기', patch: { action: 'toSomeday' } };
+    const skip = { label: '안 할래요 (someday로)', patch: { action: 'toSomeday' } };
     const finished = (label) => ({ label, patch: { action: item.boardId === 'waiting' ? 'resolved' : 'done' } });
     // waiting의 확인일 대안: 내일 확인하기 / 다음에 확인하기(날짜를 직접 고름)
     const checkTomorrow = { label: '내일 확인하기', patch: { action: 'setReply', date: dsDateAfter(1) } };
@@ -7092,17 +7093,17 @@
       case 'dueSoon':
         return [clearDate];
       case 'urgentOld':
-        return [{ label: '긴급 해제', patch: { action: 'unurgent' } }, tomorrow];
+        return [{ label: '긴급 해제', patch: { action: 'unurgent' } }, tomorrow, skip];
       case 'noReply':
         return [checkTomorrow, checkLater, finished('해결됐어요')];
       case 'waitIdle':
-        return [checkTomorrow, checkLater].concat(item.task.replyDate ? [clearReply] : [], [finished('해결됐어요')]);
+        return [checkTomorrow, checkLater].concat(item.task.replyDate ? [clearReply] : [], [finished('해결됐어요'), skip]);
       case 'stale':
         return item.boardId === 'waiting'
-          ? [checkTomorrow, checkLater, finished('해결됐어요')]
-          : [tomorrow, finished('이미 끝났어요 (완료)')];
+          ? [checkTomorrow, checkLater, finished('해결됐어요'), skip]
+          : [tomorrow, finished('이미 끝났어요 (완료)'), skip];
       case 'carry':
-        return [tomorrow, { label: '대기중으로 옮기기', patch: { action: 'toWaiting' } }, finished('이미 끝났어요 (완료)')];
+        return [tomorrow, { label: '대기중으로 옮기기', patch: { action: 'toWaiting' } }, finished('이미 끝났어요 (완료)'), skip];
       default:
         return [];
     }
