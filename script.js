@@ -6774,7 +6774,7 @@
 
   // ───── 초안 저장/불러오기 ─────
   function dsFreshDraft() {
-    return { date: todayStr(), step: 'tidy', decisions: {}, log: [], prep: [], order: [], seq: 1, overload: undefined };
+    return { date: todayStr(), step: 'tidy', decisions: {}, log: [], prep: [], order: [], orderW: [], seq: 1, overload: undefined };
   }
 
   function dsLoadDraft() {
@@ -6792,6 +6792,7 @@
             log: Array.isArray(d.log) ? d.log.filter(k => typeof k === 'number' || typeof k === 'string') : [],
             prep: d.prep.filter(p => p && typeof p.key === 'string' && typeof p.text === 'string'),
             order: d.order.filter(k => typeof k === 'string'),
+            orderW: Array.isArray(d.orderW) ? d.orderW.filter(k => typeof k === 'string') : [],
             seq: Number(d.seq) > 0 ? Number(d.seq) : 1,
             overload: d.overload && typeof d.overload === 'object' ? d.overload : undefined
           };
@@ -7198,16 +7199,29 @@
     return entries;
   }
 
+  // 확정 뒤 waiting 카드에 그대로 보일 항목들 — 지금 보이는 것(확인일이 아직 안 온 것은 접힌 구역이라 제외)에서
+  // 정비 답으로 빠져나가는 것(오늘로/해결/미룸)과 확인일이 미래로 잡히는 것(후속 연락/다음에 확인)을 뺀 것.
+  const DAYSTART_LEAVES_WAITING = ['today', 'self', 'toSomeday', 'done', 'resolved', 'later', 'merge', 'follow', 'setReply'];
+  function dsBuildWaitingEntries() {
+    const today = todayStr();
+    return sortByOrder(boards.waiting.filter(t => !(t.replyDate && t.replyDate > today)))
+      .filter(t => {
+        const d = dsEffective(String(t.id));
+        return !(d && DAYSTART_LEAVES_WAITING.includes(d.action));
+      })
+      .map(t => ({ key: String(t.id), text: t.text, board: 'waiting', urgent: false, rank: 0 }));
+  }
+
   // 초안의 순서(ds.order)를 먼저 따르고, 거기 없는 항목(새로 들어온 것)은 아래에 붙임
-  function dsMergeOrder(entries) {
+  function dsMergeOrder(entries, saved) {
     const byKey = new Map(entries.map(e => [e.key, e]));
     const keys = [];
-    ds.order.forEach(k => { if (byKey.has(k) && !keys.includes(k)) keys.push(k); });
+    (saved || ds.order).forEach(k => { if (byKey.has(k) && !keys.includes(k)) keys.push(k); });
     // 직접 정하지 않은 항목은 제안 순서(rank 낮은 순, 같으면 원래 순서)로 뒤에 붙임
     entries
       .map((e, i) => ({ e, i }))
       .filter(x => !keys.includes(x.e.key))
-      .sort((a, b) => (a.e.rank - b.e.rank) || (a.i - b.i))
+      .sort((a, b) => ((a.e.rank || 0) - (b.e.rank || 0)) || (a.i - b.i))
       .forEach(x => keys.push(x.e.key));
     return keys;
   }
@@ -7237,7 +7251,9 @@
     const postponed = ds.overload && ds.overload.ids ? ds.overload.ids.length : 0;
     const newTask = c.follow + c.repeat + ds.prep.filter(p => p.text.trim()).length;
     const entries = dsBuildOrderEntries();
-    const orderChanged = dsMergeOrder(entries).join('|') !== entries.map(e => e.key).join('|');
+    const wEntries = dsBuildWaitingEntries();
+    const orderChanged = dsMergeOrder(entries).join('|') !== entries.map(e => e.key).join('|')
+      || dsMergeOrder(wEntries, ds.orderW).join('|') !== wEntries.map(e => e.key).join('|');
     const parts = [];
     if (c.today) parts.push('오늘로 ' + c.today);
     if (c.urgent) parts.push('긴급 ' + c.urgent);
@@ -7675,7 +7691,69 @@
     dayStartBodyEl.appendChild(off);
   }
 
-  // ③ 오늘 순서 정하기 — 한 줄에 하나. 손잡이(⋮⋮)는 순서 바꾸기 모드와 같은 모양.
+  // 순서 목록 한 개(오늘 할 일 / 기다리는 중) — 한 줄에 하나, 손잡이(⋮⋮)는 순서 바꾸기 모드와 같은 모양.
+  function dsBuildReorderList(keys, byKey, setKeys, label, deletable) {
+    const list = dsEl('ol', 'search-list day-start__order-list');
+    list.setAttribute('aria-label', label);
+    const moveTo = (from, to, focusKey) => {
+      if (to < 0 || to >= keys.length || from === to) return;
+      const next = keys.slice();
+      const [k] = next.splice(from, 1);
+      next.splice(to, 0, k);
+      setKeys(next);
+      dsSaveDraft();
+      dsRender();
+      if (focusKey) {
+        const h = dayStartBodyEl.querySelector('.day-start__order-item[data-key="' + focusKey + '"] .day-start__handle');
+        if (h) h.focus({ preventScroll: true });
+      }
+    };
+    keys.forEach((key, i) => {
+      const e = byKey.get(key);
+      const li = dsEl('li', 'day-start__order-item');
+      li.dataset.key = key;
+      li.appendChild(dsEl('span', 'day-start__num', String(i + 1)));
+      li.appendChild(makeBoardIcon(e.board));
+      li.appendChild(dsEl('span', 'search-item-text', e.text));
+      if (e.urgent) li.appendChild(makeSearchChip('긴급')); // 출처 칩(정비에서 가져옴 등)은 없앰 — 긴급만
+      if (deletable && key.indexOf('p:') === 0) {
+        const del = dsEl('button', 'delete-btn day-start__delete', '🗑️');
+        del.type = 'button';
+        del.setAttribute('aria-label', '추가한 할 일 삭제');
+        del.addEventListener('click', () => {
+          ds.prep = ds.prep.filter(x => x.key !== key);
+          dsSaveDraft();
+          dsRender();
+        });
+        li.appendChild(del);
+      }
+      const up = dsEl('button', 'day-start__move', '↑');
+      up.type = 'button';
+      up.setAttribute('aria-label', '위로');
+      up.disabled = i === 0;
+      up.addEventListener('click', () => moveTo(i, i - 1, key));
+      const down = dsEl('button', 'day-start__move', '↓');
+      down.type = 'button';
+      down.setAttribute('aria-label', '아래로');
+      down.disabled = i === keys.length - 1;
+      down.addEventListener('click', () => moveTo(i, i + 1, key));
+      li.appendChild(up);
+      li.appendChild(down);
+      const handle = dsEl('button', 'day-start__handle', '⋮⋮');
+      handle.type = 'button';
+      handle.setAttribute('aria-label', '순서 바꾸기: ' + e.text + ' (↑ ↓ 키로 이동)');
+      handle.addEventListener('keydown', (ev) => {
+        if (ev.key === 'ArrowUp') { ev.preventDefault(); moveTo(i, i - 1, key); }
+        else if (ev.key === 'ArrowDown') { ev.preventDefault(); moveTo(i, i + 1, key); }
+      });
+      dsBindDrag(handle, li, list, i, (to) => moveTo(i, to, key));
+      li.appendChild(handle);
+      list.appendChild(li);
+    });
+    return list;
+  }
+
+  // ③ 오늘 순서 정하기 — 오늘 할 일(제안 순서) + 기다리는 중(원래 순서)을 각각 끌어서 바꿈
   function dsRenderOrder() {
     const entries = dsBuildOrderEntries();
     const byKey = new Map(entries.map(e => [e.key, e]));
@@ -7684,64 +7762,7 @@
       ? '급한 것부터 순서를 제안했어요. 바꾸고 싶으면 끌어 주세요.'
       : '오늘 할 일이 아직 없어요. 아래에서 추가할 수 있어요.'));
     if (keys.length) {
-      const list = dsEl('ol', 'search-list day-start__order-list');
-      list.setAttribute('aria-label', '오늘 실행 순서');
-      const moveTo = (from, to, focusKey) => {
-        if (to < 0 || to >= keys.length || from === to) return;
-        const next = keys.slice();
-        const [k] = next.splice(from, 1);
-        next.splice(to, 0, k);
-        ds.order = next;
-        dsSaveDraft();
-        dsRender();
-        if (focusKey) {
-          const h = dayStartBodyEl.querySelector('.day-start__order-item[data-key="' + focusKey + '"] .day-start__handle');
-          if (h) h.focus({ preventScroll: true });
-        }
-      };
-      keys.forEach((key, i) => {
-        const e = byKey.get(key);
-        const li = dsEl('li', 'day-start__order-item');
-        li.dataset.key = key;
-        li.appendChild(dsEl('span', 'day-start__num', String(i + 1)));
-        li.appendChild(makeBoardIcon(e.board));
-        li.appendChild(dsEl('span', 'search-item-text', e.text));
-        if (e.urgent) li.appendChild(makeSearchChip('긴급')); // 출처 칩(정비에서 가져옴 등)은 없앰 — 긴급만
-        if (key.indexOf('p:') === 0) {
-          const del = dsEl('button', 'delete-btn day-start__delete', '🗑️');
-          del.type = 'button';
-          del.setAttribute('aria-label', '추가한 할 일 삭제');
-          del.addEventListener('click', () => {
-            ds.prep = ds.prep.filter(x => x.key !== key);
-            dsSaveDraft();
-            dsRender();
-          });
-          li.appendChild(del);
-        }
-        const up = dsEl('button', 'day-start__move', '↑');
-        up.type = 'button';
-        up.setAttribute('aria-label', '위로');
-        up.disabled = i === 0;
-        up.addEventListener('click', () => moveTo(i, i - 1, key));
-        const down = dsEl('button', 'day-start__move', '↓');
-        down.type = 'button';
-        down.setAttribute('aria-label', '아래로');
-        down.disabled = i === keys.length - 1;
-        down.addEventListener('click', () => moveTo(i, i + 1, key));
-        li.appendChild(up);
-        li.appendChild(down);
-        const handle = dsEl('button', 'day-start__handle', '⋮⋮');
-        handle.type = 'button';
-        handle.setAttribute('aria-label', '순서 바꾸기: ' + e.text + ' (↑ ↓ 키로 이동)');
-        handle.addEventListener('keydown', (ev) => {
-          if (ev.key === 'ArrowUp') { ev.preventDefault(); moveTo(i, i - 1, key); }
-          else if (ev.key === 'ArrowDown') { ev.preventDefault(); moveTo(i, i + 1, key); }
-        });
-        dsBindDrag(handle, li, list, i, (to) => moveTo(i, to, key));
-        li.appendChild(handle);
-        list.appendChild(li);
-      });
-      dayStartBodyEl.appendChild(list);
+      dayStartBodyEl.appendChild(dsBuildReorderList(keys, byKey, (next) => { ds.order = next; }, '오늘 실행 순서', true));
     }
 
     // 보드 맨 아래 "+ 끄적이기..." 줄과 같은 입력줄 — 오늘 할 일을 바로 추가
@@ -7771,6 +7792,15 @@
     addRow.appendChild(plus);
     addRow.appendChild(addInput);
     dayStartBodyEl.appendChild(addRow);
+
+    // 기다리는 중 — waiting 카드에서 보이는 순서(정비 답을 반영한 뒤 남는 것). 두 개 이상일 때만
+    const wEntries = dsBuildWaitingEntries();
+    if (wEntries.length >= 2) {
+      const wBy = new Map(wEntries.map(e => [e.key, e]));
+      const wKeys = dsMergeOrder(wEntries, ds.orderW);
+      dayStartBodyEl.appendChild(dsEl('h3', 'search-group-title day-start__wtitle', '기다리는 중 ⏳'));
+      dayStartBodyEl.appendChild(dsBuildReorderList(wKeys, wBy, (next) => { ds.orderW = next; }, 'waiting 순서', false));
+    }
     // 일정 단계를 건너뛴(연결 안 한) 경우에만 — 나중에라도 연결할 수 있는 입구
     if (gcalConfigured() && !gcalGranted()) {
       const link = dsEl('button', 'day-start__change day-start__connectlink', '📅 구글 캘린더 연결하기');
@@ -8007,6 +8037,7 @@
     const snapshot = JSON.stringify(boards);
     const entries = dsBuildOrderEntries();
     const finalKeys = dsMergeOrder(entries);
+    const finalWaitKeys = ds.orderW.length ? dsMergeOrder(dsBuildWaitingEntries(), ds.orderW) : null; // waiting은 직접 바꿨을 때만 순서를 기록
     const today = todayStr();
     const counter = { n: Date.now() };
     const newTasks = new Map();
@@ -8076,6 +8107,17 @@
       live.forEach(t => { if (!placed.has(t)) { placed.add(t); place(t); } });
       const first = live.find(t => t.order === 0);
       if (first) startTask = { task: first, boardId: boards.today.includes(first) ? 'today' : 'scheduled' };
+
+      // 기다리는 중 순서(직접 바꾼 경우) — waiting 카드에 보이는 항목에 0부터 차례로
+      if (finalWaitKeys) {
+        let wi = 0;
+        finalWaitKeys.forEach(k => {
+          const t = boards.waiting.find(x => String(x.id) === k);
+          if (!t || (t.replyDate && t.replyDate > today)) return;
+          if (t.order !== wi) { t.order = wi; changed = true; }
+          wi++;
+        });
+      }
 
       if (changed) saveBoards();
     } catch (err) {

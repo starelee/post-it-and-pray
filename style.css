@@ -4578,3 +4578,10 @@ body.reorder-mode .sticky:not(.reorder-active) {
   font-size: 13px;
   color: var(--ink-soft);
 }
+
+/* ③ 기다리는 중 목록의 제목 — 오늘 목록·입력줄과 한 줄 띄움 */
+.day-start__wtitle {
+  margin-top: var(--day-start-line);
+  position: relative;
+  top: 3px;
+}

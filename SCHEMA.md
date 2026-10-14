@@ -138,6 +138,7 @@ type DayStartDraft = {
   overload?: { ids: number[] } | { skip: true };  // '오늘 할 일이 너무 많은데 내일로 미룰래요?' 답(항목에 묶이지 않는 질문)
   prep: { key: string; text: string; date?: string; src?: string }[];  // 순서 단계에서 추가한/캘린더 일정에서 담은 할 일(확정 때 Task로 만들어짐, 날짜가 내일 이후면 pray later로). src = '<구글 일정 id>@<날짜>'(캘린더에서 담은 것)
   order: string[];                    // 오늘 순서: 항목 id 또는 'f:<원본id>'(후속)/'p:<n>'(추가) 키
+  orderW: string[];                   // 기다리는 중(waiting) 순서 — 항목 id 키, 직접 바꾼 경우만 확정 때 task.order로 기록
   seq: number;
 };
 ```
