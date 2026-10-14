@@ -67,7 +67,7 @@
   const SNOOZE_DAYS = 3; // '오래 묵은 것'에서 '그대로 두기'(미루기)를 누르면 이만큼 다시 안 올라옴
   // 구글 캘린더(브라우저 OAuth — Google Identity Services). 비워 두면 캘린더 기능은 통째로 숨겨짐(앱 동작에 영향 없음).
   // Google Cloud에서 만든 "웹 애플리케이션" OAuth 클라이언트 ID(공개값)를 넣으면 켜짐 — 설정 방법은 README의 '구글 캘린더' 참고.
-  const GOOGLE_CLIENT_ID = '';
+  const GOOGLE_CLIENT_ID = '201633401717-qhkf30g8lv9h9s212425mat3gv4702i1.apps.googleusercontent.com';
   const GCAL_SCOPE = 'https://www.googleapis.com/auth/calendar.readonly';
   let gcalHint = ''; // 로그인한 구글 계정 이메일 — 토큰을 조용히 받을 때 계정 선택 창이 안 뜨게 힌트로 넘김
   const BOARD_IDS = ['today', 'waiting', 'someday', 'scheduled'];
