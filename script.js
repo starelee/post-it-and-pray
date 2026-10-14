@@ -7505,14 +7505,14 @@
     li.appendChild(dsEl('p', 'day-start__qtext', q.text));
     const btns = dsEl('div', 'day-start__qbtns');
     btns.appendChild(dsSmallButton('confirm-btn-cancel day-start__no', '아니오', () => dsSayNo(q)));
-    btns.appendChild(dsSmallButton('confirm-btn-ok day-start__yes', '네', () => dsAnswer(q, true)));
+    const showAlts = !overload && dsAltKey === key && q.alts && q.alts.length;
+    if (!showAlts) btns.appendChild(dsSmallButton('confirm-btn-ok day-start__yes', '네', () => dsAnswer(q, true)));
     li.appendChild(btns);
 
-    if (!overload && dsAltKey === key && q.alts && q.alts.length) {
-      // '아니오' 뒤: 그럼 어떻게 할까요? — 대안 + 그대로 두기
+    if (showAlts) {
+      // '아니오' 뒤: '네'가 있던 자리에 대안 + 그대로 두기가 같은 줄로 이어짐
       li.classList.add('has-alts');
-      li.appendChild(dsEl('p', 'day-start__qtext day-start__qtext-alt', '그럼 어떻게 할까요?'));
-      const alts = dsEl('div', 'day-start__alts');
+      btns.classList.add('has-alts');
       q.alts.map(a => ({ label: a.label, patch: a.patch, pickDate: a.pickDate }))
         .concat([{ label: q.no.snooze ? SNOOZE_DAYS + '일 뒤에 다시' : '그대로 두기', patch: null }])
         .forEach(o => {
@@ -7524,9 +7524,8 @@
           } else {
             b.addEventListener('click', () => dsAnswerAlt(q, o.patch));
           }
-          alts.appendChild(b);
+          btns.appendChild(b);
         });
-      li.appendChild(alts);
       if (dsAltPick === key) {
         const row = dsEl('div', 'day-start__field day-start__pick');
         row.appendChild(dsEl('span', 'day-start__field-label', '확인할 날짜'));
