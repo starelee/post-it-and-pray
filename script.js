@@ -6598,6 +6598,7 @@
   const DAYSTART_BUSY_TODAY = 5;
   const DAYSTART_BIG_OVERDUE = 7;          // 마감이 이만큼 넘게 지났으면 '다시 잡을래요?'
   const DAYSTART_URGENT_DAYS = 3;          // 긴급(❗)인데 이만큼 그대로면 '오늘 첫 번째로 할래요?'
+  const DAYSTART_WAIT_DAYS = 3;            // waiting이 이만큼 손을 안 탔으면 '후속 연락을 하실래요?'를 물음
   const DAYSTART_NOREPLY_DAYS = 7;         // 확인 날짜 없는 waiting이 이만큼 묵으면 '3일 뒤에 확인할까요?'
   const DAYSTART_REPEAT_MAX = 3;           // 반복되는 일 질문은 한 번에 이만큼까지만
   const DAYSTART_TODAY_LIMIT = 8;          // 오늘 할 일이 이보다 많으면 '내일로 미룰래요?'
@@ -6868,6 +6869,7 @@
     { key: 'dueSoon' },
     { key: 'finish', test: t => /^하위 /.test(t) },
     { key: 'noReply' },
+    { key: 'waitIdle' },
     { key: 'dup' },
     { key: 'repeat' },
     { key: 'stale' },
@@ -6930,6 +6932,13 @@
       if (t.replyDate || byTask.has(t.id)) return;
       const days = dsAgeDays(t);
       if (days >= DAYSTART_NOREPLY_DAYS) push({ task: t, boardId: 'waiting', tags: [days + '일째'], group: 'noReply' });
+    });
+    // 며칠째 그냥 기다리는 waiting(확인 날짜가 아직 안 온 것은 제외) — 후속 연락을 하실지 물음
+    boards.waiting.forEach(t => {
+      if (byTask.has(t.id)) return;
+      if (t.replyDate && t.replyDate > today) return; // 일부러 확인일을 잡아 둔 것
+      const days = dsAgeDays(t);
+      if (days >= DAYSTART_WAIT_DAYS) push({ task: t, boardId: 'waiting', tags: [days + '일째'], group: 'waitIdle' });
     });
     // 긴급(❗)인데 며칠째 그대로 — 오늘 목록에 있는 것만
     boards.today.filter(t => !t.done && t.urgent).map(t => ({ task: t, boardId: 'today' }))
@@ -7033,6 +7042,8 @@
       }
       case 'noReply':
         return { text: '확인 날짜가 없는데, ' + DAYSTART_FOLLOW_DAYS + '일 뒤에 확인할까요?', yes: { action: 'setReply', date: dsDateAfter(DAYSTART_FOLLOW_DAYS) }, no: snooze };
+      case 'waitIdle':
+        return { text: item.tags[0] + ' 기다리는 중인데, 후속 연락을 하실래요?', yes: follow, no: snooze };
       case 'dup':
         return { text: '같은 제목이 두 개 있는데, 하나로 합칠래요?', yes: { action: 'merge', intoId: item.dupOf.id }, no: snooze };
       case 'repeat':
@@ -7073,7 +7084,9 @@
       case 'urgentOld':
         return [{ label: '긴급 해제', patch: { action: 'unurgent' } }, tomorrow];
       case 'noReply':
-        return [waitMore('1주 뒤에 확인', 7)];
+        return [waitMore('1주 뒤에 확인', 7), finished('해결됐어요')];
+      case 'waitIdle':
+        return [waitMore('3일 더 기다리기', 3), waitMore('1주 뒤에 확인', 7)].concat(item.task.replyDate ? [clearReply] : [], [finished('해결됐어요')]);
       case 'stale':
         return item.boardId === 'waiting'
           ? [waitMore('1주 더 기다리기', 7), finished('해결됐어요')]
