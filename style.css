@@ -4577,3 +4577,23 @@ body.reorder-mode .sticky:not(.reorder-active) {
   line-height: var(--day-start-line);
   color: var(--ink-soft);
 }
+
+.day-start__calpick {
+  list-style: none;
+  margin: 0;
+  padding: 0 0 0 22px;
+  max-height: calc(var(--day-start-line) * 7);
+  overflow-y: auto;
+}
+
+.day-start__calpick-item {
+  font-family: var(--font-ui);
+  letter-spacing: var(--ui-letter-spacing);
+  font-size: 14px;
+  line-height: var(--day-start-line);
+  color: var(--ink);
+}
+
+.day-start__calpick-item label {
+  cursor: pointer;
+}

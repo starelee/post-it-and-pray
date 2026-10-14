@@ -6658,6 +6658,7 @@
   // 이후에는 구글에 로그인돼 있으면 팝업이 잠깐 떴다 바로 닫힘. 받은 토큰은 만료 5분 전까지 재사용해 그동안은 팝업이 없음.
   const GCAL_TOKEN_KEY = 'postit-gcal-token';       // { token, exp }
   const GCAL_GRANTED_KEY = 'postit-gcal-granted';   // 한 번 동의했는지
+  const GCAL_CALS_KEY = 'postit-gcal-cals';         // 읽을 캘린더 id 목록(JSON). 없으면 기본: 내가 만든/편집할 수 있는 선택된 캘린더
   const GCAL_ACCOUNT_KEY = 'postit-gcal-account';   // 캘린더를 읽는 구글 계정(로그인 계정과 다를 때만 저장)
   const GCAL_DECLINED_KEY = 'postit-gcal-declined'; // 연결 안 하고 넘어갔는지(그러면 일정 단계를 숨김)
   const lsGet = (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } };
@@ -6731,14 +6732,26 @@
     const from = new Date(); from.setHours(0, 0, 0, 0);
     const to = new Date(from); to.setDate(to.getDate() + 2);
     const headers = { Authorization: 'Bearer ' + token };
-    let cals = [];
+    let list = [];
     try {
-      const lr = await fetch('https://www.googleapis.com/calendar/v3/users/me/calendarList?' + new URLSearchParams({ minAccessRole: 'writer', maxResults: '20' }).toString(), { headers });
+      const lr = await fetch('https://www.googleapis.com/calendar/v3/users/me/calendarList?' + new URLSearchParams({ maxResults: '250' }).toString(), { headers });
       if (lr.status === 401) { lsSet(GCAL_TOKEN_KEY, null); return { auth: false }; }
-      if (lr.ok) cals = ((await lr.json()).items || []).filter(c => c.selected !== false).slice(0, 10);
+      if (lr.ok) list = (await lr.json()).items || [];
     } catch (e) { /* 목록을 못 읽으면 기본 캘린더만 */ }
-    if (!cals.length) cals = [{ id: 'primary', primary: true }];
-    const primary = cals.find(c => c.primary);
+    if (!list.length) list = [{ id: 'primary', primary: true }];
+    // 고른 목록이 있으면 그대로, 없으면 기본(내 것/편집 가능 + 구글에서 선택 표시된 것)
+    let chosen = null;
+    try { chosen = JSON.parse(lsGet(GCAL_CALS_KEY) || 'null'); } catch (e) { /* 무시 */ }
+    if (Array.isArray(chosen) && !list.some(c => chosen.includes(c.id))) chosen = null; // 다른 계정의 낡은 선택
+    const isDefaultOn = (c) => c.primary || (c.selected !== false && (c.accessRole === 'owner' || c.accessRole === 'writer' || !c.accessRole));
+    const calendars = list.map(c => ({
+      id: c.id,
+      name: c.summaryOverride || c.summary || c.id,
+      primary: !!c.primary,
+      on: Array.isArray(chosen) ? chosen.includes(c.id) : isDefaultOn(c)
+    }));
+    const cals = calendars.filter(c => c.on).slice(0, 15);
+    const primary = list.find(c => c.primary);
     let account = primary && /@/.test(primary.id || '') ? primary.id : '';
     const all = [];
     let denied = false;
@@ -6747,8 +6760,8 @@
         timeMin: from.toISOString(), timeMax: to.toISOString(), singleEvents: 'true', orderBy: 'startTime', maxResults: '50'
       }).toString();
       const r = await fetch(url, { headers });
-      if (r.status === 401 || r.status === 403) { if (c.primary) denied = true; return; }
-      if (!r.ok) { if (c.primary) throw new Error('calendar ' + r.status); return; }
+      if (r.status === 401 || r.status === 403) { if (cals.length === 1 || c.primary) denied = true; return; }
+      if (!r.ok) { if (cals.length === 1) throw new Error('calendar ' + r.status); return; }
       const data = await r.json();
       if (c.primary && !account && /@/.test(data.summary || '')) account = data.summary;
       (data.items || []).forEach(ev => all.push(ev));
@@ -6772,7 +6785,7 @@
       })
       .filter(ev => ev.start)
       .sort((x, y) => (x.allDay === y.allDay ? 0 : x.allDay ? -1 : 1) || String(x.start).localeCompare(String(y.start)));
-    return { events, account };
+    return { events, account, calendars };
   }
 
   function gcalDisconnect() {
@@ -6781,6 +6794,7 @@
     lsSet(GCAL_TOKEN_KEY, null);
     lsSet(GCAL_GRANTED_KEY, null);
     lsSet(GCAL_ACCOUNT_KEY, null);
+    lsSet(GCAL_CALS_KEY, null);
     lsSet(GCAL_DECLINED_KEY, '1');
   }
 
@@ -7606,7 +7620,7 @@
     gcalFetchEvents(token).then(res => {
       if (res.auth === false) { dsCal.state = 'needconnect'; dsCal.err = 'expired'; }
       else {
-        dsCal.state = 'ok'; dsCal.events = res.events; dsCal.account = res.account || '';
+        dsCal.state = 'ok'; dsCal.events = res.events; dsCal.account = res.account || ''; dsCal.calendars = res.calendars || [];
         if (dsCal.pick && res.account) lsSet(GCAL_ACCOUNT_KEY, res.account); // 계정을 직접 고른 경우만 기억
         dsCal.pick = false;
       }
@@ -7618,6 +7632,7 @@
   function dsCalConnect(goToCal, pick) {
     dsCal.state = 'loading';
     dsCal.pick = !!pick;
+    if (pick) lsSet(GCAL_CALS_KEY, null); // 다른 계정이면 캘린더 선택도 새로
     if (goToCal) { ds.step = 'cal'; dsSaveDraft(); }
     dsRender();
     gcalRequest(pick).then(tok => {
@@ -7721,6 +7736,35 @@
       });
       dayStartBodyEl.appendChild(list);
     });
+    if (dsCal.calendars && dsCal.calendars.length > 1) {
+      const nOn = dsCal.calendars.filter(c => c.on).length;
+      const tg = dsEl('button', 'day-start__change day-start__switch', '캘린더 ' + nOn + '/' + dsCal.calendars.length + '개 읽는 중 · ' + (dsCal.calOpen ? '접기' : '고르기'));
+      tg.type = 'button';
+      tg.addEventListener('click', () => { dsCal.calOpen = !dsCal.calOpen; dsRender(); });
+      dayStartBodyEl.appendChild(tg);
+      if (dsCal.calOpen) {
+        const ul = dsEl('ul', 'day-start__calpick');
+        dsCal.calendars.forEach(c => {
+          const li = dsEl('li', 'day-start__calpick-item');
+          const lab = document.createElement('label');
+          const cb = document.createElement('input');
+          cb.type = 'checkbox';
+          cb.checked = c.on;
+          cb.addEventListener('change', () => {
+            c.on = cb.checked;
+            lsSet(GCAL_CALS_KEY, JSON.stringify(dsCal.calendars.filter(x => x.on).map(x => x.id)));
+            const keep = { calOpen: true, calendars: dsCal.calendars, account: dsCal.account };
+            const tok = gcalCachedToken();
+            if (tok) { Object.assign(dsCal, keep); dsCalStart(tok); }
+          });
+          lab.appendChild(cb);
+          lab.appendChild(dsEl('span', '', ' ' + c.name));
+          li.appendChild(lab);
+          ul.appendChild(li);
+        });
+        dayStartBodyEl.appendChild(ul);
+      }
+    }
     const acct = dsEl('p', 'day-start__calacct', dsCal.account ? '연결된 계정: ' + dsCal.account : '');
     if (dsCal.account) dayStartBodyEl.appendChild(acct);
     const sw = dsEl('button', 'day-start__change day-start__switch', '다른 계정으로 연결');
