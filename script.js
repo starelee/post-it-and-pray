@@ -1364,6 +1364,11 @@
   async function handleAuthChange(session) {
     const user = session && session.user ? session.user : null;
     gcalHint = (user && user.email) || '';
+    // 로그인 계정이 바뀌면 이전 계정의 캘린더 토큰이 남아 있지 않게 비움(직접 고른 계정이 있으면 그대로 둠)
+    if (user && user.email && !lsGet(GCAL_ACCOUNT_KEY)) {
+      if (lsGet('postit-gcal-login') && lsGet('postit-gcal-login') !== user.email) { lsSet(GCAL_TOKEN_KEY, null); lsSet(GCAL_SEEN_KEY, null); }
+      lsSet('postit-gcal-login', user.email);
+    }
     gcalCaptureSession(session);
     renderAuthUI(user);
     clearAuthHash();
@@ -6721,20 +6726,40 @@
   }
 
   // 오늘 0시 ~ 모레 0시(내일까지)의 일정. { auth:false }면 토큰이 거부됨(만료·권한 취소).
+  // 기본 캘린더만이 아니라 내가 만든/편집할 수 있는 캘린더(선택돼 있는 것)를 모두 읽음 — 일정이 다른 캘린더에 들어 있는 경우가 많아서.
   async function gcalFetchEvents(token) {
     const from = new Date(); from.setHours(0, 0, 0, 0);
     const to = new Date(from); to.setDate(to.getDate() + 2);
-    const url = 'https://www.googleapis.com/calendar/v3/calendars/primary/events?' + new URLSearchParams({
-      timeMin: from.toISOString(), timeMax: to.toISOString(), singleEvents: 'true', orderBy: 'startTime', maxResults: '50'
-    }).toString();
-    const r = await fetch(url, { headers: { Authorization: 'Bearer ' + token } });
-    if (r.status === 401 || r.status === 403) { lsSet(GCAL_TOKEN_KEY, null); return { auth: false }; }
-    if (!r.ok) throw new Error('calendar ' + r.status);
-    const data = await r.json();
-    const events = (data.items || [])
+    const headers = { Authorization: 'Bearer ' + token };
+    let cals = [];
+    try {
+      const lr = await fetch('https://www.googleapis.com/calendar/v3/users/me/calendarList?' + new URLSearchParams({ minAccessRole: 'writer', maxResults: '20' }).toString(), { headers });
+      if (lr.status === 401) { lsSet(GCAL_TOKEN_KEY, null); return { auth: false }; }
+      if (lr.ok) cals = ((await lr.json()).items || []).filter(c => c.selected !== false).slice(0, 10);
+    } catch (e) { /* 목록을 못 읽으면 기본 캘린더만 */ }
+    if (!cals.length) cals = [{ id: 'primary', primary: true }];
+    const primary = cals.find(c => c.primary);
+    let account = primary && /@/.test(primary.id || '') ? primary.id : '';
+    const all = [];
+    let denied = false;
+    await Promise.all(cals.map(async (c) => {
+      const url = 'https://www.googleapis.com/calendar/v3/calendars/' + encodeURIComponent(c.id) + '/events?' + new URLSearchParams({
+        timeMin: from.toISOString(), timeMax: to.toISOString(), singleEvents: 'true', orderBy: 'startTime', maxResults: '50'
+      }).toString();
+      const r = await fetch(url, { headers });
+      if (r.status === 401 || r.status === 403) { if (c.primary) denied = true; return; }
+      if (!r.ok) { if (c.primary) throw new Error('calendar ' + r.status); return; }
+      const data = await r.json();
+      if (c.primary && !account && /@/.test(data.summary || '')) account = data.summary;
+      (data.items || []).forEach(ev => all.push(ev));
+    }));
+    if (denied) { lsSet(GCAL_TOKEN_KEY, null); return { auth: false }; }
+    const seen = new Set();
+    const events = all
       .filter(ev => ev.status !== 'cancelled')
       .filter(ev => !ev.eventType || ev.eventType === 'default') // 근무 위치/부재 같은 것은 제외
       .filter(ev => !(ev.attendees || []).some(a => a.self && a.responseStatus === 'declined')) // 거절한 일정 제외
+      .filter(ev => { if (seen.has(ev.id)) return false; seen.add(ev.id); return true; }) // 여러 캘린더에 걸친 같은 일정
       .map(ev => {
         const allDay = !!(ev.start && ev.start.date);
         return {
@@ -6745,9 +6770,9 @@
           end: allDay ? (ev.end && ev.end.date) : (ev.end && ev.end.dateTime)
         };
       })
-      .filter(ev => ev.start);
-    // events.list의 summary는 기본 캘린더 이름 = 계정 이메일
-    return { events, account: /@/.test(data.summary || '') ? data.summary : '' };
+      .filter(ev => ev.start)
+      .sort((x, y) => (x.allDay === y.allDay ? 0 : x.allDay ? -1 : 1) || String(x.start).localeCompare(String(y.start)));
+    return { events, account };
   }
 
   function gcalDisconnect() {
