@@ -706,7 +706,11 @@
         if (past > 0) { tags.push(label + ' ' + past + '일 지남'); overdue = past; }
         else if (past === 0) { tags.push('오늘 ' + label); isToday = true; }
       }
-      suggestChecklistTags(task).forEach(t => tags.push(t));
+      // 하위 항목 마무리는 지금 신경 쓸 때만: someday는 안 묻고, pray later는 마감이 내일 이내일 때만
+      const checklistDue = boardId === 'someday' ? false
+        : boardId === 'scheduled' ? !!task.dueDate && daysUntilDue(task.dueDate) <= 1
+        : true;
+      if (checklistDue) suggestChecklistTags(task).forEach(t => tags.push(t));
       if (!tags.length) return;
       watch.push({ task, boardId, tags, rank: overdue ? 0 : (isToday ? 1 : 2), overdue });
     };
