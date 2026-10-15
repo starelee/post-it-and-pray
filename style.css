@@ -442,6 +442,16 @@
     border-color: var(--accent);
   }
 
+  .cloud-warn {
+    color: var(--accent);
+    border-color: var(--accent);
+    opacity: 1;
+  }
+
+  .cloud-warn[hidden] {
+    display: none;
+  }
+
   .auth-btn-primary {
     background: var(--accent);
     border-color: var(--accent);

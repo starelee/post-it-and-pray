@@ -548,6 +548,8 @@
   const BACKUP_VERSION = 1;
   const backupBtn = document.getElementById('backupBtn');
   if (backupBtn) backupBtn.addEventListener('click', openBackupModal);
+  const cloudWarnEl = document.getElementById('cloudWarn');
+  if (cloudWarnEl) cloudWarnEl.addEventListener('click', openBackupModal);
 
   function downloadBackup() {
     const payload = { app: BACKUP_APP, version: BACKUP_VERSION, exportedAt: new Date().toISOString(), boards };
@@ -648,7 +650,7 @@
   function cloudFreshnessText(snap) {
     if (!snap || snap.empty) return '';
     const parts = [];
-    if (localVersion !== syncedLocalVersion) parts.push('이 기기에 아직 클라우드에 못 올린 변경이 있어요');
+    if (hasUnsyncedLocal()) parts.push('이 기기에 아직 클라우드에 못 올린 변경이 있어요');
     const cloudMs = instantMs(snap.updatedAt);
     const knownMs = lastKnownServerUpdatedAt ? instantMs(lastKnownServerUpdatedAt) : null;
     if (cloudMs !== null && knownMs !== null) {
@@ -689,7 +691,7 @@
         if (res.error) throw res.error;
       }
       lastKnownServerUpdatedAt = newUpdatedAt;
-      syncedLocalVersion = localVersion;
+      markCloudSynced(localVersion);
       showToast('클라우드를 이 기기 값으로 바꿨어요');
     } catch (e) {
       showToast('클라우드에 저장하지 못했어요');
@@ -717,7 +719,8 @@
       /* ignore */
     }
     lastKnownServerUpdatedAt = snap.updatedAt;
-    syncedLocalVersion = localVersion;
+    cloudLoadFailed = false;
+    markCloudSynced(localVersion);
     closeArchivePanel();
     closeSearchPanel();
     renderAll();
@@ -1218,6 +1221,45 @@
   // 클라우드와 마지막으로 맞춘 시점의 localVersion — localVersion과 다르면 이 기기에 아직 못 올린 변경이 있다는 뜻
   let syncedLocalVersion = 0;
 
+  // 이 기기에 아직 클라우드에 못 올린 변경이 있다는 표시를 기기에 남김(계정 id 저장). localVersion은 메모리에만 있어서
+  // 올리기가 실패한 채 새로 열면 사라지는데, 이 표시는 남아서 그때 클라우드로 덮어쓰지 않고 합치게 함.
+  const CLOUD_DIRTY_KEY = 'postit-cloud-dirty';
+  function getCloudDirtyUser() {
+    try { return localStorage.getItem(CLOUD_DIRTY_KEY); } catch (e) { return null; }
+  }
+  function setCloudDirtyUser(id) {
+    try {
+      if (id) localStorage.setItem(CLOUD_DIRTY_KEY, id);
+      else localStorage.removeItem(CLOUD_DIRTY_KEY);
+    } catch (e) {
+      /* ignore */
+    }
+  }
+  function hasUnsyncedLocal() {
+    return localVersion !== syncedLocalVersion || (!!activeRowId && getCloudDirtyUser() === activeRowId);
+  }
+  // 클라우드와 맞췄다고 기록 — 그 뒤 더 고친 게 없을 때만 '못 올린 변경' 표시를 지움
+  function markCloudSynced(version) {
+    syncedLocalVersion = version;
+    if (localVersion === version) setCloudDirtyUser(null);
+    cloudSyncFailed = false;
+    updateCloudWarn();
+  }
+
+  // 올리기/불러오기가 실패한 채로 있는지 — 헤더에 '⚠ 동기화 안 됨'을 띄우는 기준
+  let cloudSyncFailed = false;
+  let cloudLoadFailed = false; // 처음 불러오기 자체가 실패(그러면 지금 화면은 이 기기에 저장된 값)
+  function updateCloudWarn() {
+    const el = document.getElementById('cloudWarn');
+    if (!el) return;
+    el.hidden = !(activeRowId && (cloudSyncFailed || cloudLoadFailed));
+  }
+  function markCloudFailed(isLoad) {
+    if (isLoad) cloudLoadFailed = true;
+    else cloudSyncFailed = true;
+    updateCloudWarn();
+  }
+
   function saveBoards() {
     localVersion++;
     stampChangedTasks();
@@ -1228,7 +1270,7 @@
       /* storage unavailable — state just won't persist */
     }
     // Guests (activeRowId === null) stay local-only — no cloud write at all.
-    if (activeRowId) pushToCloud();
+    if (activeRowId) { setCloudDirtyUser(activeRowId); pushToCloud(); }
   }
 
   let cloudClient = null;
@@ -1334,7 +1376,7 @@
       if (data && data.length > 0) {
         // No one else wrote since we last synced — our write landed clean.
         lastKnownServerUpdatedAt = newUpdatedAt;
-        syncedLocalVersion = versionAtPush;
+        markCloudSynced(versionAtPush);
         return;
       }
       // Either the row moved (someone else wrote after our last known
@@ -1349,9 +1391,10 @@
       if (!current) {
         // Row genuinely doesn't exist yet (first sync for this account) —
         // safe to create it outright.
-        await cloudClient.from('postit_data').insert({ id: activeRowId, data: boards, updated_at: newUpdatedAt });
+        const ins = await cloudClient.from('postit_data').insert({ id: activeRowId, data: boards, updated_at: newUpdatedAt });
+        if (ins && ins.error) throw ins.error;
         lastKnownServerUpdatedAt = newUpdatedAt;
-        syncedLocalVersion = versionAtPush;
+        markCloudSynced(versionAtPush);
         return;
       }
       // 글자를 고치는 중이거나 순서를 끄는 중이면 지금 화면을 통째로 갈아엎지 않고 잠깐 뒤에 다시 시도
@@ -1380,7 +1423,8 @@
       pushToCloud(); // retry with the merged state, now conditioned on the version we just saw
     } catch (e) {
       /* offline or cloud unavailable — local state is still saved; the
-         next successful push will reconcile */
+         next successful push will reconcile. 그동안은 헤더에 '동기화 안 됨'을 띄움 */
+      markCloudFailed(false);
     }
   }
 
@@ -1466,11 +1510,33 @@
           markUserSynced(rowId);
           if (!useCloud) {
             lastKnownServerUpdatedAt = data.updated_at; // 로컬을 유지하고 클라우드 쪽을 로컬로 덮어씀
+            setCloudDirtyUser(rowId); // 올리기가 끝나기 전에 새로 열어도 클라우드로 덮어쓰지 않게
             pushToCloud();
             return;
           }
         } else {
           markUserSynced(rowId);
+        }
+        // 이 기기에 못 올린 변경이 남은 채 새로 연 경우(올리기가 실패했거나 끝나기 전에 닫음) — 클라우드로
+        // 덮어쓰면 그 변경이 사라지므로 항목별로 합친 뒤 다시 올림.
+        if (getCloudDirtyUser() === rowId) {
+          const merged = mergeBoards(cloudBoards, boards);
+          migrateArchive(merged);
+          lastKnownServerUpdatedAt = data.updated_at;
+          cloudLoadFailed = false;
+          if (boardsContentKey(merged) !== boardsContentKey(boards)) {
+            boards = merged;
+            resetHistory();
+            try {
+              localStorage.setItem(STORAGE_KEY, JSON.stringify(boards));
+            } catch (e) {
+              /* ignore */
+            }
+            renderAll();
+          }
+          pushToCloud();
+          updateCloudWarn();
+          return;
         }
         // 화면에 이미 있는 내용과 같으면(보통 새로고침 직후) 다시 그리지 않음 — 안 그러면 열자마자 한 번
         // 더 전체가 갈아엎어져 "혼자 새로고침"처럼 보임.
@@ -1485,14 +1551,16 @@
           renderAll();
         }
         lastKnownServerUpdatedAt = data.updated_at;
-        syncedLocalVersion = localVersion;
+        cloudLoadFailed = false;
+        markCloudSynced(localVersion);
       } else {
         markUserSynced(rowId);
         lastKnownServerUpdatedAt = null; // row doesn't exist yet — pushToCloudNow will insert it
         pushToCloud();
       }
     } catch (e) {
-      /* offline or cloud unavailable — keep using local data */
+      /* offline or cloud unavailable — keep using local data. 지금 화면은 이 기기에 저장된 값이라 알려 줌 */
+      markCloudFailed(true);
     }
   }
 
@@ -1515,6 +1583,9 @@
   }
 
   async function refreshFromCloudIfNewer() {
+    // 처음 불러오기가 실패했거나 올리기가 실패해 있었다면 돌아올 때 다시 시도
+    if (cloudClient && activeRowId && cloudLoadFailed) { cloudLoadFailed = false; syncRow(activeRowId); return; }
+    if (cloudClient && activeRowId && cloudSyncFailed && hasUnsyncedLocal()) pushToCloud();
     if (!cloudClient || !activeRowId || !lastKnownServerUpdatedAt || cloudCheckRunning) return;
     if (document.visibilityState === 'hidden' || Date.now() - lastCloudCheckAt < CLOUD_RECHECK_MS) return;
     if (!canRefreshFromCloudNow()) return;
@@ -1531,7 +1602,7 @@
       const cloudMs = instantMs(data.updated_at);
       const knownMs = instantMs(lastKnownServerUpdatedAt);
       if (cloudMs === null || knownMs === null || cloudMs <= knownMs) return; // 이 기기가 이미 아는 시점이거나 더 오래됨
-      if (localVersion !== syncedLocalVersion) { pushToCloud(); return; } // 못 올린 변경이 있음 — 병합은 저장 경로가 함
+      if (hasUnsyncedLocal()) { pushToCloud(); return; } // 못 올린 변경이 있음 — 병합은 저장 경로가 함
       if (localVersion !== versionAtStart || !canRefreshFromCloudNow()) return; // 기다리는 사이 손댔으면 다음에
       const cloudBoards = normalizeBoards(data.data);
       lastKnownServerUpdatedAt = data.updated_at;
@@ -1639,6 +1710,9 @@
     } else {
       // Logged out (or never logged in): guest mode, local-only, no cloud sync.
       activeRowId = null;
+      cloudSyncFailed = false;
+      cloudLoadFailed = false;
+      updateCloudWarn();
     }
   }
 
