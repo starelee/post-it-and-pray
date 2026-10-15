@@ -8036,21 +8036,7 @@
       ? '급한 것부터 순서를 제안했어요. 바꾸고 싶으면 끌어 주세요.'
       : '오늘 할 일이 아직 없어요. 아래에서 추가할 수 있어요.'));
     if (keys.length) {
-      // 기다리는 중에서 끌어온 항목에는 '대기중으로' — 잘못 옮겼을 때 되돌림(확정 전까지는 이 화면의 임시 상태)
-      const backBtn = (key) => {
-        if (!ds.toToday.includes(key)) return null;
-        const b = dsEl('button', 'day-start__change', '대기중으로');
-        b.type = 'button';
-        b.setAttribute('aria-label', '다시 기다리는 중으로');
-        b.addEventListener('click', () => {
-          ds.toToday = ds.toToday.filter(k => k !== key);
-          ds.order = ds.order.filter(k => k !== key);
-          dsSaveDraft();
-          dsRender();
-        });
-        return b;
-      };
-      dayStartBodyEl.appendChild(dsBuildReorderList(keys, byKey, (next) => { ds.order = next; }, '오늘 실행 순서', true, backBtn));
+      dayStartBodyEl.appendChild(dsBuildReorderList(keys, byKey, (next) => { ds.order = next; }, '오늘 실행 순서', true));
     }
 
     // 보드 맨 아래 "+ 끄적이기..." 줄과 같은 입력줄 — 오늘 할 일을 바로 추가
