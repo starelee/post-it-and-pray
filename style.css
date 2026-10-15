@@ -3275,6 +3275,11 @@
     align-self: flex-start;
   }
 
+  .backup-fresh {
+    white-space: pre-line;
+    color: var(--ink-soft);
+  }
+
   .backup-section-title {
     margin: 0;
     font-family: var(--font-ui);
