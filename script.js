@@ -658,11 +658,12 @@
   }
 
   // ─────────────────────────────
-  // 검색어가 없을 때의 제안 — 세 섹션, 각각 최대 4개(넘는 건 그냥 안 보여줌).
+  // 검색어가 없을 때의 제안 — 네 섹션, 각각 최대 4개(넘는 건 그냥 안 보여줌).
   //  · 챙길 것: 기한/회신 예정일이 오늘이거나 지남, 하위 항목이 거의 끝남.
   //    이유를 태그로 달아 한 줄로 합침(지난 것 → 오늘 → 마무리만 남은 것 순).
   //  · 오래 묵은 것: someday/waiting 중 2주 넘게 손 안 댄 것.
   //  · 최근 완료: 최근 3일 안에 끝낸 것.
+  //  · 자주 한 것: 최근 30일 안에 2일 이상 끝냈고 지금 열려 있지 않은 것.
   // 한 항목은 위 섹션에만 나옴. lupin/gone은 여기서도 제외.
   // ─────────────────────────────
   const SUGGEST_LIMIT = 4;
@@ -684,6 +685,28 @@
     if (subs.length >= 1 && open === 0) return ['하위 다 끝남'];
     if (subs.length >= 2 && open === 1) return ['하위 1개 남음'];
     return [];
+  }
+
+  // 최근 30일 안에 2일 이상 끝냈고 같은 제목이 열려 있지 않은 일(많이 한 순)
+  function collectRepeatedTasks() {
+    const norm = (text) => String(text || '').replace(/\s+/g, ' ').trim().toLowerCase();
+    const openTexts = new Set();
+    BOARD_IDS.forEach(b => boards[b].forEach(t => { if (!t.done) openTexts.add(norm(t.text)); }));
+    const groups = new Map();
+    collectArchiveEntries().forEach(e => {
+      const t = e.task;
+      if (!t.doneAt || -daysUntilDue(t.doneAt) > 30) return;
+      const k = norm(t.text);
+      if (!k || openTexts.has(k)) return;
+      const g = groups.get(k) || { dates: new Set(), task: t, source: e.source };
+      g.dates.add(t.doneAt);
+      if (t.doneAt >= g.task.doneAt) { g.task = t; g.source = e.source; }
+      groups.set(k, g);
+    });
+    return Array.from(groups.values())
+      .filter(g => g.dates.size >= 2)
+      .sort((a, b) => b.dates.size - a.dates.size)
+      .map(g => ({ task: g.task, source: g.source, count: g.dates.size }));
   }
 
   // opts.all — 하루 시작하기(정비하기)용: 개수 제한/무작위 선정 없이 전부, '최근 완료'는 뺌.
@@ -765,10 +788,18 @@
       .slice(0, SUGGEST_LIMIT)
       .map(e => ({ task: e.task, boardId: e.source, tags: [e.task.doneAt.slice(5).replace('-', '/')], done: true }));
 
+    // 4) 자주 한 것 — 최근 한 달 사이 여러 날 끝냈고 지금은 열려 있지 않은 일(하루 시작하기에서 묻지 않고 여기서만 보여줌)
+    const recentIds = new Set(recent.map(r => r.task.id));
+    const repeated = all ? [] : collectRepeatedTasks()
+      .filter(r => !recentIds.has(r.task.id))
+      .slice(0, SUGGEST_LIMIT)
+      .map(r => ({ task: r.task, boardId: r.source, tags: [r.count + '번'], done: true }));
+
     return [
       { label: '챙길 것', items: watchTop },
       { label: '오래 묵은 것', items: staleTop },
-      { label: '최근 완료', items: recent }
+      { label: '최근 완료', items: recent },
+      { label: '자주 한 것', items: repeated }
     ].filter(sec => sec.items.length);
   }
 
@@ -6611,7 +6642,6 @@
   const DAYSTART_WAIT_MAX = 3;             // 그 질문은 한 번에 오래된 순으로 이만큼까지만
   const DAYSTART_WAIT_DAYS = 3;            // waiting이 이만큼 손을 안 탔으면 '후속 연락을 하실래요?'를 물음
   const DAYSTART_NOREPLY_DAYS = 7;         // 확인 날짜 없는 waiting이 이만큼 묵으면 '3일 뒤에 확인할까요?'
-  const DAYSTART_REPEAT_MAX = 3;           // 반복되는 일 질문은 한 번에 이만큼까지만
   const DAYSTART_TODAY_LIMIT = 8;          // 오늘 할 일이 이보다 많으면 '내일로 미룰래요?'
   const DAYSTART_FOCUS_MIN = 25;           // 확정 뒤 '바로 시작할래요?'의 포커스 시간(분)
 
@@ -7026,25 +7056,6 @@
       if (byTask.has(newer.task.id)) return;
       push({ task: newer.task, boardId: newer.boardId, tags: ['같은 제목'], group: 'dup', dupOf: older.task });
     });
-    // 최근 한 달 사이 여러 날 끝낸 일(지금 열려 있지 않은 것) — 오늘도 하자고 물음
-    const openTexts = new Set(open.map(o => dsNorm(o.task.text)));
-    const recent = new Map();
-    boards.archive.forEach(t => {
-      if (!t.doneAt || -daysUntilDue(t.doneAt) > 30) return;
-      const k = dsNorm(t.text);
-      if (!k || openTexts.has(k)) return;
-      const r = recent.get(k) || { dates: new Set(), latest: t };
-      r.dates.add(t.doneAt);
-      if (t.doneAt >= r.latest.doneAt) r.latest = t;
-      recent.set(k, r);
-    });
-    Array.from(recent.values())
-      .filter(r => r.dates.size >= 2)
-      .sort((a, b) => b.dates.size - a.dates.size)
-      .forEach(r => {
-        if (items.filter(i => i.group === 'repeat').length >= DAYSTART_REPEAT_MAX) return;
-        push({ task: r.latest, boardId: 'archive', key: 'r:' + r.latest.id, tags: [r.dates.size + '번'], group: 'repeat', count: r.dates.size });
-      });
     // 방금 미룬 것은 날짜가 정하는 항목이 아니면 잠시 건너뜀
     const rank = k => DAYSTART_GROUPS.findIndex(g => g.key === k);
     return items
@@ -7104,8 +7115,6 @@
         return { text: item.tags[0] + ' 기다리는 중인데, 후속 연락을 하실래요?', yes: follow, no: snooze };
       case 'dup':
         return { text: '같은 제목이 두 개 있는데, 하나로 합칠래요?', yes: { action: 'merge', intoId: item.dupOf.id }, no: snooze };
-      case 'repeat':
-        return { text: '최근 한 달 동안 ' + item.count + '번 한 일인데, 오늘도 하실래요?', yes: { action: 'repeat' }, no: snooze };
       case 'stale':
         if (item.boardId === 'waiting') return { text: item.tags[0] + ' 기다리는 중인데, 후속 연락을 하실래요?', yes: follow, no: snooze };
         return { text: item.tags[0] + ' 그대로인데, 오늘 해볼래요?', yes: { action: 'today' }, no: snooze };
