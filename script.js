@@ -8089,7 +8089,7 @@
       dayStartBodyEl.appendChild(dsEl('h3', 'search-group-title day-start__wtitle', '기다리는 중 ⏳'));
       // '오늘로' — 오늘 순서 맨 아래에 붙고, 거기서 ↑로 원하는 자리까지 올림
       const toTodayBtn = (key) => {
-        const b = dsEl('button', 'day-start__change', '오늘로');
+        const b = dsEl('button', 'day-start__change', '오늘 하기');
         b.type = 'button';
         b.setAttribute('aria-label', '오늘 할 일로 옮기기');
         b.addEventListener('click', () => {
