@@ -706,7 +706,12 @@
         if (past > 0) { tags.push(label + ' ' + past + '일 지남'); overdue = past; }
         else if (past === 0) { tags.push('오늘 ' + label); isToday = true; }
       }
-      suggestChecklistTags(task).forEach(t => tags.push(t));
+      // 하루 시작하기에서만: 하위 항목 마무리는 지금 신경 쓸 때만 묻기(someday는 안 묻고, pray later는 마감이 내일 이내일 때만). 검색 제안은 그대로
+      const checklistDue = !all ? true
+        : boardId === 'someday' ? false
+        : boardId === 'scheduled' ? !!task.dueDate && daysUntilDue(task.dueDate) <= 1
+        : true;
+      if (checklistDue) suggestChecklistTags(task).forEach(t => tags.push(t));
       if (!tags.length) return;
       watch.push({ task, boardId, tags, rank: overdue ? 0 : (isToday ? 1 : 2), overdue });
     };
@@ -7529,6 +7534,11 @@
         row.appendChild(chip);
       });
       if (item.task.urgent) row.appendChild(makeSearchChip('긴급'));
+      // 언제 하기로 한 일인지: 날짜가 있는데 태그에 이미 마감/회신이 없으면 날짜 칩을 덧붙임
+      const dateKey = item.boardId === 'waiting' ? 'replyDate' : 'dueDate';
+      if (item.task[dateKey] && !item.tags.some(tag => /마감|회신/.test(tag))) {
+        row.appendChild(makeSearchChip((dateKey === 'replyDate' ? '회신 ' : '마감 ') + formatDueDateRelative(item.task[dateKey])));
+      }
     }
     li.appendChild(row);
 
