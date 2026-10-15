@@ -7560,8 +7560,9 @@
       // '아니오' 뒤: 아니오/네 버튼이 사라지고 그 자리에 대안 + 그대로 두기가 버튼으로 나타남
       li.classList.add('has-alts');
       btns.classList.add('has-alts');
-      q.alts.map(a => ({ label: a.label, patch: a.patch, pickDate: a.pickDate }))
-        .concat([{ label: q.no.snooze ? SNOOZE_DAYS + '일 뒤에 다시' : '그대로 두기', patch: null }])
+      // 가장 많이 누르는 '그대로 두기'(또는 3일 뒤에 다시)를 맨 앞에 둠
+      [{ label: q.no.snooze ? SNOOZE_DAYS + '일 뒤에 다시' : '그대로 두기', patch: null }]
+        .concat(q.alts.map(a => ({ label: a.label, patch: a.patch, pickDate: a.pickDate })))
         .forEach(o => {
           const b = dsSmallButton('confirm-btn-cancel day-start__alt', o.label, () => {});
           if (o.pickDate) {
