@@ -706,8 +706,9 @@
         if (past > 0) { tags.push(label + ' ' + past + '일 지남'); overdue = past; }
         else if (past === 0) { tags.push('오늘 ' + label); isToday = true; }
       }
-      // 하위 항목 마무리는 지금 신경 쓸 때만: someday는 안 묻고, pray later는 마감이 내일 이내일 때만
-      const checklistDue = boardId === 'someday' ? false
+      // 하루 시작하기에서만: 하위 항목 마무리는 지금 신경 쓸 때만 묻기(someday는 안 묻고, pray later는 마감이 내일 이내일 때만). 검색 제안은 그대로
+      const checklistDue = !all ? true
+        : boardId === 'someday' ? false
         : boardId === 'scheduled' ? !!task.dueDate && daysUntilDue(task.dueDate) <= 1
         : true;
       if (checklistDue) suggestChecklistTags(task).forEach(t => tags.push(t));
