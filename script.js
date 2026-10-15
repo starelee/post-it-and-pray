@@ -6991,7 +6991,7 @@
 
   // ───── 초안 저장/불러오기 ─────
   function dsFreshDraft() {
-    return { date: todayStr(), step: 'tidy', decisions: {}, log: [], prep: [], order: [], orderW: [], seq: 1, overload: undefined };
+    return { date: todayStr(), step: 'tidy', decisions: {}, log: [], prep: [], order: [], orderW: [], toToday: [], seq: 1, overload: undefined };
   }
 
   function dsLoadDraft() {
@@ -7010,6 +7010,7 @@
             prep: d.prep.filter(p => p && typeof p.key === 'string' && typeof p.text === 'string'),
             order: d.order.filter(k => typeof k === 'string'),
             orderW: Array.isArray(d.orderW) ? d.orderW.filter(k => typeof k === 'string') : [],
+            toToday: Array.isArray(d.toToday) ? d.toToday.filter(k => typeof k === 'string') : [],
             seq: Number(d.seq) > 0 ? Number(d.seq) : 1,
             overload: d.overload && typeof d.overload === 'object' ? d.overload : undefined
           };
@@ -7388,6 +7389,10 @@
         entries.push({ key: 'f:' + item.task.id, text: d.text.trim(), origin: '', urgent: false, rank: 3, board: 'today' });
       }
     });
+    // 오늘 순서 화면에서 '오늘로'를 눌러 기다리는 중에서 끌어온 것 — 확정하면 waiting에서 gotta do로 옮겨감
+    dsWaitingToToday().forEach(t => {
+      entries.push({ key: String(t.id), text: t.text, origin: '', urgent: !!t.urgent, rank: 9, board: 'waiting' });
+    });
     ds.prep.forEach(p => {
       if (p.text.trim() && (p.date || todayStr()) === today) {
         entries.push({ key: p.key, text: p.text.trim(), origin: '', urgent: false, rank: 8, board: 'today' });
@@ -7401,12 +7406,27 @@
   const DAYSTART_LEAVES_WAITING = ['today', 'self', 'toSomeday', 'drop', 'done', 'resolved', 'later', 'merge', 'follow', 'setReply'];
   function dsBuildWaitingEntries() {
     const today = todayStr();
+    const moved = new Set(ds.toToday);
     return sortByOrder(boards.waiting.filter(t => !(t.replyDate && t.replyDate > today)))
       .filter(t => {
+        if (moved.has(String(t.id))) return false;
         const d = dsEffective(String(t.id));
         return !(d && DAYSTART_LEAVES_WAITING.includes(d.action));
       })
       .map(t => ({ key: String(t.id), text: t.text, board: 'waiting', urgent: false, rank: 0 }));
+  }
+
+  // '오늘로'로 끌어온 기다리는 중 항목 중 지금도 waiting에 있고 다른 정비 답으로 빠져나가지 않는 것
+  function dsWaitingToToday() {
+    const out = [];
+    ds.toToday.forEach(k => {
+      const t = boards.waiting.find(x => String(x.id) === k);
+      if (!t) return;
+      const d = dsEffective(k);
+      if (d && DAYSTART_LEAVES_WAITING.includes(d.action)) return;
+      out.push(t);
+    });
+    return out;
   }
 
   // 초안의 순서(ds.order)를 먼저 따르고, 거기 없는 항목(새로 들어온 것)은 아래에 붙임
@@ -7446,6 +7466,7 @@
       else if (a === 'toWaiting') c.waiting++;
       else if (a === 'keep' && s.d.snooze) c.snooze++;
     });
+    c.today += dsWaitingToToday().length;
     const postponed = ds.overload && ds.overload.ids ? ds.overload.ids.length : 0;
     const newTask = c.follow + c.repeat + ds.prep.filter(p => p.text.trim()).length;
     const entries = dsBuildOrderEntries();
@@ -7943,7 +7964,7 @@
   }
 
   // 순서 목록 한 개(오늘 할 일 / 기다리는 중) — 한 줄에 하나, 손잡이(⋮⋮)는 순서 바꾸기 모드와 같은 모양.
-  function dsBuildReorderList(keys, byKey, setKeys, label, deletable) {
+  function dsBuildReorderList(keys, byKey, setKeys, label, deletable, extra) {
     const list = dsEl('ol', 'search-list day-start__order-list');
     list.setAttribute('aria-label', label);
     const moveTo = (from, to, focusKey) => {
@@ -7978,6 +7999,8 @@
         });
         li.appendChild(del);
       }
+      const extraBtn = extra ? extra(key, e) : null;
+      if (extraBtn) li.appendChild(extraBtn);
       const up = dsEl('button', 'day-start__move', '↑');
       up.type = 'button';
       up.setAttribute('aria-label', '위로');
@@ -8013,7 +8036,21 @@
       ? '급한 것부터 순서를 제안했어요. 바꾸고 싶으면 끌어 주세요.'
       : '오늘 할 일이 아직 없어요. 아래에서 추가할 수 있어요.'));
     if (keys.length) {
-      dayStartBodyEl.appendChild(dsBuildReorderList(keys, byKey, (next) => { ds.order = next; }, '오늘 실행 순서', true));
+      // 기다리는 중에서 끌어온 항목에는 '대기중으로' — 잘못 옮겼을 때 되돌림(확정 전까지는 이 화면의 임시 상태)
+      const backBtn = (key) => {
+        if (!ds.toToday.includes(key)) return null;
+        const b = dsEl('button', 'day-start__change', '대기중으로');
+        b.type = 'button';
+        b.setAttribute('aria-label', '다시 기다리는 중으로');
+        b.addEventListener('click', () => {
+          ds.toToday = ds.toToday.filter(k => k !== key);
+          ds.order = ds.order.filter(k => k !== key);
+          dsSaveDraft();
+          dsRender();
+        });
+        return b;
+      };
+      dayStartBodyEl.appendChild(dsBuildReorderList(keys, byKey, (next) => { ds.order = next; }, '오늘 실행 순서', true, backBtn));
     }
 
     // 보드 맨 아래 "+ 끄적이기..." 줄과 같은 입력줄 — 오늘 할 일을 바로 추가
@@ -8046,11 +8083,23 @@
 
     // 기다리는 중 — waiting 카드에서 보이는 순서(정비 답을 반영한 뒤 남는 것). 두 개 이상일 때만
     const wEntries = dsBuildWaitingEntries();
-    if (wEntries.length >= 2) {
+    if (wEntries.length >= 1) {
       const wBy = new Map(wEntries.map(e => [e.key, e]));
       const wKeys = dsMergeOrder(wEntries, ds.orderW);
       dayStartBodyEl.appendChild(dsEl('h3', 'search-group-title day-start__wtitle', '기다리는 중 ⏳'));
-      dayStartBodyEl.appendChild(dsBuildReorderList(wKeys, wBy, (next) => { ds.orderW = next; }, 'waiting 순서', false));
+      // '오늘로' — 오늘 순서 맨 아래에 붙고, 거기서 ↑로 원하는 자리까지 올림
+      const toTodayBtn = (key) => {
+        const b = dsEl('button', 'day-start__change', '오늘로');
+        b.type = 'button';
+        b.setAttribute('aria-label', '오늘 할 일로 옮기기');
+        b.addEventListener('click', () => {
+          if (!ds.toToday.includes(key)) ds.toToday.push(key);
+          dsSaveDraft();
+          dsRender();
+        });
+        return b;
+      };
+      dayStartBodyEl.appendChild(dsBuildReorderList(wKeys, wBy, (next) => { ds.orderW = next; }, 'waiting 순서', false, toTodayBtn));
     }
     // 일정 단계를 건너뛴(연결 안 한) 경우에만 — 나중에라도 연결할 수 있는 입구
     if (gcalConfigured() && !gcalGranted()) {
@@ -8310,6 +8359,13 @@
           return;
         }
         dsApplyOne(item, d, counter, newTasks);
+        changed = true;
+      });
+      // 오늘 순서 화면에서 '오늘로'로 끌어온 기다리는 중 항목 — waiting에서 gotta do로 옮김(날짜 값은 정리)
+      dsWaitingToToday().forEach(t => {
+        dsDetach('waiting', t);
+        dsScrub(t);
+        boards.today.push(t);
         changed = true;
       });
       // 오늘 너무 많아서 '내일로 미룰래요?'에 네 — 일반 항목은 내일 날짜로 pray later에, 오늘 마감은 날짜만 내일로
