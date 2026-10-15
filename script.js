@@ -615,6 +615,99 @@
     showToast('복구했어요 (Ctrl+Z로 되돌릴 수 있어요)');
   }
 
+  // ─────────────────────────────
+  // 클라우드 맞추기 — 동기화가 어긋났을 때 사람이 직접 "이게 마지막 값"을 고름.
+  // 이 기기 → 클라우드(클라우드를 이 기기 내용으로 덮어씀) / 클라우드 → 이 기기(이 기기를 클라우드 내용으로 바꿈).
+  // 둘 다 합치지 않고 한쪽으로 통째로 맞추며, 지울 쪽의 요약과 마지막 저장 시각을 보여주고 한 번 더 확인함.
+  // ─────────────────────────────
+  function formatCloudTime(iso) {
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return '알 수 없음';
+    const pad = n => String(n).padStart(2, '0');
+    return (d.getMonth() + 1) + '/' + d.getDate() + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+  }
+
+  // 클라우드의 지금 값. { boards, updatedAt } · 행이 없으면 { empty: true } · 못 읽으면 null
+  async function fetchCloudSnapshot() {
+    if (!cloudClient || !activeRowId) return null;
+    try {
+      const { data, error } = await cloudClient
+        .from('postit_data')
+        .select('data, updated_at')
+        .eq('id', activeRowId)
+        .maybeSingle();
+      if (error) throw error;
+      if (!data || !data.data) return { empty: true };
+      return { boards: normalizeBoards(data.data), updatedAt: data.updated_at };
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function cloudSummaryText(snap) {
+    if (!snap) return '불러오지 못했어요';
+    if (snap.empty) return '저장된 데이터 없음';
+    return summarizeBoards(snap.boards) + '\n마지막 저장 ' + formatCloudTime(snap.updatedAt);
+  }
+
+  async function pushDeviceToCloud() {
+    const snap = await fetchCloudSnapshot();
+    if (!snap) { showToast('클라우드에 연결하지 못했어요'); return; }
+    const ok = await showConfirm({
+      title: '클라우드를 이 기기 값으로 바꿀까요?',
+      message: '이 기기\n' + summarizeBoards(boards) + '\n\n클라우드 (지워져요)\n' + cloudSummaryText(snap) +
+        '\n\n다른 기기는 새로고침해야 이 값을 받아요. 그 전에 거기서 수정하면 옛 내용이 섞일 수 있어요.',
+      confirmLabel: '클라우드에 덮어쓰기',
+      cancelLabel: '취소'
+    });
+    if (!ok) return;
+    clearTimeout(cloudPushTimer);
+    const newUpdatedAt = new Date().toISOString();
+    try {
+      let res = await cloudClient
+        .from('postit_data')
+        .update({ data: boards, updated_at: newUpdatedAt })
+        .eq('id', activeRowId)
+        .select('updated_at');
+      if (res.error) throw res.error;
+      if (!res.data || !res.data.length) {
+        res = await cloudClient.from('postit_data').insert({ id: activeRowId, data: boards, updated_at: newUpdatedAt });
+        if (res.error) throw res.error;
+      }
+      lastKnownServerUpdatedAt = newUpdatedAt;
+      showToast('클라우드를 이 기기 값으로 바꿨어요');
+    } catch (e) {
+      showToast('클라우드에 저장하지 못했어요');
+    }
+  }
+
+  async function pullCloudToDevice() {
+    const snap = await fetchCloudSnapshot();
+    if (!snap) { showToast('클라우드에 연결하지 못했어요'); return; }
+    if (snap.empty) { showToast('클라우드에 저장된 데이터가 없어요'); return; }
+    const ok = await showConfirm({
+      title: '이 기기를 클라우드 값으로 바꿀까요?',
+      message: '클라우드\n' + cloudSummaryText(snap) + '\n\n이 기기 (지워져요)\n' + summarizeBoards(boards) +
+        '\n\n되돌릴 수 없어요. 필요하면 먼저 백업 데이터를 받아 두세요.',
+      confirmLabel: '이 기기에 가져오기',
+      cancelLabel: '취소'
+    });
+    if (!ok) return;
+    clearTimeout(cloudPushTimer);
+    boards = snap.boards;
+    resetHistory();
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(boards));
+    } catch (e) {
+      /* ignore */
+    }
+    lastKnownServerUpdatedAt = snap.updatedAt;
+    closeArchivePanel();
+    closeSearchPanel();
+    renderAll();
+    showToast('클라우드 값을 가져왔어요');
+  }
+
   async function openBackupModal() {
     if (isFocusLocked() || isConfirmModalOpen()) return;
     const okBtn = document.getElementById('confirmOk');
@@ -622,12 +715,59 @@
 
     const card = document.createElement('div');
     card.className = 'backup-card';
-    const hint = document.createElement('p');
-    hint.className = 'backup-hint';
-    hint.textContent = '지금까지 쌓인 모든 데이터를 파일(JSON)로 저장하거나, 저장해 둔 파일로 되돌려요. 숨겨 둔 보드와 삭제 기록까지 전부 들어가요.';
-    const summary = document.createElement('p');
-    summary.className = 'backup-summary';
-    summary.textContent = '지금 데이터: ' + summarizeBoards(boards);
+    let pickedFile = null;
+    let cloudAction = null;
+
+    // 위쪽: 클라우드 맞추기 (로그인했을 때만)
+    const cloudTitle = document.createElement('p');
+    cloudTitle.className = 'backup-section-title';
+    cloudTitle.textContent = '클라우드 맞추기';
+    card.appendChild(cloudTitle);
+    if (cloudClient && activeRowId) {
+      const hint = document.createElement('p');
+      hint.className = 'backup-hint';
+      hint.textContent = '기기마다 내용이 다를 때, 어느 쪽이 마지막 값인지 직접 골라 한쪽으로 맞춰요. 합치지 않고 통째로 바꿔요.';
+      const deviceLine = document.createElement('p');
+      deviceLine.className = 'backup-summary';
+      deviceLine.textContent = '이 기기: ' + summarizeBoards(boards);
+      const cloudLine = document.createElement('p');
+      cloudLine.className = 'backup-summary';
+      cloudLine.textContent = '클라우드: 불러오는 중…';
+      const pushBtn = document.createElement('button');
+      pushBtn.type = 'button';
+      pushBtn.className = 'confirm-btn backup-restore-btn';
+      pushBtn.textContent = '이 기기 값을 클라우드에 저장';
+      pushBtn.disabled = true;
+      const pullBtn = document.createElement('button');
+      pullBtn.type = 'button';
+      pullBtn.className = 'confirm-btn backup-restore-btn';
+      pullBtn.textContent = '클라우드 값을 이 기기로 가져오기';
+      pullBtn.disabled = true;
+      pushBtn.addEventListener('click', () => { cloudAction = pushDeviceToCloud; cancelBtn.click(); });
+      pullBtn.addEventListener('click', () => { cloudAction = pullCloudToDevice; cancelBtn.click(); });
+      card.append(hint, deviceLine, cloudLine, pushBtn, pullBtn);
+      fetchCloudSnapshot().then(snap => {
+        if (!cloudLine.isConnected) return;
+        cloudLine.textContent = '클라우드: ' + cloudSummaryText(snap).replace('\n', ' · ');
+        pushBtn.disabled = !snap;
+        pullBtn.disabled = !snap || !!snap.empty;
+      });
+    } else {
+      const hint = document.createElement('p');
+      hint.className = 'backup-hint';
+      hint.textContent = '로그인하면 여기서 클라우드와 이 기기를 맞출 수 있어요.';
+      card.appendChild(hint);
+    }
+
+    // 아래쪽: 백업 / 복구 (파일)
+    const divider = document.createElement('hr');
+    divider.className = 'backup-divider';
+    const backupTitle = document.createElement('p');
+    backupTitle.className = 'backup-section-title';
+    backupTitle.textContent = '백업 / 복구 (파일)';
+    const backupHint = document.createElement('p');
+    backupHint.className = 'backup-hint';
+    backupHint.textContent = '지금까지 쌓인 모든 데이터를 파일(JSON)로 저장하거나, 저장해 둔 파일로 되돌려요. 숨겨 둔 보드와 삭제 기록까지 전부 들어가요.';
     const restoreBtn = document.createElement('button');
     restoreBtn.type = 'button';
     restoreBtn.className = 'confirm-btn backup-restore-btn';
@@ -636,33 +776,31 @@
     fileInput.type = 'file';
     fileInput.accept = 'application/json,.json';
     fileInput.hidden = true;
-    let pickedFile = null;
     restoreBtn.addEventListener('click', () => fileInput.click());
     fileInput.addEventListener('change', () => {
       pickedFile = fileInput.files && fileInput.files[0];
       if (pickedFile) cancelBtn.click(); // 이 모달을 닫고 아래에서 복구 확인 모달로 넘어감
     });
-    card.appendChild(hint);
-    card.appendChild(summary);
-    card.appendChild(restoreBtn);
-    card.appendChild(fileInput);
+    card.append(divider, backupTitle, backupHint, restoreBtn, fileInput);
 
     const exportRequested = await showConfirm({
-      title: '백업 / 복구',
+      title: '클라우드 / 백업',
       content: card,
-      confirmLabel: '내보내기',
+      confirmLabel: '백업 데이터 받기',
       cancelLabel: '닫기'
     });
     if (exportRequested) downloadBackup();
+    else if (cloudAction) await cloudAction();
     else if (pickedFile) await restoreFromFile(pickedFile);
   }
 
   // ─────────────────────────────
-  // 검색어가 없을 때의 제안 — 세 섹션, 각각 최대 4개(넘는 건 그냥 안 보여줌).
+  // 검색어가 없을 때의 제안 — 네 섹션, 각각 최대 4개(넘는 건 그냥 안 보여줌).
   //  · 챙길 것: 기한/회신 예정일이 오늘이거나 지남, 하위 항목이 거의 끝남.
   //    이유를 태그로 달아 한 줄로 합침(지난 것 → 오늘 → 마무리만 남은 것 순).
   //  · 오래 묵은 것: someday/waiting 중 2주 넘게 손 안 댄 것.
   //  · 최근 완료: 최근 3일 안에 끝낸 것.
+  //  · 자주 한 것: 최근 30일 안에 2일 이상 끝냈고 지금 열려 있지 않은 것.
   // 한 항목은 위 섹션에만 나옴. lupin/gone은 여기서도 제외.
   // ─────────────────────────────
   const SUGGEST_LIMIT = 4;
@@ -684,6 +822,28 @@
     if (subs.length >= 1 && open === 0) return ['하위 다 끝남'];
     if (subs.length >= 2 && open === 1) return ['하위 1개 남음'];
     return [];
+  }
+
+  // 최근 30일 안에 2일 이상 끝냈고 같은 제목이 열려 있지 않은 일(많이 한 순)
+  function collectRepeatedTasks() {
+    const norm = (text) => String(text || '').replace(/\s+/g, ' ').trim().toLowerCase();
+    const openTexts = new Set();
+    BOARD_IDS.forEach(b => boards[b].forEach(t => { if (!t.done) openTexts.add(norm(t.text)); }));
+    const groups = new Map();
+    collectArchiveEntries().forEach(e => {
+      const t = e.task;
+      if (!t.doneAt || -daysUntilDue(t.doneAt) > 30) return;
+      const k = norm(t.text);
+      if (!k || openTexts.has(k)) return;
+      const g = groups.get(k) || { dates: new Set(), task: t, source: e.source };
+      g.dates.add(t.doneAt);
+      if (t.doneAt >= g.task.doneAt) { g.task = t; g.source = e.source; }
+      groups.set(k, g);
+    });
+    return Array.from(groups.values())
+      .filter(g => g.dates.size >= 2)
+      .sort((a, b) => b.dates.size - a.dates.size)
+      .map(g => ({ task: g.task, source: g.source, count: g.dates.size }));
   }
 
   // opts.all — 하루 시작하기(정비하기)용: 개수 제한/무작위 선정 없이 전부, '최근 완료'는 뺌.
@@ -765,10 +925,18 @@
       .slice(0, SUGGEST_LIMIT)
       .map(e => ({ task: e.task, boardId: e.source, tags: [e.task.doneAt.slice(5).replace('-', '/')], done: true }));
 
+    // 4) 자주 한 것 — 최근 한 달 사이 여러 날 끝냈고 지금은 열려 있지 않은 일(하루 시작하기에서 묻지 않고 여기서만 보여줌)
+    const recentIds = new Set(recent.map(r => r.task.id));
+    const repeated = all ? [] : collectRepeatedTasks()
+      .filter(r => !recentIds.has(r.task.id))
+      .slice(0, SUGGEST_LIMIT)
+      .map(r => ({ task: r.task, boardId: r.source, tags: [r.count + '번'], done: true }));
+
     return [
       { label: '챙길 것', items: watchTop },
       { label: '오래 묵은 것', items: staleTop },
-      { label: '최근 완료', items: recent }
+      { label: '최근 완료', items: recent },
+      { label: '자주 한 것', items: repeated }
     ].filter(sec => sec.items.length);
   }
 
@@ -6611,7 +6779,6 @@
   const DAYSTART_WAIT_MAX = 3;             // 그 질문은 한 번에 오래된 순으로 이만큼까지만
   const DAYSTART_WAIT_DAYS = 3;            // waiting이 이만큼 손을 안 탔으면 '후속 연락을 하실래요?'를 물음
   const DAYSTART_NOREPLY_DAYS = 7;         // 확인 날짜 없는 waiting이 이만큼 묵으면 '3일 뒤에 확인할까요?'
-  const DAYSTART_REPEAT_MAX = 3;           // 반복되는 일 질문은 한 번에 이만큼까지만
   const DAYSTART_TODAY_LIMIT = 8;          // 오늘 할 일이 이보다 많으면 '내일로 미룰래요?'
   const DAYSTART_FOCUS_MIN = 25;           // 확정 뒤 '바로 시작할래요?'의 포커스 시간(분)
 
@@ -6824,7 +6991,7 @@
 
   // ───── 초안 저장/불러오기 ─────
   function dsFreshDraft() {
-    return { date: todayStr(), step: 'tidy', decisions: {}, log: [], prep: [], order: [], orderW: [], seq: 1, overload: undefined };
+    return { date: todayStr(), step: 'tidy', decisions: {}, log: [], prep: [], order: [], orderW: [], toToday: [], seq: 1, overload: undefined };
   }
 
   function dsLoadDraft() {
@@ -6843,6 +7010,7 @@
             prep: d.prep.filter(p => p && typeof p.key === 'string' && typeof p.text === 'string'),
             order: d.order.filter(k => typeof k === 'string'),
             orderW: Array.isArray(d.orderW) ? d.orderW.filter(k => typeof k === 'string') : [],
+            toToday: Array.isArray(d.toToday) ? d.toToday.filter(k => typeof k === 'string') : [],
             seq: Number(d.seq) > 0 ? Number(d.seq) : 1,
             overload: d.overload && typeof d.overload === 'object' ? d.overload : undefined
           };
@@ -7026,25 +7194,6 @@
       if (byTask.has(newer.task.id)) return;
       push({ task: newer.task, boardId: newer.boardId, tags: ['같은 제목'], group: 'dup', dupOf: older.task });
     });
-    // 최근 한 달 사이 여러 날 끝낸 일(지금 열려 있지 않은 것) — 오늘도 하자고 물음
-    const openTexts = new Set(open.map(o => dsNorm(o.task.text)));
-    const recent = new Map();
-    boards.archive.forEach(t => {
-      if (!t.doneAt || -daysUntilDue(t.doneAt) > 30) return;
-      const k = dsNorm(t.text);
-      if (!k || openTexts.has(k)) return;
-      const r = recent.get(k) || { dates: new Set(), latest: t };
-      r.dates.add(t.doneAt);
-      if (t.doneAt >= r.latest.doneAt) r.latest = t;
-      recent.set(k, r);
-    });
-    Array.from(recent.values())
-      .filter(r => r.dates.size >= 2)
-      .sort((a, b) => b.dates.size - a.dates.size)
-      .forEach(r => {
-        if (items.filter(i => i.group === 'repeat').length >= DAYSTART_REPEAT_MAX) return;
-        push({ task: r.latest, boardId: 'archive', key: 'r:' + r.latest.id, tags: [r.dates.size + '번'], group: 'repeat', count: r.dates.size });
-      });
     // 방금 미룬 것은 날짜가 정하는 항목이 아니면 잠시 건너뜀
     const rank = k => DAYSTART_GROUPS.findIndex(g => g.key === k);
     return items
@@ -7104,8 +7253,6 @@
         return { text: item.tags[0] + ' 기다리는 중인데, 후속 연락을 하실래요?', yes: follow, no: snooze };
       case 'dup':
         return { text: '같은 제목이 두 개 있는데, 하나로 합칠래요?', yes: { action: 'merge', intoId: item.dupOf.id }, no: snooze };
-      case 'repeat':
-        return { text: '최근 한 달 동안 ' + item.count + '번 한 일인데, 오늘도 하실래요?', yes: { action: 'repeat' }, no: snooze };
       case 'stale':
         if (item.boardId === 'waiting') return { text: item.tags[0] + ' 기다리는 중인데, 후속 연락을 하실래요?', yes: follow, no: snooze };
         return { text: item.tags[0] + ' 그대로인데, 오늘 해볼래요?', yes: { action: 'today' }, no: snooze };
@@ -7242,6 +7389,10 @@
         entries.push({ key: 'f:' + item.task.id, text: d.text.trim(), origin: '', urgent: false, rank: 3, board: 'today' });
       }
     });
+    // 오늘 순서 화면에서 '오늘로'를 눌러 기다리는 중에서 끌어온 것 — 확정하면 waiting에서 gotta do로 옮겨감
+    dsWaitingToToday().forEach(t => {
+      entries.push({ key: String(t.id), text: t.text, origin: '', urgent: !!t.urgent, rank: 9, board: 'waiting' });
+    });
     ds.prep.forEach(p => {
       if (p.text.trim() && (p.date || todayStr()) === today) {
         entries.push({ key: p.key, text: p.text.trim(), origin: '', urgent: false, rank: 8, board: 'today' });
@@ -7255,12 +7406,27 @@
   const DAYSTART_LEAVES_WAITING = ['today', 'self', 'toSomeday', 'drop', 'done', 'resolved', 'later', 'merge', 'follow', 'setReply'];
   function dsBuildWaitingEntries() {
     const today = todayStr();
+    const moved = new Set(ds.toToday);
     return sortByOrder(boards.waiting.filter(t => !(t.replyDate && t.replyDate > today)))
       .filter(t => {
+        if (moved.has(String(t.id))) return false;
         const d = dsEffective(String(t.id));
         return !(d && DAYSTART_LEAVES_WAITING.includes(d.action));
       })
       .map(t => ({ key: String(t.id), text: t.text, board: 'waiting', urgent: false, rank: 0 }));
+  }
+
+  // '오늘로'로 끌어온 기다리는 중 항목 중 지금도 waiting에 있고 다른 정비 답으로 빠져나가지 않는 것
+  function dsWaitingToToday() {
+    const out = [];
+    ds.toToday.forEach(k => {
+      const t = boards.waiting.find(x => String(x.id) === k);
+      if (!t) return;
+      const d = dsEffective(k);
+      if (d && DAYSTART_LEAVES_WAITING.includes(d.action)) return;
+      out.push(t);
+    });
+    return out;
   }
 
   // 초안의 순서(ds.order)를 먼저 따르고, 거기 없는 항목(새로 들어온 것)은 아래에 붙임
@@ -7300,6 +7466,7 @@
       else if (a === 'toWaiting') c.waiting++;
       else if (a === 'keep' && s.d.snooze) c.snooze++;
     });
+    c.today += dsWaitingToToday().length;
     const postponed = ds.overload && ds.overload.ids ? ds.overload.ids.length : 0;
     const newTask = c.follow + c.repeat + ds.prep.filter(p => p.text.trim()).length;
     const entries = dsBuildOrderEntries();
@@ -7797,7 +7964,7 @@
   }
 
   // 순서 목록 한 개(오늘 할 일 / 기다리는 중) — 한 줄에 하나, 손잡이(⋮⋮)는 순서 바꾸기 모드와 같은 모양.
-  function dsBuildReorderList(keys, byKey, setKeys, label, deletable) {
+  function dsBuildReorderList(keys, byKey, setKeys, label, deletable, extra) {
     const list = dsEl('ol', 'search-list day-start__order-list');
     list.setAttribute('aria-label', label);
     const moveTo = (from, to, focusKey) => {
@@ -7832,6 +7999,8 @@
         });
         li.appendChild(del);
       }
+      const extraBtn = extra ? extra(key, e) : null;
+      if (extraBtn) li.appendChild(extraBtn);
       const up = dsEl('button', 'day-start__move', '↑');
       up.type = 'button';
       up.setAttribute('aria-label', '위로');
@@ -7900,11 +8069,23 @@
 
     // 기다리는 중 — waiting 카드에서 보이는 순서(정비 답을 반영한 뒤 남는 것). 두 개 이상일 때만
     const wEntries = dsBuildWaitingEntries();
-    if (wEntries.length >= 2) {
+    if (wEntries.length >= 1) {
       const wBy = new Map(wEntries.map(e => [e.key, e]));
       const wKeys = dsMergeOrder(wEntries, ds.orderW);
       dayStartBodyEl.appendChild(dsEl('h3', 'search-group-title day-start__wtitle', '기다리는 중 ⏳'));
-      dayStartBodyEl.appendChild(dsBuildReorderList(wKeys, wBy, (next) => { ds.orderW = next; }, 'waiting 순서', false));
+      // '오늘로' — 오늘 순서 맨 아래에 붙고, 거기서 ↑로 원하는 자리까지 올림
+      const toTodayBtn = (key) => {
+        const b = dsEl('button', 'day-start__change', '오늘 하기');
+        b.type = 'button';
+        b.setAttribute('aria-label', '오늘 할 일로 옮기기');
+        b.addEventListener('click', () => {
+          if (!ds.toToday.includes(key)) ds.toToday.push(key);
+          dsSaveDraft();
+          dsRender();
+        });
+        return b;
+      };
+      dayStartBodyEl.appendChild(dsBuildReorderList(wKeys, wBy, (next) => { ds.orderW = next; }, 'waiting 순서', false, toTodayBtn));
     }
     // 일정 단계를 건너뛴(연결 안 한) 경우에만 — 나중에라도 연결할 수 있는 입구
     if (gcalConfigured() && !gcalGranted()) {
@@ -8164,6 +8345,13 @@
           return;
         }
         dsApplyOne(item, d, counter, newTasks);
+        changed = true;
+      });
+      // 오늘 순서 화면에서 '오늘로'로 끌어온 기다리는 중 항목 — waiting에서 gotta do로 옮김(날짜 값은 정리)
+      dsWaitingToToday().forEach(t => {
+        dsDetach('waiting', t);
+        dsScrub(t);
+        boards.today.push(t);
         changed = true;
       });
       // 오늘 너무 많아서 '내일로 미룰래요?'에 네 — 일반 항목은 내일 날짜로 pray later에, 오늘 마감은 날짜만 내일로
