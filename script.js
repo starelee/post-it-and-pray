@@ -615,6 +615,99 @@
     showToast('복구했어요 (Ctrl+Z로 되돌릴 수 있어요)');
   }
 
+  // ─────────────────────────────
+  // 클라우드 맞추기 — 동기화가 어긋났을 때 사람이 직접 "이게 마지막 값"을 고름.
+  // 이 기기 → 클라우드(클라우드를 이 기기 내용으로 덮어씀) / 클라우드 → 이 기기(이 기기를 클라우드 내용으로 바꿈).
+  // 둘 다 합치지 않고 한쪽으로 통째로 맞추며, 지울 쪽의 요약과 마지막 저장 시각을 보여주고 한 번 더 확인함.
+  // ─────────────────────────────
+  function formatCloudTime(iso) {
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return '알 수 없음';
+    const pad = n => String(n).padStart(2, '0');
+    return (d.getMonth() + 1) + '/' + d.getDate() + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+  }
+
+  // 클라우드의 지금 값. { boards, updatedAt } · 행이 없으면 { empty: true } · 못 읽으면 null
+  async function fetchCloudSnapshot() {
+    if (!cloudClient || !activeRowId) return null;
+    try {
+      const { data, error } = await cloudClient
+        .from('postit_data')
+        .select('data, updated_at')
+        .eq('id', activeRowId)
+        .maybeSingle();
+      if (error) throw error;
+      if (!data || !data.data) return { empty: true };
+      return { boards: normalizeBoards(data.data), updatedAt: data.updated_at };
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function cloudSummaryText(snap) {
+    if (!snap) return '불러오지 못했어요';
+    if (snap.empty) return '저장된 데이터 없음';
+    return summarizeBoards(snap.boards) + '\n마지막 저장 ' + formatCloudTime(snap.updatedAt);
+  }
+
+  async function pushDeviceToCloud() {
+    const snap = await fetchCloudSnapshot();
+    if (!snap) { showToast('클라우드에 연결하지 못했어요'); return; }
+    const ok = await showConfirm({
+      title: '클라우드를 이 기기 값으로 바꿀까요?',
+      message: '이 기기\n' + summarizeBoards(boards) + '\n\n클라우드 (지워져요)\n' + cloudSummaryText(snap) +
+        '\n\n다른 기기는 새로고침해야 이 값을 받아요. 그 전에 거기서 수정하면 옛 내용이 섞일 수 있어요.',
+      confirmLabel: '클라우드에 덮어쓰기',
+      cancelLabel: '취소'
+    });
+    if (!ok) return;
+    clearTimeout(cloudPushTimer);
+    const newUpdatedAt = new Date().toISOString();
+    try {
+      let res = await cloudClient
+        .from('postit_data')
+        .update({ data: boards, updated_at: newUpdatedAt })
+        .eq('id', activeRowId)
+        .select('updated_at');
+      if (res.error) throw res.error;
+      if (!res.data || !res.data.length) {
+        res = await cloudClient.from('postit_data').insert({ id: activeRowId, data: boards, updated_at: newUpdatedAt });
+        if (res.error) throw res.error;
+      }
+      lastKnownServerUpdatedAt = newUpdatedAt;
+      showToast('클라우드를 이 기기 값으로 바꿨어요');
+    } catch (e) {
+      showToast('클라우드에 저장하지 못했어요');
+    }
+  }
+
+  async function pullCloudToDevice() {
+    const snap = await fetchCloudSnapshot();
+    if (!snap) { showToast('클라우드에 연결하지 못했어요'); return; }
+    if (snap.empty) { showToast('클라우드에 저장된 데이터가 없어요'); return; }
+    const ok = await showConfirm({
+      title: '이 기기를 클라우드 값으로 바꿀까요?',
+      message: '클라우드\n' + cloudSummaryText(snap) + '\n\n이 기기 (지워져요)\n' + summarizeBoards(boards) +
+        '\n\n되돌릴 수 없어요. 필요하면 먼저 백업 데이터를 받아 두세요.',
+      confirmLabel: '이 기기에 가져오기',
+      cancelLabel: '취소'
+    });
+    if (!ok) return;
+    clearTimeout(cloudPushTimer);
+    boards = snap.boards;
+    resetHistory();
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(boards));
+    } catch (e) {
+      /* ignore */
+    }
+    lastKnownServerUpdatedAt = snap.updatedAt;
+    closeArchivePanel();
+    closeSearchPanel();
+    renderAll();
+    showToast('클라우드 값을 가져왔어요');
+  }
+
   async function openBackupModal() {
     if (isFocusLocked() || isConfirmModalOpen()) return;
     const okBtn = document.getElementById('confirmOk');
@@ -622,12 +715,59 @@
 
     const card = document.createElement('div');
     card.className = 'backup-card';
-    const hint = document.createElement('p');
-    hint.className = 'backup-hint';
-    hint.textContent = '지금까지 쌓인 모든 데이터를 파일(JSON)로 저장하거나, 저장해 둔 파일로 되돌려요. 숨겨 둔 보드와 삭제 기록까지 전부 들어가요.';
-    const summary = document.createElement('p');
-    summary.className = 'backup-summary';
-    summary.textContent = '지금 데이터: ' + summarizeBoards(boards);
+    let pickedFile = null;
+    let cloudAction = null;
+
+    // 위쪽: 클라우드 맞추기 (로그인했을 때만)
+    const cloudTitle = document.createElement('p');
+    cloudTitle.className = 'backup-section-title';
+    cloudTitle.textContent = '클라우드 맞추기';
+    card.appendChild(cloudTitle);
+    if (cloudClient && activeRowId) {
+      const hint = document.createElement('p');
+      hint.className = 'backup-hint';
+      hint.textContent = '기기마다 내용이 다를 때, 어느 쪽이 마지막 값인지 직접 골라 한쪽으로 맞춰요. 합치지 않고 통째로 바꿔요.';
+      const deviceLine = document.createElement('p');
+      deviceLine.className = 'backup-summary';
+      deviceLine.textContent = '이 기기: ' + summarizeBoards(boards);
+      const cloudLine = document.createElement('p');
+      cloudLine.className = 'backup-summary';
+      cloudLine.textContent = '클라우드: 불러오는 중…';
+      const pushBtn = document.createElement('button');
+      pushBtn.type = 'button';
+      pushBtn.className = 'confirm-btn backup-restore-btn';
+      pushBtn.textContent = '이 기기 값을 클라우드에 저장';
+      pushBtn.disabled = true;
+      const pullBtn = document.createElement('button');
+      pullBtn.type = 'button';
+      pullBtn.className = 'confirm-btn backup-restore-btn';
+      pullBtn.textContent = '클라우드 값을 이 기기로 가져오기';
+      pullBtn.disabled = true;
+      pushBtn.addEventListener('click', () => { cloudAction = pushDeviceToCloud; cancelBtn.click(); });
+      pullBtn.addEventListener('click', () => { cloudAction = pullCloudToDevice; cancelBtn.click(); });
+      card.append(hint, deviceLine, cloudLine, pushBtn, pullBtn);
+      fetchCloudSnapshot().then(snap => {
+        if (!cloudLine.isConnected) return;
+        cloudLine.textContent = '클라우드: ' + cloudSummaryText(snap).replace('\n', ' · ');
+        pushBtn.disabled = !snap;
+        pullBtn.disabled = !snap || !!snap.empty;
+      });
+    } else {
+      const hint = document.createElement('p');
+      hint.className = 'backup-hint';
+      hint.textContent = '로그인하면 여기서 클라우드와 이 기기를 맞출 수 있어요.';
+      card.appendChild(hint);
+    }
+
+    // 아래쪽: 백업 / 복구 (파일)
+    const divider = document.createElement('hr');
+    divider.className = 'backup-divider';
+    const backupTitle = document.createElement('p');
+    backupTitle.className = 'backup-section-title';
+    backupTitle.textContent = '백업 / 복구 (파일)';
+    const backupHint = document.createElement('p');
+    backupHint.className = 'backup-hint';
+    backupHint.textContent = '지금까지 쌓인 모든 데이터를 파일(JSON)로 저장하거나, 저장해 둔 파일로 되돌려요. 숨겨 둔 보드와 삭제 기록까지 전부 들어가요.';
     const restoreBtn = document.createElement('button');
     restoreBtn.type = 'button';
     restoreBtn.className = 'confirm-btn backup-restore-btn';
@@ -636,24 +776,21 @@
     fileInput.type = 'file';
     fileInput.accept = 'application/json,.json';
     fileInput.hidden = true;
-    let pickedFile = null;
     restoreBtn.addEventListener('click', () => fileInput.click());
     fileInput.addEventListener('change', () => {
       pickedFile = fileInput.files && fileInput.files[0];
       if (pickedFile) cancelBtn.click(); // 이 모달을 닫고 아래에서 복구 확인 모달로 넘어감
     });
-    card.appendChild(hint);
-    card.appendChild(summary);
-    card.appendChild(restoreBtn);
-    card.appendChild(fileInput);
+    card.append(divider, backupTitle, backupHint, restoreBtn, fileInput);
 
     const exportRequested = await showConfirm({
-      title: '백업 / 복구',
+      title: '클라우드 / 백업',
       content: card,
-      confirmLabel: '내보내기',
+      confirmLabel: '백업 데이터 받기',
       cancelLabel: '닫기'
     });
     if (exportRequested) downloadBackup();
+    else if (cloudAction) await cloudAction();
     else if (pickedFile) await restoreFromFile(pickedFile);
   }
 
