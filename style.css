@@ -28,6 +28,7 @@
     .urgent-btn,
     .delete-btn,
     .move-btn,
+    .done-btn,
     .subtask-chip,
     .subtask-edit-btn,
     .subtask-reorder-btn,
@@ -2329,6 +2330,33 @@
   .move-btn:hover {
     opacity: 1;
     transform: scale(1.15);
+  }
+
+  /* waiting 줄 아래 아이콘 줄의 완료 버튼 — gotta do 체크박스와 같은 체크 SVG(.check-path)를 늘 보이게 씀 */
+  .done-btn {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2px 3px;
+    opacity: 0.6;
+    transition: opacity 0.15s var(--ease-ui), transform 0.15s var(--ease-ui);
+  }
+
+  .done-btn:hover {
+    opacity: 1;
+    transform: scale(1.15);
+  }
+
+  .done-btn-icon {
+    width: 15px;
+    height: 15px;
+    overflow: visible;
+  }
+
+  .done-btn-icon .check-path {
+    stroke: var(--accent);
+    stroke-dashoffset: 0;
   }
 
   .subtask-list {
