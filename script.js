@@ -644,6 +644,20 @@
     }
   }
 
+  // 이 기기와 클라우드 중 어느 쪽이 더 최근인지 한 줄(판단용). 알 수 없으면 빈 문자열
+  function cloudFreshnessText(snap) {
+    if (!snap || snap.empty) return '';
+    const parts = [];
+    if (localVersion !== syncedLocalVersion) parts.push('이 기기에 아직 클라우드에 못 올린 변경이 있어요');
+    const cloudMs = instantMs(snap.updatedAt);
+    const knownMs = lastKnownServerUpdatedAt ? instantMs(lastKnownServerUpdatedAt) : null;
+    if (cloudMs !== null && knownMs !== null) {
+      if (cloudMs > knownMs) parts.push('클라우드가 이 기기보다 더 최근이에요 (이 기기는 ' + formatCloudTime(lastKnownServerUpdatedAt) + ' 이후 못 받았어요)');
+      else if (!parts.length) parts.push('이 기기와 클라우드가 같은 시점이에요');
+    }
+    return parts.join('\n');
+  }
+
   function cloudSummaryText(snap) {
     if (!snap) return '불러오지 못했어요';
     if (snap.empty) return '저장된 데이터 없음';
@@ -675,6 +689,7 @@
         if (res.error) throw res.error;
       }
       lastKnownServerUpdatedAt = newUpdatedAt;
+      syncedLocalVersion = localVersion;
       showToast('클라우드를 이 기기 값으로 바꿨어요');
     } catch (e) {
       showToast('클라우드에 저장하지 못했어요');
@@ -702,6 +717,7 @@
       /* ignore */
     }
     lastKnownServerUpdatedAt = snap.updatedAt;
+    syncedLocalVersion = localVersion;
     closeArchivePanel();
     closeSearchPanel();
     renderAll();
@@ -745,10 +761,14 @@
       pullBtn.disabled = true;
       pushBtn.addEventListener('click', () => { cloudAction = pushDeviceToCloud; cancelBtn.click(); });
       pullBtn.addEventListener('click', () => { cloudAction = pullCloudToDevice; cancelBtn.click(); });
-      card.append(hint, deviceLine, cloudLine, pushBtn, pullBtn);
+      const freshLine = document.createElement('p');
+      freshLine.className = 'backup-summary backup-fresh';
+      card.append(hint, deviceLine, cloudLine, freshLine, pushBtn, pullBtn);
       fetchCloudSnapshot().then(snap => {
         if (!cloudLine.isConnected) return;
         cloudLine.textContent = '클라우드: ' + cloudSummaryText(snap).replace('\n', ' · ');
+        freshLine.textContent = cloudFreshnessText(snap);
+        freshLine.hidden = !freshLine.textContent;
         pushBtn.disabled = !snap;
         pullBtn.disabled = !snap || !!snap.empty;
       });
@@ -1195,6 +1215,8 @@
   // can tell whether the user changed something while it was loading and
   // back off instead of clobbering that edit with stale server data.
   let localVersion = 0;
+  // 클라우드와 마지막으로 맞춘 시점의 localVersion — localVersion과 다르면 이 기기에 아직 못 올린 변경이 있다는 뜻
+  let syncedLocalVersion = 0;
 
   function saveBoards() {
     localVersion++;
@@ -1299,6 +1321,7 @@
 
   async function pushToCloudNow() {
     if (!cloudClient || !activeRowId) return;
+    const versionAtPush = localVersion;
     const newUpdatedAt = new Date().toISOString();
     try {
       const { data, error } = await cloudClient
@@ -1311,6 +1334,7 @@
       if (data && data.length > 0) {
         // No one else wrote since we last synced — our write landed clean.
         lastKnownServerUpdatedAt = newUpdatedAt;
+        syncedLocalVersion = versionAtPush;
         return;
       }
       // Either the row moved (someone else wrote after our last known
@@ -1327,6 +1351,7 @@
         // safe to create it outright.
         await cloudClient.from('postit_data').insert({ id: activeRowId, data: boards, updated_at: newUpdatedAt });
         lastKnownServerUpdatedAt = newUpdatedAt;
+        syncedLocalVersion = versionAtPush;
         return;
       }
       // 글자를 고치는 중이거나 순서를 끄는 중이면 지금 화면을 통째로 갈아엎지 않고 잠깐 뒤에 다시 시도
@@ -1460,6 +1485,7 @@
           renderAll();
         }
         lastKnownServerUpdatedAt = data.updated_at;
+        syncedLocalVersion = localVersion;
       } else {
         markUserSynced(rowId);
         lastKnownServerUpdatedAt = null; // row doesn't exist yet — pushToCloudNow will insert it
@@ -1469,6 +1495,68 @@
       /* offline or cloud unavailable — keep using local data */
     }
   }
+
+  // ───── 돌아왔을 때 클라우드가 더 최근이면 불러오기 ─────
+  // 다른 기기가 저장한 뒤에도 켜 둔 탭은 옛 화면을 계속 보여줬음. 탭/앱으로 돌아올 때 한 번 확인해서
+  //  · 이 기기에 못 올린 변경이 없으면 클라우드 내용으로 그대로 바꾸고,
+  //  · 못 올린 변경이 있으면 덮어쓰지 않고 평소 저장 경로(조건부 쓰기 → 충돌 시 항목별 병합)에 맡김.
+  // 글자를 고치는 중/끄는 중/모달·하루 시작하기·포커스 카운트다운 중에는 건너뛰고 다음에 돌아올 때 다시 봄.
+  const CLOUD_RECHECK_MS = 5000;
+  let lastCloudCheckAt = 0;
+  let cloudCheckRunning = false;
+
+  function instantMs(iso) {
+    const t = new Date(iso).getTime();
+    return isNaN(t) ? null : t;
+  }
+
+  function canRefreshFromCloudNow() {
+    return !isCloudMergeBusy() && !isConfirmModalOpen() && !isFocusLocked();
+  }
+
+  async function refreshFromCloudIfNewer() {
+    if (!cloudClient || !activeRowId || !lastKnownServerUpdatedAt || cloudCheckRunning) return;
+    if (document.visibilityState === 'hidden' || Date.now() - lastCloudCheckAt < CLOUD_RECHECK_MS) return;
+    if (!canRefreshFromCloudNow()) return;
+    lastCloudCheckAt = Date.now();
+    cloudCheckRunning = true;
+    const versionAtStart = localVersion;
+    try {
+      const { data, error } = await cloudClient
+        .from('postit_data')
+        .select('data, updated_at')
+        .eq('id', activeRowId)
+        .maybeSingle();
+      if (error || !data || !data.data) return;
+      const cloudMs = instantMs(data.updated_at);
+      const knownMs = instantMs(lastKnownServerUpdatedAt);
+      if (cloudMs === null || knownMs === null || cloudMs <= knownMs) return; // 이 기기가 이미 아는 시점이거나 더 오래됨
+      if (localVersion !== syncedLocalVersion) { pushToCloud(); return; } // 못 올린 변경이 있음 — 병합은 저장 경로가 함
+      if (localVersion !== versionAtStart || !canRefreshFromCloudNow()) return; // 기다리는 사이 손댔으면 다음에
+      const cloudBoards = normalizeBoards(data.data);
+      lastKnownServerUpdatedAt = data.updated_at;
+      if (boardsContentKey(cloudBoards) !== boardsContentKey(boards)) {
+        boards = cloudBoards;
+        resetHistory();
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(boards));
+        } catch (e) {
+          /* ignore */
+        }
+        renderAll();
+        showToast('다른 기기의 변경을 불러왔어요');
+      }
+    } catch (e) {
+      /* offline — 다음에 돌아올 때 다시 */
+    } finally {
+      cloudCheckRunning = false;
+    }
+  }
+
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') refreshFromCloudIfNewer(); });
+  window.addEventListener('focus', refreshFromCloudIfNewer);
+  window.addEventListener('online', refreshFromCloudIfNewer);
+  window.addEventListener('pageshow', (e) => { if (e.persisted) refreshFromCloudIfNewer(); });
 
   const authRowEl = document.getElementById('authRow');
 
