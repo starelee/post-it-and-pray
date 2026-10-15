@@ -7529,6 +7529,11 @@
         row.appendChild(chip);
       });
       if (item.task.urgent) row.appendChild(makeSearchChip('긴급'));
+      // 언제 하기로 한 일인지: 날짜가 있는데 태그에 이미 마감/회신이 없으면 날짜 칩을 덧붙임
+      const dateKey = item.boardId === 'waiting' ? 'replyDate' : 'dueDate';
+      if (item.task[dateKey] && !item.tags.some(tag => /마감|회신/.test(tag))) {
+        row.appendChild(makeSearchChip((dateKey === 'replyDate' ? '회신 ' : '마감 ') + formatDueDateRelative(item.task[dateKey])));
+      }
     }
     li.appendChild(row);
 
