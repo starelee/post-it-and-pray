@@ -1092,7 +1092,7 @@
         if (sub.done) done++; else praying++;
       });
     });
-    // waiting은 항목 자체는 "완료" 개념이 없어(체크 없이 ←로만 돌아감) 여기
+    // waiting은 항목 자체는 체크박스가 없어(체크 없이 ←로만 돌아감) 여기
     // 세지 않지만, 그 안의 하위 항목은 실제로 끝낸 일이니 카운터엔 포함함
     // — 그렇다고 waiting 항목이 done 보관함(리갈패드)으로 넘어가진 않음.
     boards.waiting.forEach(task => {
@@ -2600,6 +2600,18 @@
       moveBtn.addEventListener('click', () => moveTask(boardId, otherId, task.id));
       controls.appendChild(moveBtn);
     });
+
+    // waiting은 체크박스가 없어서 끝내려면 gotta do로 옮긴 뒤 체크해야 했음 — someday 옆에서 바로 완료
+    if (boardId === 'waiting') {
+      const doneBtn = document.createElement('button');
+      doneBtn.className = 'done-btn';
+      doneBtn.type = 'button';
+      doneBtn.setAttribute('aria-label', '완료');
+      doneBtn.title = '완료';
+      doneBtn.appendChild(makeCheckSvg('done-btn-icon'));
+      doneBtn.addEventListener('click', () => completeWaitingTask(task.id));
+      controls.appendChild(doneBtn);
+    }
 
     const del = document.createElement('button');
     del.className = 'delete-btn';
@@ -4145,6 +4157,35 @@
         if (boardId === 'scheduled') render('today');
       }
     }, REORDER_DELAY_MS);
+  }
+
+  // waiting 항목을 바로 완료 — gotta do로 옮겨 완료 처리하므로 오늘 목록에 취소선으로 남았다가 다음날 done 기록으로 넘어감
+  // (하루 시작하기의 '해결됨'과 같은 결과). 못 끝낸 하위 항목이 있으면 체크할 때처럼 먼저 확인.
+  async function completeWaitingTask(id) {
+    let task = boards.waiting.find(t => t.id === id);
+    if (!task) return;
+    const pending = (task.subtasks || []).filter(x => !x.done);
+    if (pending.length > 0) {
+      const ok = await showConfirm({
+        title: '아직 못 끝낸 하위 항목이 있어요',
+        message: '미완료 하위 항목 ' + pending.length + '개가 남아 있어요.\n함께 완료 처리할까요?',
+        confirmLabel: '모두 완료',
+        cancelLabel: '취소',
+        anchorEl: findTaskLi(id)
+      });
+      if (!ok) return;
+      task = boards.waiting.find(t => t.id === id); // 모달이 떠 있던 사이 바뀌었을 수 있어 다시 찾음
+      if (!task) return;
+    }
+    boards.waiting.splice(boards.waiting.indexOf(task), 1);
+    delete task.dueDate;
+    delete task.replyDate; // 회신 예정일은 waiting에 있을 때만 의미 있음
+    delete task.from;
+    delete task.snoozedAt;
+    delete task.order;
+    boards.today.push(task);
+    await toggleTask('today', id, { skipConfirm: true }); // 하위 항목 완료 · done 표시 · 저장 · 취소선 연출
+    setTimeout(() => render('waiting'), REORDER_DELAY_MS);
   }
 
   function archiveNow(boardId, id) {
