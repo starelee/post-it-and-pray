@@ -99,6 +99,7 @@ type Subtask = {
 
 - 로컬: `localStorage['postit-todo-boards-v1']` — 위 `Boards` shape을 그대로 `JSON.stringify`.
 - 클라우드(로그인 시): Supabase `postit_data` 테이블, `id` = Supabase 유저 id, `data` 컬럼에 같은 `Boards` JSON. 본인 행에만 접근 가능.
+- `localStorage['postit-cloud-dirty']`: 로그인한 채 이 기기에서 고쳤는데 아직 클라우드에 못 올린 변경이 있을 때 그 계정(Supabase 유저 id)을 적어 둠. 클라우드에 올리기가 성공하면(그 사이 더 고친 게 없을 때) 지움. 새로 열 때 이 값이 있으면 클라우드 내용으로 덮어쓰지 않고 항목별로 합친 뒤 다시 올림. `boards`/백업/클라우드에는 안 들어가는 기기별 값.
 - 테마 설정(`light`/`dark`)은 별도로 `localStorage['postit-theme']`에 저장 — `boards`와 무관.
 
 ## 백업 파일
