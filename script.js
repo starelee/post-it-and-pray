@@ -7000,7 +7000,8 @@
   let dsPrevFocus = null;
   let dsDayTimer = null;
   let dsCal = { state: 'idle', events: [], err: '' }; // 일정 단계: idle → loading → ok | needconnect | error
-  let dsAltPick = null;      // 대안 중 '다음에 확인하기(날짜 지정)'를 눌러 날짜를 고르는 중인 질문의 키
+  let dsAltPickOpt = null;   // 날짜 고르기 대안의 설정(적용할 처리·라벨)
+  let dsAltPick = null;     // 대안 중 '다음에 확인하기(날짜 지정)'를 눌러 날짜를 고르는 중인 질문의 키
   let dsAltKey = null;       // '아니오'를 눌러 대안 선택지를 보여주는 중인 질문의 키
 
   function isDayStartOpen() {
@@ -7476,6 +7477,7 @@
     // waiting의 확인일 대안: 내일 확인하기 / 다음에 확인하기(날짜를 직접 고름)
     const checkTomorrow = { label: '내일 확인하기', patch: { action: 'setReply', date: dsDateAfter(1) } };
     const checkLater = { label: '다음에 확인하기 (날짜 지정)', pickDate: true };
+    const pickStart = { label: '날짜 정하기', pickDate: true, pickAction: 'later', pickLabel: '시작할 날짜' };
     const clearDate = { label: '날짜 지우기', patch: { action: 'clearDate' } };   // 마감을 없애 일반 항목으로
     const clearReply = { label: '날짜 지우기', patch: { action: 'clearReply' } }; // waiting의 확인 날짜를 없앰
     const days = (re) => { for (const tag of item.tags) { const m = tag.match(re); if (m) return Number(m[1]); } return 0; };
@@ -7501,7 +7503,7 @@
       case 'stale':
         return item.boardId === 'waiting'
           ? [checkTomorrow, checkLater, finished('해결됐어요'), skip]
-          : [tomorrow, finished('이미 끝났어요 (완료)'), skip];
+          : [pickStart, finished('이미 끝났어요 (완료)'), skip]; // someday는 '언젠가' 항목이라 내일 대신 착수일을 직접 고름
       case 'carry':
         return [tomorrow, { label: '대기중으로 옮기기', patch: { action: 'toWaiting' } }, finished('이미 끝났어요 (완료)'), skip];
       default:
@@ -7857,7 +7859,7 @@
       case 'resolved': return '해결됨';
       case 'urgent': return '긴급으로 표시';
       case 'unurgent': return '긴급 해제';
-      case 'later': return date + '로 미룸';
+      case 'later': return d.picked ? date + '에 시작' : date + '로 미룸';
       case 'setReply': return date + '에 확인';
       case 'top': return '오늘 첫 번째로';
       case 'merge': return '하나로 합침';
@@ -7942,12 +7944,12 @@
       btns.classList.add('has-alts');
       // 가장 많이 누르는 '그대로 두기'(또는 3일 뒤에 다시)를 맨 앞에 둠
       [{ label: q.no.snooze ? SNOOZE_DAYS + '일 뒤에 다시' : '그대로 두기', patch: null }]
-        .concat(q.alts.map(a => ({ label: a.label, patch: a.patch, pickDate: a.pickDate })))
+        .concat(q.alts.map(a => ({ label: a.label, patch: a.patch, pickDate: a.pickDate, pickAction: a.pickAction, pickLabel: a.pickLabel })))
         .forEach(o => {
           const b = dsSmallButton('confirm-btn-cancel day-start__alt', o.label, () => {});
           if (o.pickDate) {
             // 날짜를 직접 고르는 대안 — 그 줄 아래에 날짜 입력이 펼쳐지고, 고르면 바로 적용
-            b.addEventListener('click', () => { dsAltPick = key; dsRender(); });
+            b.addEventListener('click', () => { dsAltPick = key; dsAltPickOpt = o; dsRender(); });
           } else {
             b.addEventListener('click', () => dsAnswerAlt(q, o.patch));
           }
@@ -7955,14 +7957,17 @@
         });
       if (dsAltPick === key) {
         const row = dsEl('div', 'day-start__field day-start__pick');
-        row.appendChild(dsEl('span', 'day-start__field-label', '확인할 날짜'));
+        const pickOpt = dsAltPickOpt || {};
+        const pickLabel = pickOpt.pickLabel || '확인할 날짜';
+        const pickAction = pickOpt.pickAction || 'setReply';
+        row.appendChild(dsEl('span', 'day-start__field-label', pickLabel));
         const input = document.createElement('input');
         input.type = 'date';
         input.className = 'date-picker-input';
         input.min = dsDateAfter(1);
-        input.setAttribute('aria-label', '확인할 날짜');
+        input.setAttribute('aria-label', pickLabel);
         input.addEventListener('change', () => {
-          if (input.value && input.value > todayStr()) dsAnswerAlt(q, { action: 'setReply', date: input.value });
+          if (input.value && input.value > todayStr()) dsAnswerAlt(q, { action: pickAction, date: input.value, picked: true });
         });
         row.appendChild(wrapDateInputWithHint(input));
         li.appendChild(row);
