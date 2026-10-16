@@ -130,6 +130,7 @@ type DayStartDraft = {
           | 'later' | 'setReply' | 'top' | 'merge' | 'repeat' | 'unurgent';
     date?: string;                    // follow/setReply: 다음 확인 날짜, later: 다시 잡은 마감일
     text?: string;                    // follow: 후속 작업 제목
+    picked?: boolean;                 // later: 날짜를 직접 골랐음(someday '날짜 정하기' — 결과 문구만 '미룸' 대신 '시작'으로)
     snooze?: boolean;                 // keep: 아니오 = 3일 미루기(확정 때 snoozedAt 기록)
     intoId?: number;                  // merge: 합쳐질(먼저 만든) 항목 id
     prevOrder?: string[];             // top: 되돌릴 때 복원할 이전 순서
