@@ -4117,9 +4117,11 @@
     task.done = !task.done;
     if (task.done) task.doneAt = todayStr();
     else delete task.doneAt;
+    if (task.done) task.urgent = false; // 끝낸 일은 긴급 표시를 내려놓음(되돌려도 긴급은 복구하지 않음 — Ctrl+Z로는 가능)
 
     const li = findTaskLi(id);
     if (li) {
+      if (task.done) li.classList.remove('urgent');
       li.classList.toggle('done', task.done);
       animateStrikeLines(li, task.done);
     }
@@ -8486,6 +8488,7 @@
     task.subtasks.forEach(s => { s.done = true; });
     task.done = true;
     task.doneAt = today;
+    task.urgent = false;
     delete task.order;
     // 오늘 할 일은 당일 취소선으로 남고 다음날 스윕됨. 그 밖에는 바로 done 아카이브로.
     const graced = boardId === 'today' || (boardId === 'scheduled' && task.dueDate === today);
