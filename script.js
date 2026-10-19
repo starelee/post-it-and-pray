@@ -8147,7 +8147,22 @@
         li.appendChild(makeBoardIcon('scheduled'));
         li.appendChild(dsEl('span', 'search-item-text', ev.title));
         li.appendChild(makeSearchChip(dsEventTime(ev)));
+        // 이 일정과 연결된 할 일(회의 자료 준비 등) — 직접 적어서 오늘 할 일로 추가
+        const linked = ds.prep.filter(x => x.ev === src);
+        const linkOpen = dsCal.linkOpen === src;
+        const link = dsEl('button', 'day-start__evadd day-start__evlink', '↳');
+        link.type = 'button';
+        link.title = '이 일정과 연결된 할 일 추가';
+        link.setAttribute('aria-expanded', linkOpen ? 'true' : 'false');
+        link.setAttribute('aria-label', '연결된 할 일 추가: ' + ev.title);
+        link.addEventListener('click', () => {
+          dsCal.linkOpen = linkOpen ? null : src;
+          dsRender();
+          if (!linkOpen) { const inp = dayStartBodyEl.querySelector('.day-start__evlinked input'); if (inp) inp.focus({ preventScroll: true }); }
+        });
+        li.appendChild(link);
         const add = dsEl('button', 'day-start__evadd', added ? '✓' : '➕');
+        add.title = '이 일정 자체를 할 일로';
         add.type = 'button';
         add.setAttribute('aria-pressed', added ? 'true' : 'false');
         add.setAttribute('aria-label', added ? '할 일에서 빼기: ' + ev.title : '할 일로 만들기: ' + ev.title);
@@ -8159,6 +8174,46 @@
         });
         li.appendChild(add);
         list.appendChild(li);
+        if (linked.length || linkOpen) {
+          const sub = dsEl('li', 'day-start__evlinked');
+          linked.forEach(x => {
+            const row = dsEl('div', 'day-start__evlinked-item');
+            row.appendChild(dsEl('span', 'search-item-text', '↳ ' + x.text));
+            const del = dsEl('button', 'delete-btn day-start__delete', '🗑️');
+            del.type = 'button';
+            del.setAttribute('aria-label', '연결된 할 일 삭제: ' + x.text);
+            del.addEventListener('click', () => { ds.prep = ds.prep.filter(y => y.key !== x.key); dsSaveDraft(); dsRender(); });
+            row.appendChild(del);
+            sub.appendChild(row);
+          });
+          if (linkOpen) {
+            const inp = document.createElement('input');
+            inp.className = 'new-task-input';
+            inp.maxLength = 100;
+            inp.placeholder = '이 일정과 연결된 오늘 할 일…';
+            inp.autocomplete = 'off';
+            inp.setAttribute('aria-label', '연결된 오늘 할 일: ' + ev.title);
+            inp.addEventListener('keydown', (e) => {
+              if (e.isComposing) return;
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                const text = inp.value.trim();
+                if (!text) return;
+                ds.prep.push({ key: 'p:' + (ds.seq++), text, date: todayStr(), ev: src });
+                dsSaveDraft();
+                dsRender();
+                const next = dayStartBodyEl.querySelector('.day-start__evlinked input');
+                if (next) next.focus({ preventScroll: true });
+              } else if (e.key === 'Escape') {
+                e.preventDefault(); e.stopPropagation();
+                dsCal.linkOpen = null;
+                dsRender();
+              }
+            });
+            sub.appendChild(inp);
+          }
+          list.appendChild(sub);
+        }
       });
       dayStartBodyEl.appendChild(list);
     });

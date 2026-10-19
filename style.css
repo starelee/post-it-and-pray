@@ -4590,6 +4590,35 @@ body.reorder-mode .sticky:not(.reorder-active) {
   transform: scale(1.1);
 }
 
+.day-start__evlink + .day-start__evadd {
+  margin-left: 0;
+}
+
+.day-start__evlink {
+  margin-left: auto;
+}
+
+.day-start__evlinked {
+  display: flex;
+  flex-direction: column;
+  padding-left: 28px;
+}
+
+.day-start__evlinked-item {
+  display: flex;
+  align-items: flex-start;
+  column-gap: 8px;
+  min-height: var(--day-start-line);
+}
+
+.day-start__evlinked-item .day-start__delete {
+  margin-left: auto;
+}
+
+.day-start__evlinked .new-task-input {
+  width: 100%;
+}
+
 .day-start__evadd[aria-pressed="true"] {
   opacity: 1;
   filter: none;
