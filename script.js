@@ -8131,7 +8131,7 @@
       return;
     }
 
-    dayStartBodyEl.appendChild(dsLead('할 일로 만들 일정은 ➕를 눌러요.'));
+    dayStartBodyEl.appendChild(dsLead('할 일로 만들 일정은 아래 버튼을 눌러요.'));
     const now = Date.now();
     dsDayLabelKeys().forEach(({ key, label, quiet }) => {
       const evs = dsCal.events.filter(ev => dsEventOnDay(ev, key));
@@ -8152,9 +8152,10 @@
         row.appendChild(makeSearchChip(dsEventTime(ev)));
         li.appendChild(row);
 
-        // ㄴ [할 일로 복사] [할 일 작성하기] — 복사는 일정 자체를 그 날짜의 할 일로, 작성하기는 이 일정과 연결된 오늘 할 일을 직접 적음
+        // ㄴ [할 일로 복사] [할 일 작성하기] — 복사는 일정 자체를 그 날짜의 할 일로, 작성하기는 이 일정과 연결된 오늘 할 일을
+        // 같은 줄에 칩으로 바로 적음(칩을 누르면 다시 고침, 비우고 나가면 삭제)
         const btns = dsEl('div', 'day-start__qbtns day-start__evbtns');
-        const copy = dsSmallButton(added ? 'confirm-btn-ok' : 'confirm-btn-cancel', added ? '✓ 할 일로 복사함' : '할 일로 복사', () => {
+        const copy = dsSmallButton('day-start__evchipbtn' + (added ? ' is-on' : ''), added ? '✓ 할 일로 복사' : '할 일로 복사', () => {
           if (added) ds.prep = ds.prep.filter(x => x.src !== src);
           else ds.prep.push({ key: 'p:' + (ds.seq++), text: ev.allDay ? ev.title : dsEventTime(ev) + ' ' + ev.title, date: key, src });
           dsSaveDraft();
@@ -8163,54 +8164,72 @@
         copy.setAttribute('aria-pressed', added ? 'true' : 'false');
         copy.setAttribute('aria-label', (added ? '할 일에서 빼기: ' : '할 일로 복사: ') + ev.title);
         btns.appendChild(copy);
-        const write = dsSmallButton(linkOpen ? 'confirm-btn-ok' : 'confirm-btn-cancel', '할 일 작성하기', () => {
-          dsCal.linkOpen = linkOpen ? null : src;
+        const write = dsSmallButton('day-start__evchipbtn', '할 일 작성하기', () => {
+          dsCal.linkOpen = src;
+          dsCal.linkEdit = null;
           dsRender();
-          if (!linkOpen) { const inp = dayStartBodyEl.querySelector('.day-start__evlinked input'); if (inp) inp.focus({ preventScroll: true }); }
+          const inp = dayStartBodyEl.querySelector('.day-start__evbtns input'); if (inp) inp.focus({ preventScroll: true });
         });
-        write.setAttribute('aria-expanded', linkOpen ? 'true' : 'false');
         write.setAttribute('aria-label', '이 일정과 연결된 할 일 작성하기: ' + ev.title);
         btns.appendChild(write);
-        li.appendChild(btns);
 
+        // 칩 하나를 글자 칸으로: x가 있으면 그 할 일을 고침, 없으면 새로 적음
+        const editChip = (x) => {
+          const inp = document.createElement('input');
+          inp.className = 'day-start__evchip-input';
+          inp.maxLength = 100;
+          inp.autocomplete = 'off';
+          inp.value = x ? x.text : '';
+          inp.placeholder = '이 일정과 연결된 할 일';
+          inp.setAttribute('aria-label', '연결된 오늘 할 일: ' + ev.title);
+          const fit = () => { inp.size = Math.max(12, inp.value.length * 2 + 2); };
+          fit();
+          inp.addEventListener('input', fit);
+          let done = false;
+          const finish = (commit, more, silent) => {
+            if (done) return;
+            done = true;
+            const text = inp.value.trim();
+            if (commit && text) {
+              if (x) x.text = text;
+              else ds.prep.push({ key: 'p:' + (ds.seq++), text, date: todayStr(), ev: src });
+            } else if (x && commit) ds.prep = ds.prep.filter(y => y.key !== x.key); // 비우고 확인하면 삭제
+            dsCal.linkOpen = more && commit && text ? src : null; // Enter로 확정하면 다음 칩 칸을 바로 이어서 엶
+            dsCal.linkEdit = null;
+            dsSaveDraft();
+            // 다른 버튼을 눌러 빠져나가는 중이면 다시 그리지 않음(눌린 버튼이 사라져 클릭이 날아가므로) — 그 버튼이 곧 다시 그림
+            if (silent) { setTimeout(() => { if (dayStartOpen && ds && ds.step === 'cal') dsRender(); }, 300); return; }
+            dsRender();
+            if (dsCal.linkOpen) { const next = dayStartBodyEl.querySelector('.day-start__evbtns input'); if (next) next.focus({ preventScroll: true }); }
+          };
+          inp.addEventListener('keydown', (e) => {
+            if (e.isComposing) return;
+            if (e.key === 'Enter') { e.preventDefault(); finish(true, !x); }
+            else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); finish(false); }
+          });
+          inp.addEventListener('blur', (e) => finish(true, false, !!e.relatedTarget)); // 글씨를 적다 다른 곳을 눌러도 잃지 않음
+          return inp;
+        };
         linked.forEach(x => {
-          const item = dsEl('div', 'day-start__evlinked-item');
-          item.appendChild(dsEl('span', 'search-item-text', x.text));
-          const del = dsEl('button', 'delete-btn day-start__delete', '🗑️');
+          if (dsCal.linkEdit === x.key) { btns.appendChild(editChip(x)); return; }
+          const chip = dsEl('span', 'day-start__evchip');
+          const t = dsEl('button', 'day-start__evchip-text', x.text);
+          t.type = 'button';
+          t.setAttribute('aria-label', '연결된 할 일 고치기: ' + x.text);
+          t.addEventListener('click', () => {
+            dsCal.linkEdit = x.key; dsCal.linkOpen = null; dsRender();
+            const inp = dayStartBodyEl.querySelector('.day-start__evbtns input'); if (inp) { inp.focus({ preventScroll: true }); inp.setSelectionRange(inp.value.length, inp.value.length); }
+          });
+          const del = dsEl('button', 'day-start__evchip-del', '×');
           del.type = 'button';
           del.setAttribute('aria-label', '연결된 할 일 삭제: ' + x.text);
           del.addEventListener('click', () => { ds.prep = ds.prep.filter(y => y.key !== x.key); dsSaveDraft(); dsRender(); });
-          item.appendChild(del);
-          li.appendChild(item);
+          chip.appendChild(t);
+          chip.appendChild(del);
+          btns.appendChild(chip);
         });
-        if (linkOpen) {
-          const wrap = dsEl('div', 'day-start__evlinked');
-          const inp = document.createElement('input');
-          inp.className = 'new-task-input';
-          inp.maxLength = 100;
-          inp.placeholder = '이 일정과 연결된 오늘 할 일…';
-          inp.autocomplete = 'off';
-          inp.setAttribute('aria-label', '연결된 오늘 할 일: ' + ev.title);
-          inp.addEventListener('keydown', (e) => {
-            if (e.isComposing) return;
-            if (e.key === 'Enter') {
-              e.preventDefault();
-              const text = inp.value.trim();
-              if (!text) return;
-              ds.prep.push({ key: 'p:' + (ds.seq++), text, date: todayStr(), ev: src });
-              dsSaveDraft();
-              dsRender();
-              const next = dayStartBodyEl.querySelector('.day-start__evlinked input');
-              if (next) next.focus({ preventScroll: true });
-            } else if (e.key === 'Escape') {
-              e.preventDefault(); e.stopPropagation();
-              dsCal.linkOpen = null;
-              dsRender();
-            }
-          });
-          wrap.appendChild(inp);
-          li.appendChild(wrap);
-        }
+        if (linkOpen) btns.appendChild(editChip(null));
+        li.appendChild(btns);
         list.appendChild(li);
       });
       dayStartBodyEl.appendChild(list);
