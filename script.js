@@ -7489,7 +7489,7 @@
       case 'replyLate':
         return [checkTomorrow, checkLater, clearReply, { label: '제가 직접 처리할게요 (오늘 할 일로)', patch: { action: 'today' } }, finished('해결됐어요')];
       case 'replyToday':
-        return [checkTomorrow, checkLater, clearReply, finished('해결됐어요')];
+        return [checkTomorrow, checkLater, clearReply, { label: '제가 직접 처리할게요 (오늘 할 일로)', patch: { action: 'today' } }, finished('해결됐어요')];
       case 'dueToday':
         return [tomorrow, clearDate, finished('이미 끝났어요 (완료)')];
       case 'dueSoon':
