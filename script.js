@@ -7102,12 +7102,51 @@
     });
   }
 
-  // 오늘 0시 ~ 모레 0시(내일까지)의 일정. { auth:false }면 토큰이 거부됨(만료·권한 취소).
+  // 구글이 제공하는 대한민국 공휴일 캘린더 — 같은 읽기 권한으로 읽히고, 대체·임시공휴일도 구글이 갱신함.
+  const GCAL_HOLIDAY_ID = 'ko.south_korea#holiday@group.v.calendar.google.com';
+  const gcalDateKey = (d) => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+
+  // 공휴일 날짜 집합. 못 읽으면(권한·네트워크) 빈 집합 — 그러면 주말만 쉬는 날로 봄.
+  async function gcalFetchHolidays(headers, from, days) {
+    const set = new Set();
+    try {
+      const to = new Date(from); to.setDate(to.getDate() + days);
+      const r = await fetch('https://www.googleapis.com/calendar/v3/calendars/' + encodeURIComponent(GCAL_HOLIDAY_ID) + '/events?' + new URLSearchParams({
+        timeMin: from.toISOString(), timeMax: to.toISOString(), singleEvents: 'true', maxResults: '50'
+      }).toString(), { headers });
+      if (!r.ok) return set;
+      ((await r.json()).items || []).forEach(ev => {
+        if (!ev.start || !ev.start.date) return;
+        const d = new Date(ev.start.date + 'T00:00:00');
+        const end = new Date((ev.end && ev.end.date || ev.start.date) + 'T00:00:00');
+        do { set.add(gcalDateKey(d)); d.setDate(d.getDate() + 1); } while (d < end);
+      });
+    } catch (e) { /* 무시 */ }
+    return set;
+  }
+
+  // 일정 단계에서 보여줄 날: 오늘·내일, 그리고 내일이 쉬는 날이면 다음 영업일까지(그 사이 쉬는 날은 일정이 있을 때만).
+  function gcalPlanDays(from, holidays) {
+    const WD = ['일', '월', '화', '수', '목', '금', '토'];
+    const off = n => { const d = new Date(from); d.setDate(d.getDate() + n); return d; };
+    const isBiz = d => d.getDay() >= 1 && d.getDay() <= 5 && !holidays.has(gcalDateKey(d));
+    const days = [{ key: gcalDateKey(off(0)), label: '오늘' }, { key: gcalDateKey(off(1)), label: '내일' }];
+    if (isBiz(off(1))) return days;
+    for (let n = 2; n <= 14; n++) {
+      const d = off(n), biz = isBiz(d);
+      days.push({ key: gcalDateKey(d), label: WD[d.getDay()] + '요일 (' + (d.getMonth() + 1) + '/' + d.getDate() + ')' + (biz ? ' · 다음 영업일' : ''), quiet: !biz });
+      if (biz) break;
+    }
+    return days;
+  }
+
+  // 오늘 0시 ~ 보여줄 마지막 날 끝까지의 일정(보통 내일까지). { auth:false }면 토큰이 거부됨(만료·권한 취소).
   // 기본 캘린더만이 아니라 내가 만든/편집할 수 있는 캘린더(선택돼 있는 것)를 모두 읽음 — 일정이 다른 캘린더에 들어 있는 경우가 많아서.
   async function gcalFetchEvents(token) {
     const from = new Date(); from.setHours(0, 0, 0, 0);
-    const to = new Date(from); to.setDate(to.getDate() + 2);
     const headers = { Authorization: 'Bearer ' + token };
+    const days = gcalPlanDays(from, await gcalFetchHolidays(headers, from, 16));
+    const to = new Date(days[days.length - 1].key + 'T00:00:00'); to.setDate(to.getDate() + 1);
     let list = [];
     try {
       const lr = await fetch('https://www.googleapis.com/calendar/v3/users/me/calendarList?' + new URLSearchParams({ maxResults: '250' }).toString(), { headers });
@@ -7161,7 +7200,7 @@
       })
       .filter(ev => ev.start)
       .sort((x, y) => (x.allDay === y.allDay ? 0 : x.allDay ? -1 : 1) || String(x.start).localeCompare(String(y.start)));
-    return { events, account, calendars };
+    return { events, account, calendars, days };
   }
 
   function gcalDisconnect() {
@@ -8006,7 +8045,7 @@
     gcalFetchEvents(token).then(res => {
       if (res.auth === false) { dsCal.state = 'needconnect'; dsCal.err = 'expired'; }
       else {
-        dsCal.state = 'ok'; dsCal.events = res.events; dsCal.account = res.account || ''; dsCal.calendars = res.calendars || [];
+        dsCal.state = 'ok'; dsCal.events = res.events; dsCal.account = res.account || ''; dsCal.calendars = res.calendars || []; dsCal.days = res.days || null;
         if (dsCal.pick && res.account) lsSet(GCAL_ACCOUNT_KEY, res.account); // 계정을 직접 고른 경우만 기억
         dsCal.pick = false;
       }
@@ -8029,7 +8068,7 @@
   }
 
   function dsDayLabelKeys() {
-    return [{ key: todayStr(), label: '오늘' }, { key: tomorrowStr(), label: '내일' }];
+    return dsCal.days || [{ key: todayStr(), label: '오늘' }, { key: tomorrowStr(), label: '내일' }];
   }
 
   function dsEventOnDay(ev, dayKey) {
@@ -8094,9 +8133,10 @@
 
     dayStartBodyEl.appendChild(dsLead('할 일로 만들 일정은 ➕를 눌러요.'));
     const now = Date.now();
-    dsDayLabelKeys().forEach(({ key, label }) => {
-      dayStartBodyEl.appendChild(dsEl('h3', 'search-group-title', label));
+    dsDayLabelKeys().forEach(({ key, label, quiet }) => {
       const evs = dsCal.events.filter(ev => dsEventOnDay(ev, key));
+      if (quiet && !evs.length) return; // 쉬는 날인데 일정도 없으면 줄을 만들지 않음
+      dayStartBodyEl.appendChild(dsEl('h3', 'search-group-title', label));
       if (!evs.length) { dayStartBodyEl.appendChild(dsLead(label + ' 일정이 없어요.')); return; }
       const list = dsEl('ul', 'search-list day-start__events');
       evs.forEach(ev => {
