@@ -8155,7 +8155,7 @@
         // ㄴ [할 일로 복사] [할 일 작성하기] — 복사는 일정 자체를 그 날짜의 할 일로, 작성하기는 이 일정과 연결된 오늘 할 일을
         // 같은 줄에 칩으로 바로 적음(칩을 누르면 다시 고침, 비우고 나가면 삭제)
         const btns = dsEl('div', 'day-start__qbtns day-start__evbtns');
-        const copy = dsSmallButton('day-start__evchipbtn' + (added ? ' is-on' : ''), added ? '✓ 할 일로 복사' : '할 일로 복사', () => {
+        const copy = dsSmallButton('day-start__evchipbtn' + (added ? ' is-on' : ''), added ? '[✓ 할 일로 복사]' : '[할 일로 복사]', () => {
           if (added) ds.prep = ds.prep.filter(x => x.src !== src);
           else ds.prep.push({ key: 'p:' + (ds.seq++), text: ev.allDay ? ev.title : dsEventTime(ev) + ' ' + ev.title, date: key, src });
           dsSaveDraft();
@@ -8164,7 +8164,7 @@
         copy.setAttribute('aria-pressed', added ? 'true' : 'false');
         copy.setAttribute('aria-label', (added ? '할 일에서 빼기: ' : '할 일로 복사: ') + ev.title);
         btns.appendChild(copy);
-        const write = dsSmallButton('day-start__evchipbtn', '할 일 작성하기', () => {
+        const write = dsSmallButton('day-start__evchipbtn', '[할 일 작성하기]', () => {
           dsCal.linkOpen = src;
           dsCal.linkEdit = null;
           dsRender();
@@ -8208,12 +8208,16 @@
             else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); finish(false); }
           });
           inp.addEventListener('blur', (e) => finish(true, false, !!e.relatedTarget)); // 글씨를 적다 다른 곳을 눌러도 잃지 않음
-          return inp;
+          const wrap = dsEl('span', 'day-start__evchip is-editing');
+          wrap.appendChild(dsEl('span', 'day-start__evchip-br', '['));
+          wrap.appendChild(inp);
+          wrap.appendChild(dsEl('span', 'day-start__evchip-br', ']'));
+          return wrap;
         };
         linked.forEach(x => {
           if (dsCal.linkEdit === x.key) { btns.appendChild(editChip(x)); return; }
           const chip = dsEl('span', 'day-start__evchip');
-          const t = dsEl('button', 'day-start__evchip-text', x.text);
+          const t = dsEl('button', 'day-start__evchip-text', '[' + x.text + ']');
           t.type = 'button';
           t.setAttribute('aria-label', '연결된 할 일 고치기: ' + x.text);
           t.addEventListener('click', () => {
