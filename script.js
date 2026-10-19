@@ -8153,7 +8153,7 @@
         li.appendChild(row);
 
         // ㄴ [할 일로 복사] [할 일 작성하기] — 복사는 일정 자체를 그 날짜의 할 일로, 작성하기는 이 일정과 연결된 오늘 할 일을
-        // 같은 줄에 칩으로 바로 적음(칩을 누르면 다시 고침, 비우고 나가면 삭제)
+        // 버튼 자리에서 바로 적음(작성한 항목은 같은 줄에 보이고, 누르면 다시 고침, 비우고 확정하면 삭제)
         const btns = dsEl('div', 'day-start__qbtns day-start__evbtns');
         const copy = dsSmallButton('day-start__evchipbtn' + (added ? ' is-on' : ''), added ? '[✓ 할 일로 복사]' : '[할 일로 복사]', () => {
           if (added) ds.prep = ds.prep.filter(x => x.src !== src);
@@ -8171,7 +8171,6 @@
           const inp = dayStartBodyEl.querySelector('.day-start__evbtns input'); if (inp) inp.focus({ preventScroll: true });
         });
         write.setAttribute('aria-label', '이 일정과 연결된 할 일 작성하기: ' + ev.title);
-        btns.appendChild(write);
 
         // 칩 하나를 글자 칸으로: x가 있으면 그 할 일을 고침, 없으면 새로 적음
         const editChip = (x) => {
@@ -8232,7 +8231,8 @@
           chip.appendChild(del);
           btns.appendChild(chip);
         });
-        if (linkOpen) btns.appendChild(editChip(null));
+        // [할 일로 복사] [작성한 항목…] 다음 자리에 [할 일 작성하기] — 누르면 그 버튼이 그 자리에서 바로 글자 칸이 됨
+        btns.appendChild(linkOpen ? editChip(null) : write);
         li.appendChild(btns);
         list.appendChild(li);
       });
