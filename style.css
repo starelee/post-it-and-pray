@@ -4567,24 +4567,75 @@ body.reorder-mode .sticky:not(.reorder-active) {
   font-size: 14px;
 }
 
-.day-start__evlinked-item {
-  display: flex;
-  align-items: flex-start;
-  column-gap: 8px;
-  padding-left: 30px;
-  min-height: var(--day-start-line);
+.day-start__evbtns {
+  gap: 0 6px;
 }
 
-.day-start__evlinked-item .day-start__delete {
-  margin-left: auto;
+/* [할 일로 복사] [할 일 작성하기] — gotta do 하위 항목처럼 대괄호로 감싼 작은 글씨(알약·테두리 없음) */
+.day-start__evchipbtn,
+.day-start__evchip {
+  font-family: var(--font-task);
+  font-size: 14px;
+  line-height: 22px;
+  color: var(--ink-soft);
+  background: none;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  min-height: 0;
+  padding: 0;
+  cursor: pointer;
 }
 
-.day-start__evlinked {
-  padding-left: 30px;
+.day-start__evchipbtn:hover,
+.day-start__evchipbtn:focus-visible {
+  color: var(--accent);
 }
 
-.day-start__evlinked .new-task-input {
-  width: 100%;
+.day-start__evchipbtn.is-on {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.day-start__evchip {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  cursor: default;
+}
+
+.day-start__evchip-text,
+.day-start__evchip-del {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+}
+
+.day-start__evchip-del {
+  padding: 0 4px;
+}
+
+.day-start__evchip-text:hover,
+.day-start__evchip-del:hover,
+.day-start__evchip-del:focus-visible {
+  color: var(--accent);
+}
+
+/* 눌러서 바로 적는 칩: 글자 폭만큼의 점선 밑줄 칸 */
+.day-start__evchip-input {
+  font-family: var(--font-task);
+  font-size: 14px;
+  line-height: 22px;
+  color: var(--ink);
+  background: transparent;
+  border: none;
+  border-bottom: 1px dashed var(--accent);
+  outline: none;
+  padding: 0 2px;
+  max-width: 100%;
 }
 
 .day-start__disconnect,
