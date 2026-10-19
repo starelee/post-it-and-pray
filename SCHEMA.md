@@ -29,7 +29,7 @@ type Task = {
   id: number;           // Date.now() 기반, 사실상 유일값
   text: string;
   done: boolean;
-  urgent: boolean;
+  urgent: boolean;       // 완료(done=true)로 바뀌는 순간 false로 내려감 — 완료를 취소해도 복구하지 않음
   subtasks: Subtask[];
   dueDate?: string;      // "YYYY-MM-DD" — scheduled 항목에만 존재
   snoozedAt?: string;    // "YYYY-MM-DD" — 하루 시작하기의 '오래 묵은 것'에서 '그대로 두기(3일 미루기)'를 누른 날. updatedAt은 올리지 않음
