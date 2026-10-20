@@ -7532,7 +7532,7 @@
       case 'replyToday':
         return [checkTomorrow, checkLater, clearReply, { label: '제가 직접 처리할게요 (오늘 할 일로)', patch: { action: 'today' } }, finished('해결됐어요')];
       case 'dueToday':
-        return [tomorrow, clearDate, finished('이미 끝났어요 (완료)')];
+        return [tomorrow, { label: '날짜 정해서 미루기', pickDate: true, pickAction: 'later', pickLabel: '미룰 날짜', pickMoved: true }, clearDate, finished('이미 끝났어요 (완료)')];
       case 'dueSoon':
         return [clearDate];
       case 'urgentOld':
@@ -7900,7 +7900,7 @@
       case 'resolved': return '해결됨';
       case 'urgent': return '긴급으로 표시';
       case 'unurgent': return '긴급 해제';
-      case 'later': return d.picked ? date + '에 시작' : date + '로 미룸';
+      case 'later': return d.picked && !d.moved ? date + '에 시작' : date + '로 미룸';
       case 'setReply': return date + '에 확인';
       case 'top': return '오늘 첫 번째로';
       case 'merge': return '하나로 합침';
@@ -7985,7 +7985,7 @@
       btns.classList.add('has-alts');
       // 가장 많이 누르는 '그대로 두기'(또는 3일 뒤에 다시)를 맨 앞에 둠
       [{ label: q.no.snooze ? SNOOZE_DAYS + '일 뒤에 다시' : '그대로 두기', patch: null }]
-        .concat(q.alts.map(a => ({ label: a.label, patch: a.patch, pickDate: a.pickDate, pickAction: a.pickAction, pickLabel: a.pickLabel })))
+        .concat(q.alts.map(a => ({ label: a.label, patch: a.patch, pickDate: a.pickDate, pickAction: a.pickAction, pickLabel: a.pickLabel, pickMoved: a.pickMoved })))
         .forEach(o => {
           const b = dsSmallButton('confirm-btn-cancel day-start__alt', o.label, () => {});
           if (o.pickDate) {
@@ -8008,7 +8008,7 @@
         input.min = dsDateAfter(1);
         input.setAttribute('aria-label', pickLabel);
         input.addEventListener('change', () => {
-          if (input.value && input.value > todayStr()) dsAnswerAlt(q, { action: pickAction, date: input.value, picked: true });
+          if (input.value && input.value > todayStr()) dsAnswerAlt(q, { action: pickAction, date: input.value, picked: true, moved: !!pickOpt.pickMoved });
         });
         row.appendChild(wrapDateInputWithHint(input));
         li.appendChild(row);
