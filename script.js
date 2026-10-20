@@ -7020,6 +7020,7 @@
   const DAYSTART_LEAVES_TODAY = ['toSomeday', 'drop', 'done', 'later', 'merge'];
   const DAYSTART_DUE_SOON_DAYS = 2;        // 마감이 이만큼 안으로 다가오면 '오늘 미리 시작할래요?'(모레는 금요일에 일요일 마감일 때만)
   const DAYSTART_DUE_SOON_MAX = 3;         // 그 질문은 한 번에 마감이 빠른 순으로 이만큼까지만
+  const DAYSTART_DUE_TODAY_MAX = 3;        // '오늘 마감인데, 긴급건으로 처리할래요?'는 한 번에 이만큼까지만
   const DAYSTART_DUE_SET_RECENT = 3;       // 마감일을 정한 지 이만큼(일) 안이면 이미 알고 있는 일이라 안 물음
   // 오늘 이미 일이 이만큼 많으면 '마감이 곧 다가와요' 질문은 안 물음(모레 마감은 BUSY, 내일 마감은 한도까지 봐줌)
   const DAYSTART_BUSY_TODAY = 5;
@@ -7491,6 +7492,15 @@
       if (byTask.has(newer.task.id)) return;
       push({ task: newer.task, boardId: newer.boardId, tags: ['같은 제목'], group: 'dup', dupOf: older.task });
     });
+    // '오늘 마감인데, 긴급건으로?'는 너무 자주 떠서: 마감일을 방금 정한 건 이미 아는 일이라 빼고, 한 번에 N개까지만(나머지는 gotta do에 그대로 보임)
+    let dueTodayAsked = 0;
+    for (let i = 0; i < items.length; i++) {
+      const it = items[i];
+      if (it.group !== 'dueToday' || it.task.urgent) continue;
+      const recent = it.task.dueSetAt && -daysUntilDue(it.task.dueSetAt) < DAYSTART_DUE_SET_RECENT;
+      if (recent || dueTodayAsked >= DAYSTART_DUE_TODAY_MAX) { items.splice(i--, 1); continue; }
+      dueTodayAsked++;
+    }
     // 방금 미룬 것은 날짜가 정하는 항목이 아니면 잠시 건너뜀
     const rank = k => DAYSTART_GROUPS.findIndex(g => g.key === k);
     return items
