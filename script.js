@@ -1148,6 +1148,7 @@
       if (typeof t.from === 'string' && t.from) out.from = t.from;
       if (typeof t.order === 'number' && isFinite(t.order)) out.order = t.order;
       if (typeof t.snoozedAt === 'string' && t.snoozedAt) out.snoozedAt = t.snoozedAt;
+      if (t.todaySlot && t.todaySlot.date === todayStr() && Number.isInteger(t.todaySlot.index) && t.todaySlot.index >= 0) out.todaySlot = { date: t.todaySlot.date, index: t.todaySlot.index }; // 같은 날만 기억 — 다음 날이면 버림
       if (typeof t.deletedAt === 'string' && t.deletedAt) out.deletedAt = t.deletedAt;
       if (typeof t.updatedAt === 'number' && isFinite(t.updatedAt)) out.updatedAt = t.updatedAt;
       if (out.done) {
@@ -4282,15 +4283,31 @@
     }, outMs);
   }
 
+  // gotta do 카드에 지금 그려지는 미완료 항목들(직접 등록 + 오늘 마감)을 renderToday와 같은 순서로
+  function todayActiveTasks() {
+    const today = todayStr();
+    return sortByOrder(
+      boards.today.filter(t => !t.done).map(t => ({ task: t }))
+        .concat(boards.scheduled.filter(t => !t.done && t.dueDate === today).sort(byDueDate).map(t => ({ task: t }))),
+      e => e.task
+    ).map(e => e.task);
+  }
+
   function moveTask(fromBoardId, toBoardId, id) {
     const idx = boards[fromBoardId].findIndex(t => t.id === id);
     if (idx === -1) return;
+    // gotta do를 떠나는 미완료 항목은 그날의 자리(몇 번째였는지)를 기억 — 같은 날 gotta do로 돌아오면 그 자리로
+    const slot = fromBoardId === 'today' && !boards.today[idx].done
+      ? todayActiveTasks().findIndex(t => t.id === id) : -1;
     const [task] = boards[fromBoardId].splice(idx, 1);
     delete task.dueDate;
     delete task.replyDate; // 회신 예정일은 waiting에 있을 때만 의미 있음
     delete task.from;
     delete task.snoozedAt; // 미루기는 묵은 것 목록 안에서만 의미 있음
     delete task.order; // 수동 순서는 그 보드 안에서만 의미 있음
+    const savedSlot = task.todaySlot;
+    delete task.todaySlot;
+    if (slot >= 0) task.todaySlot = { date: todayStr(), index: slot };
     if (toBoardId === 'waiting') {
       // waiting has no done concept — defend against a done task landing
       // there via a hover move-button from another board.
@@ -4298,6 +4315,15 @@
       delete task.doneAt;
     }
     boards[toBoardId].push(task);
+    if (toBoardId === 'today') {
+      // 같은 날 gotta do를 떠났던 자리가 있으면 그 자리로 — 다른 항목들은 지금 보이는 순서를 그대로 번호로 굳힘
+      delete task.todaySlot;
+      if (savedSlot && savedSlot.date === todayStr() && !task.done) {
+        const list = todayActiveTasks().filter(t => t !== task);
+        list.splice(Math.min(savedSlot.index, list.length), 0, task);
+        list.forEach((t, i) => { t.order = i; });
+      }
+    }
     saveBoards();
     finishMove(fromBoardId, toBoardId, task, () => {
       render(fromBoardId);
