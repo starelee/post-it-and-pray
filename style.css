@@ -2448,6 +2448,7 @@
   }
 
   .task-list[data-tasklist="waiting"] .subtask-progress,
+  .task-list[data-tasklist="scheduled"] .subtask-progress,
   .task-list[data-tasklist="waitingLater"] .subtask-progress,
   .task-list[data-tasklist="someday"] .subtask-progress,
   .task-list[data-tasklist="today"] .task-item.done .subtask-progress,
@@ -2491,11 +2492,13 @@
      간격을 음수 여백으로 상쇄하면 flex 줄바꿈 계산이 어긋나 혼자 한 줄을
      차지했음. */
   .task-list[data-tasklist="waiting"] .subtask-collapse > .subtask-list,
+  .task-list[data-tasklist="scheduled"] .subtask-collapse > .subtask-list,
   .task-list[data-tasklist="waitingLater"] .subtask-collapse > .subtask-list {
     column-gap: 0;
   }
 
   .task-list[data-tasklist="waiting"] .subtask-item,
+  .task-list[data-tasklist="scheduled"] .subtask-item,
   .task-list[data-tasklist="waitingLater"] .subtask-item {
     margin-right: 4px;
   }
@@ -2504,6 +2507,7 @@
      펼치는 동안 미완료 칩이 오른쪽으로 밀렸다가 줄바꿈으로 아래로 툭 떨어지는
      어색한 움직임이 생김 — 높이로 접으면 미완료 칩이 그냥 부드럽게 내려감. */
   .task-list[data-tasklist="waiting"] .subtask-item.done,
+  .task-list[data-tasklist="scheduled"] .subtask-item.done,
   .task-list[data-tasklist="waitingLater"] .subtask-item.done {
     flex: 0 0 100%;
     max-height: 3em;
@@ -2516,6 +2520,7 @@
   }
 
   .task-list[data-tasklist="waiting"] .task-item:not(.done-open) .subtask-item.done,
+  .task-list[data-tasklist="scheduled"] .task-item:not(.done-open) .subtask-item.done,
   .task-list[data-tasklist="waitingLater"] .task-item:not(.done-open) .subtask-item.done {
     max-height: 0;
     opacity: 0;
@@ -2524,6 +2529,7 @@
   }
 
   .task-list[data-tasklist="waiting"] .task-item:not(.done-open) > .subtask-collapse:not(:has(.subtask-item:not(.done):not(.complete-all-item))),
+  .task-list[data-tasklist="scheduled"] .task-item:not(.done-open) > .subtask-collapse:not(:has(.subtask-item:not(.done):not(.complete-all-item))),
   .task-list[data-tasklist="waitingLater"] .task-item:not(.done-open) > .subtask-collapse:not(:has(.subtask-item:not(.done):not(.complete-all-item))),
   .task-list[data-tasklist="someday"] .task-item:not(:hover):not(:focus-within) > .subtask-collapse,
   body.is-editing .task-list[data-tasklist="someday"] .task-item:not(:focus-within) > .subtask-collapse,
@@ -3672,6 +3678,7 @@ body.reorder-mode .sticky:not(.reorder-active) {
 /* waiting의 완료된 하위 항목도 gotta do처럼 가로로 주르륵(줄바꿈은 폭이 모자랄 때만).
    접혀 있을 땐 자리를 안 차지하게 display:none, (n/m) 알약을 눌러 펼치면 칩이 나란히 나타남. */
 .task-list[data-tasklist="waiting"] .subtask-item.done,
+.task-list[data-tasklist="scheduled"] .subtask-item.done,
 .task-list[data-tasklist="waitingLater"] .subtask-item.done {
   flex: 0 1 auto;
   max-height: none;
@@ -3679,6 +3686,7 @@ body.reorder-mode .sticky:not(.reorder-active) {
 }
 
 .task-list[data-tasklist="waiting"] .task-item:not(.done-open) .subtask-item.done,
+.task-list[data-tasklist="scheduled"] .task-item:not(.done-open) .subtask-item.done,
 .task-list[data-tasklist="waitingLater"] .task-item:not(.done-open) .subtask-item.done {
   display: none;
 }

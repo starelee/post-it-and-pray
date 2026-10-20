@@ -1148,6 +1148,8 @@
       if (typeof t.from === 'string' && t.from) out.from = t.from;
       if (typeof t.order === 'number' && isFinite(t.order)) out.order = t.order;
       if (typeof t.snoozedAt === 'string' && t.snoozedAt) out.snoozedAt = t.snoozedAt;
+      if (typeof t.dueSetAt === 'string' && t.dueSetAt) out.dueSetAt = t.dueSetAt;
+      if (t.todaySlot && t.todaySlot.date === todayStr() && Number.isInteger(t.todaySlot.index) && t.todaySlot.index >= 0) out.todaySlot = { date: t.todaySlot.date, index: t.todaySlot.index }; // 같은 날만 기억 — 다음 날이면 버림
       if (typeof t.deletedAt === 'string' && t.deletedAt) out.deletedAt = t.deletedAt;
       if (typeof t.updatedAt === 'number' && isFinite(t.updatedAt)) out.updatedAt = t.updatedAt;
       if (out.done) {
@@ -1742,20 +1744,34 @@
     });
     return sigs;
   }
+  // 항목별 마지막으로 본 마감일 — 마감일이 바뀐 날을 dueSetAt에 남기려고
+  function taskDueDates() {
+    const m = new Map();
+    BOARD_IDS.forEach(boardId => (boards[boardId] || []).forEach(t => m.set(t.id, t.dueDate || '')));
+    return m;
+  }
   let lastSigs = taskSignatures();
+  let lastDues = taskDueDates();
 
   function stampChangedTasks() {
     const now = Date.now();
     const sigs = new Map();
     BOARD_IDS.concat(['archive', 'lupin', 'trash']).forEach(boardId => {
       (boards[boardId] || []).forEach(t => {
-        const { updatedAt, snoozedAt, ...rest } = t; // 미루기는 '손댄' 것으로 치지 않음
+        const { updatedAt, snoozedAt, dueSetAt, ...rest } = t; // 미루기·마감일 정한 날은 '손댄' 것으로 치지 않음
         const sig = boardId + '|' + JSON.stringify(rest);
         sigs.set(t.id, sig);
         if (lastSigs.get(t.id) !== sig) t.updatedAt = now;
       });
     });
     lastSigs = sigs;
+    // 마감일이 새로 생기거나 바뀐 항목은 그날을 기록(하루 시작하기가 '방금 정한 마감'을 다시 묻지 않게)
+    const dues = taskDueDates();
+    BOARD_IDS.forEach(boardId => (boards[boardId] || []).forEach(t => {
+      if (t.dueDate && dues.get(t.id) !== lastDues.get(t.id)) t.dueSetAt = todayStr();
+      else if (!t.dueDate) delete t.dueSetAt;
+    }));
+    lastDues = dues;
   }
 
   const UNDO_LIMIT = 10;
@@ -1781,6 +1797,7 @@
     redoStack.length = 0;
     lastSnapshot = JSON.stringify(boards);
     lastSigs = taskSignatures(); // 클라우드에서 받은 항목을 "방금 바뀐 것"으로 오인하지 않게
+    lastDues = taskDueDates();
   }
 
   let toastEl = null;
@@ -2431,7 +2448,7 @@
     // 지나면 접힘.
     // waiting은 하위 항목이 있으면 늘 눌 수 있게 — 그릴 때의 완료 개수로 정하면, 나중에 체크한 뒤에
     // (다시 그려지기 전까지) (n/m) 알약이 안 눌렸음.
-    const togglable = boardId === 'waiting' ? task.subtasks.length > 0 : task.done;
+    const togglable = (boardId === 'waiting' || boardId === 'scheduled') ? task.subtasks.length > 0 : task.done; // pray later도 waiting과 같음
     const makeToggle = (el) => {
       if (!togglable) return;
       el.classList.add('subtask-progress-toggle');
@@ -4282,15 +4299,31 @@
     }, outMs);
   }
 
+  // gotta do 카드에 지금 그려지는 미완료 항목들(직접 등록 + 오늘 마감)을 renderToday와 같은 순서로
+  function todayActiveTasks() {
+    const today = todayStr();
+    return sortByOrder(
+      boards.today.filter(t => !t.done).map(t => ({ task: t }))
+        .concat(boards.scheduled.filter(t => !t.done && t.dueDate === today).sort(byDueDate).map(t => ({ task: t }))),
+      e => e.task
+    ).map(e => e.task);
+  }
+
   function moveTask(fromBoardId, toBoardId, id) {
     const idx = boards[fromBoardId].findIndex(t => t.id === id);
     if (idx === -1) return;
+    // gotta do를 떠나는 미완료 항목은 그날의 자리(몇 번째였는지)를 기억 — 같은 날 gotta do로 돌아오면 그 자리로
+    const slot = fromBoardId === 'today' && !boards.today[idx].done
+      ? todayActiveTasks().findIndex(t => t.id === id) : -1;
     const [task] = boards[fromBoardId].splice(idx, 1);
     delete task.dueDate;
     delete task.replyDate; // 회신 예정일은 waiting에 있을 때만 의미 있음
     delete task.from;
     delete task.snoozedAt; // 미루기는 묵은 것 목록 안에서만 의미 있음
     delete task.order; // 수동 순서는 그 보드 안에서만 의미 있음
+    const savedSlot = task.todaySlot;
+    delete task.todaySlot;
+    if (slot >= 0) task.todaySlot = { date: todayStr(), index: slot };
     if (toBoardId === 'waiting') {
       // waiting has no done concept — defend against a done task landing
       // there via a hover move-button from another board.
@@ -4298,6 +4331,15 @@
       delete task.doneAt;
     }
     boards[toBoardId].push(task);
+    if (toBoardId === 'today') {
+      // 같은 날 gotta do를 떠났던 자리가 있으면 그 자리로 — 다른 항목들은 지금 보이는 순서를 그대로 번호로 굳힘
+      delete task.todaySlot;
+      if (savedSlot && savedSlot.date === todayStr() && !task.done) {
+        const list = todayActiveTasks().filter(t => t !== task);
+        list.splice(Math.min(savedSlot.index, list.length), 0, task);
+        list.forEach((t, i) => { t.order = i; });
+      }
+    }
     saveBoards();
     finishMove(fromBoardId, toBoardId, task, () => {
       render(fromBoardId);
@@ -6976,7 +7018,10 @@
   const DAYSTART_FOLLOW_DAYS = 3;          // 후속 연락을 고르면 원본의 다음 확인 날짜를 이만큼 뒤로
   // 이 처리를 고르면 gotta do 목록에서 빠짐
   const DAYSTART_LEAVES_TODAY = ['toSomeday', 'drop', 'done', 'later', 'merge'];
-  const DAYSTART_DUE_SOON_DAYS = 2;        // 마감이 이만큼 안으로 다가오면 '오늘 미리 시작할래요?'
+  const DAYSTART_DUE_SOON_DAYS = 2;        // 마감이 이만큼 안으로 다가오면 '오늘 미리 시작할래요?'(모레는 금요일에 일요일 마감일 때만)
+  const DAYSTART_DUE_SOON_MAX = 3;         // 그 질문은 한 번에 마감이 빠른 순으로 이만큼까지만
+  const DAYSTART_DUE_TODAY_MAX = 3;        // '오늘 마감인데, 긴급건으로 처리할래요?'는 한 번에 이만큼까지만
+  const DAYSTART_DUE_SET_RECENT = 3;       // 마감일을 정한 지 이만큼(일) 안이면 이미 알고 있는 일이라 안 물음
   // 오늘 이미 일이 이만큼 많으면 '마감이 곧 다가와요' 질문은 안 물음(모레 마감은 BUSY, 내일 마감은 한도까지 봐줌)
   const DAYSTART_BUSY_TODAY = 5;
   const DAYSTART_BIG_OVERDUE = 7;          // 마감이 이만큼 넘게 지났으면 '다시 잡을래요?'
@@ -7387,12 +7432,20 @@
     // 지금 gotta do 카드에 보이는 미완료 개수: 일반 항목 + 오늘 마감 + oops(마감 지난 것)
     const busyCount = boards.today.filter(t => !t.done).length
       + boards.scheduled.filter(t => !t.done && t.dueDate && t.dueDate <= today).length;
-    boards.scheduled.forEach(t => {
-      if (t.done || byTask.has(t.id) || !t.dueDate) return;
-      const dd = daysUntilDue(t.dueDate);
-      if (busyCount >= (dd >= 2 ? DAYSTART_BUSY_TODAY : DAYSTART_TODAY_LIMIT)) return;
-      if (dd >= 1 && dd <= DAYSTART_DUE_SOON_DAYS) push({ task: t, boardId: 'scheduled', tags: [dd === 1 ? '내일 마감' : '모레 마감'], group: 'dueSoon' });
-    });
+    const isFriday = new Date().getDay() === 5;
+    boards.scheduled
+      .filter(t => !t.done && !byTask.has(t.id) && t.dueDate)
+      .sort(byDueDate)
+      .filter(t => {
+        const dd = daysUntilDue(t.dueDate);
+        if (busyCount >= (dd >= 2 ? DAYSTART_BUSY_TODAY : DAYSTART_TODAY_LIMIT)) return false;
+        // 마감일을 방금 정한 일은 이미 알고 있으므로 묻지 않음
+        if (t.dueSetAt && -daysUntilDue(t.dueSetAt) < DAYSTART_DUE_SET_RECENT) return false;
+        // 모레 마감은 금요일에 일요일 마감일 때만(주말 전에 챙기기)
+        return dd === 1 || (dd === 2 && isFriday);
+      })
+      .slice(0, DAYSTART_DUE_SOON_MAX)
+      .forEach(t => push({ task: t, boardId: 'scheduled', tags: [daysUntilDue(t.dueDate) === 1 ? '내일 마감' : '모레 마감'], group: 'dueSoon' }));
     // 확인 날짜 없이 오래 기다리는 waiting
     boards.waiting.forEach(t => {
       if (t.replyDate || byTask.has(t.id)) return;
@@ -7439,6 +7492,15 @@
       if (byTask.has(newer.task.id)) return;
       push({ task: newer.task, boardId: newer.boardId, tags: ['같은 제목'], group: 'dup', dupOf: older.task });
     });
+    // '오늘 마감인데, 긴급건으로?'는 너무 자주 떠서: 마감일을 방금 정한 건 이미 아는 일이라 빼고, 한 번에 N개까지만(나머지는 gotta do에 그대로 보임)
+    let dueTodayAsked = 0;
+    for (let i = 0; i < items.length; i++) {
+      const it = items[i];
+      if (it.group !== 'dueToday' || it.task.urgent) continue;
+      const recent = it.task.dueSetAt && -daysUntilDue(it.task.dueSetAt) < DAYSTART_DUE_SET_RECENT;
+      if (recent || dueTodayAsked >= DAYSTART_DUE_TODAY_MAX) { items.splice(i--, 1); continue; }
+      dueTodayAsked++;
+    }
     // 방금 미룬 것은 날짜가 정하는 항목이 아니면 잠시 건너뜀
     const rank = k => DAYSTART_GROUPS.findIndex(g => g.key === k);
     return items
@@ -7532,7 +7594,7 @@
       case 'replyToday':
         return [checkTomorrow, checkLater, clearReply, { label: '제가 직접 처리할게요 (오늘 할 일로)', patch: { action: 'today' } }, finished('해결됐어요')];
       case 'dueToday':
-        return [tomorrow, { label: '날짜 정해서 미루기', pickDate: true, pickAction: 'later', pickLabel: '미룰 날짜', pickMoved: true }, clearDate, finished('이미 끝났어요 (완료)')];
+        return [tomorrow, { label: '날짜 정하기', pickDate: true, pickAction: 'later', pickLabel: '미룰 날짜', pickMoved: true }, clearDate, finished('이미 끝났어요 (완료)')];
       case 'dueSoon':
         return [clearDate];
       case 'urgentOld':

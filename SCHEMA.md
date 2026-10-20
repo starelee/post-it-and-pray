@@ -36,6 +36,8 @@ type Task = {
   note?: string;         // 메모(최대 500자, 줄바꿈 허용) — 없거나 빈 문자열이면 필드 자체가 없음. 항목이 보드를 옮겨 다니거나 아카이브로 가도 그대로 따라감
   from?: string;         // 보드 id 문자열 — 아래 "from 필드의 두 가지 의미" 참고
   doneAt?: string;       // "YYYY-MM-DD" — done === true인 항목에만 존재
+  todaySlot?: { date: string; index: number }; // gotta do를 떠난 날(YYYY-MM-DD)과 그때의 자리(0부터). 같은 날 gotta do로 돌아오면 그 자리로 복원하고 지움. 날짜가 오늘이 아니면 읽을 때 버림
+  dueSetAt?: string;     // "YYYY-MM-DD" — dueDate가 생기거나 바뀐 날(saveBoards가 찍음). 하루 시작하기가 방금 정한 마감을 다시 묻지 않는 근거. updatedAt은 올리지 않음
   updatedAt?: number;    // 마지막으로 바뀐 시각(ms, Date.now()) — saveBoards가 바뀐 항목에만 찍음. 클라우드 병합에서 "더 나중에 바꾼 쪽이 이김"의 근거
 };
 ```
