@@ -7532,7 +7532,7 @@
       case 'replyToday':
         return [checkTomorrow, checkLater, clearReply, { label: '제가 직접 처리할게요 (오늘 할 일로)', patch: { action: 'today' } }, finished('해결됐어요')];
       case 'dueToday':
-        return [tomorrow, { label: '날짜 정해서 미루기', pickDate: true, pickAction: 'later', pickLabel: '미룰 날짜', pickMoved: true }, clearDate, finished('이미 끝났어요 (완료)')];
+        return [tomorrow, { label: '날짜 정하기', pickDate: true, pickAction: 'later', pickLabel: '미룰 날짜', pickMoved: true }, clearDate, finished('이미 끝났어요 (완료)')];
       case 'dueSoon':
         return [clearDate];
       case 'urgentOld':
