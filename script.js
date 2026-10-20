@@ -1148,6 +1148,7 @@
       if (typeof t.from === 'string' && t.from) out.from = t.from;
       if (typeof t.order === 'number' && isFinite(t.order)) out.order = t.order;
       if (typeof t.snoozedAt === 'string' && t.snoozedAt) out.snoozedAt = t.snoozedAt;
+      if (typeof t.dueSetAt === 'string' && t.dueSetAt) out.dueSetAt = t.dueSetAt;
       if (t.todaySlot && t.todaySlot.date === todayStr() && Number.isInteger(t.todaySlot.index) && t.todaySlot.index >= 0) out.todaySlot = { date: t.todaySlot.date, index: t.todaySlot.index }; // 같은 날만 기억 — 다음 날이면 버림
       if (typeof t.deletedAt === 'string' && t.deletedAt) out.deletedAt = t.deletedAt;
       if (typeof t.updatedAt === 'number' && isFinite(t.updatedAt)) out.updatedAt = t.updatedAt;
@@ -1743,20 +1744,34 @@
     });
     return sigs;
   }
+  // 항목별 마지막으로 본 마감일 — 마감일이 바뀐 날을 dueSetAt에 남기려고
+  function taskDueDates() {
+    const m = new Map();
+    BOARD_IDS.forEach(boardId => (boards[boardId] || []).forEach(t => m.set(t.id, t.dueDate || '')));
+    return m;
+  }
   let lastSigs = taskSignatures();
+  let lastDues = taskDueDates();
 
   function stampChangedTasks() {
     const now = Date.now();
     const sigs = new Map();
     BOARD_IDS.concat(['archive', 'lupin', 'trash']).forEach(boardId => {
       (boards[boardId] || []).forEach(t => {
-        const { updatedAt, snoozedAt, ...rest } = t; // 미루기는 '손댄' 것으로 치지 않음
+        const { updatedAt, snoozedAt, dueSetAt, ...rest } = t; // 미루기·마감일 정한 날은 '손댄' 것으로 치지 않음
         const sig = boardId + '|' + JSON.stringify(rest);
         sigs.set(t.id, sig);
         if (lastSigs.get(t.id) !== sig) t.updatedAt = now;
       });
     });
     lastSigs = sigs;
+    // 마감일이 새로 생기거나 바뀐 항목은 그날을 기록(하루 시작하기가 '방금 정한 마감'을 다시 묻지 않게)
+    const dues = taskDueDates();
+    BOARD_IDS.forEach(boardId => (boards[boardId] || []).forEach(t => {
+      if (t.dueDate && dues.get(t.id) !== lastDues.get(t.id)) t.dueSetAt = todayStr();
+      else if (!t.dueDate) delete t.dueSetAt;
+    }));
+    lastDues = dues;
   }
 
   const UNDO_LIMIT = 10;
@@ -1782,6 +1797,7 @@
     redoStack.length = 0;
     lastSnapshot = JSON.stringify(boards);
     lastSigs = taskSignatures(); // 클라우드에서 받은 항목을 "방금 바뀐 것"으로 오인하지 않게
+    lastDues = taskDueDates();
   }
 
   let toastEl = null;
@@ -7002,7 +7018,9 @@
   const DAYSTART_FOLLOW_DAYS = 3;          // 후속 연락을 고르면 원본의 다음 확인 날짜를 이만큼 뒤로
   // 이 처리를 고르면 gotta do 목록에서 빠짐
   const DAYSTART_LEAVES_TODAY = ['toSomeday', 'drop', 'done', 'later', 'merge'];
-  const DAYSTART_DUE_SOON_DAYS = 2;        // 마감이 이만큼 안으로 다가오면 '오늘 미리 시작할래요?'
+  const DAYSTART_DUE_SOON_DAYS = 2;        // 마감이 이만큼 안으로 다가오면 '오늘 미리 시작할래요?'(모레는 금요일에 일요일 마감일 때만)
+  const DAYSTART_DUE_SOON_MAX = 3;         // 그 질문은 한 번에 마감이 빠른 순으로 이만큼까지만
+  const DAYSTART_DUE_SET_RECENT = 3;       // 마감일을 정한 지 이만큼(일) 안이면 이미 알고 있는 일이라 안 물음
   // 오늘 이미 일이 이만큼 많으면 '마감이 곧 다가와요' 질문은 안 물음(모레 마감은 BUSY, 내일 마감은 한도까지 봐줌)
   const DAYSTART_BUSY_TODAY = 5;
   const DAYSTART_BIG_OVERDUE = 7;          // 마감이 이만큼 넘게 지났으면 '다시 잡을래요?'
@@ -7413,12 +7431,20 @@
     // 지금 gotta do 카드에 보이는 미완료 개수: 일반 항목 + 오늘 마감 + oops(마감 지난 것)
     const busyCount = boards.today.filter(t => !t.done).length
       + boards.scheduled.filter(t => !t.done && t.dueDate && t.dueDate <= today).length;
-    boards.scheduled.forEach(t => {
-      if (t.done || byTask.has(t.id) || !t.dueDate) return;
-      const dd = daysUntilDue(t.dueDate);
-      if (busyCount >= (dd >= 2 ? DAYSTART_BUSY_TODAY : DAYSTART_TODAY_LIMIT)) return;
-      if (dd >= 1 && dd <= DAYSTART_DUE_SOON_DAYS) push({ task: t, boardId: 'scheduled', tags: [dd === 1 ? '내일 마감' : '모레 마감'], group: 'dueSoon' });
-    });
+    const isFriday = new Date().getDay() === 5;
+    boards.scheduled
+      .filter(t => !t.done && !byTask.has(t.id) && t.dueDate)
+      .sort(byDueDate)
+      .filter(t => {
+        const dd = daysUntilDue(t.dueDate);
+        if (busyCount >= (dd >= 2 ? DAYSTART_BUSY_TODAY : DAYSTART_TODAY_LIMIT)) return false;
+        // 마감일을 방금 정한 일은 이미 알고 있으므로 묻지 않음
+        if (t.dueSetAt && -daysUntilDue(t.dueSetAt) < DAYSTART_DUE_SET_RECENT) return false;
+        // 모레 마감은 금요일에 일요일 마감일 때만(주말 전에 챙기기)
+        return dd === 1 || (dd === 2 && isFriday);
+      })
+      .slice(0, DAYSTART_DUE_SOON_MAX)
+      .forEach(t => push({ task: t, boardId: 'scheduled', tags: [daysUntilDue(t.dueDate) === 1 ? '내일 마감' : '모레 마감'], group: 'dueSoon' }));
     // 확인 날짜 없이 오래 기다리는 waiting
     boards.waiting.forEach(t => {
       if (t.replyDate || byTask.has(t.id)) return;
