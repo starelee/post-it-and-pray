@@ -2432,7 +2432,7 @@
     // 지나면 접힘.
     // waiting은 하위 항목이 있으면 늘 눌 수 있게 — 그릴 때의 완료 개수로 정하면, 나중에 체크한 뒤에
     // (다시 그려지기 전까지) (n/m) 알약이 안 눌렸음.
-    const togglable = boardId === 'waiting' ? task.subtasks.length > 0 : task.done;
+    const togglable = (boardId === 'waiting' || boardId === 'scheduled') ? task.subtasks.length > 0 : task.done; // pray later도 waiting과 같음
     const makeToggle = (el) => {
       if (!togglable) return;
       el.classList.add('subtask-progress-toggle');
