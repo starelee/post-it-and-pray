@@ -143,6 +143,7 @@ type DayStartDraft = {
   prep: { key: string; text: string; date?: string; src?: string }[];  // 순서 단계에서 추가한/캘린더 일정에서 담은 할 일(확정 때 Task로 만들어짐, 날짜가 내일 이후면 pray later로). src = '<구글 일정 id>@<날짜>'(캘린더에서 담은 것)
   order: string[];                    // 오늘 순서: 항목 id 또는 'f:<원본id>'(후속)/'p:<n>'(추가) 키
   orderW: string[];                   // 기다리는 중(waiting) 순서 — 항목 id 키, 직접 바꾼 경우만 확정 때 task.order로 기록
+  doneKeys: string[];                 // 오늘 순서 화면에서 ✓로 완료 표시한 항목 키(id 또는 추가한 할 일 키) — 확정 때 완료 처리, 오늘 목록에 없는 키는 무시
   seq: number;
 };
 ```

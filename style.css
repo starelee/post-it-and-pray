@@ -4404,6 +4404,33 @@ body.reorder-mode .sticky:not(.reorder-active) {
   opacity: 1;
 }
 
+/* 완료 표시(✓) — 평소엔 흐리게, 누르면 줄에 취소선 */
+.day-start__check {
+  flex: 0 0 auto;
+  height: var(--day-start-line);
+  padding: 0 4px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 15px;
+  line-height: var(--day-start-line);
+  color: var(--ink-soft);
+  opacity: 0.4;
+}
+
+.day-start__check:hover,
+.day-start__check:focus-visible,
+.day-start__check[aria-pressed="true"] {
+  opacity: 1;
+  color: var(--accent);
+}
+
+.day-start__order-item.is-done .search-item-text,
+.day-start__order-item.is-done .day-start__num {
+  text-decoration: line-through;
+  opacity: 0.5;
+}
+
 /* 순서 바꾸기 모드의 ⋮⋮ 손잡이와 같은 모양 */
 .day-start__handle {
   flex: 0 0 auto;
@@ -4515,6 +4542,7 @@ body.reorder-mode .sticky:not(.reorder-active) {
   }
 
   .day-start__handle,
+  .day-start__check,
   .day-start__move {
     height: calc(var(--day-start-line) * 2);
   }

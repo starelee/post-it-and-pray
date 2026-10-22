@@ -7030,7 +7030,6 @@
   const DAYSTART_WAIT_DAYS = 3;            // waiting이 이만큼 손을 안 탔으면 '후속 연락을 하실래요?'를 물음
   const DAYSTART_NOREPLY_DAYS = 7;         // 확인 날짜 없는 waiting이 이만큼 묵으면 '3일 뒤에 확인할까요?'
   const DAYSTART_TODAY_LIMIT = 8;          // 오늘 할 일이 이보다 많으면 '내일로 미룰래요?'
-  const DAYSTART_FOCUS_MIN = 25;           // 확정 뒤 '바로 시작할래요?'의 포커스 시간(분)
 
   const dayStartEl = document.getElementById('dayStart');
   const dayStartBodyEl = document.getElementById('dayStartBody');
@@ -7281,7 +7280,7 @@
 
   // ───── 초안 저장/불러오기 ─────
   function dsFreshDraft() {
-    return { date: todayStr(), step: 'tidy', decisions: {}, log: [], prep: [], order: [], orderW: [], toToday: [], seq: 1, overload: undefined };
+    return { date: todayStr(), step: 'tidy', decisions: {}, log: [], prep: [], order: [], orderW: [], toToday: [], doneKeys: [], seq: 1, overload: undefined };
   }
 
   function dsLoadDraft() {
@@ -7301,6 +7300,7 @@
             order: d.order.filter(k => typeof k === 'string'),
             orderW: Array.isArray(d.orderW) ? d.orderW.filter(k => typeof k === 'string') : [],
             toToday: Array.isArray(d.toToday) ? d.toToday.filter(k => typeof k === 'string') : [],
+            doneKeys: Array.isArray(d.doneKeys) ? d.doneKeys.filter(k => typeof k === 'string') : [],
             seq: Number(d.seq) > 0 ? Number(d.seq) : 1,
             overload: d.overload && typeof d.overload === 'object' ? d.overload : undefined
           };
@@ -7737,6 +7737,12 @@
     return out;
   }
 
+  // 순서 화면에서 ✓로 완료 표시한 것 중 지금 오늘 목록에 실제로 있는 것(확정하면 완료 처리됨)
+  function dsDoneKeys(entries) {
+    const live = new Set(entries.map(e => e.key));
+    return new Set((ds.doneKeys || []).filter(k => live.has(k)));
+  }
+
   // 초안의 순서(ds.order)를 먼저 따르고, 거기 없는 항목(새로 들어온 것)은 아래에 붙임
   function dsMergeOrder(entries, saved) {
     const byKey = new Map(entries.map(e => [e.key, e]));
@@ -7778,6 +7784,7 @@
     const postponed = ds.overload && ds.overload.ids ? ds.overload.ids.length : 0;
     const newTask = c.follow + c.repeat + ds.prep.filter(p => p.text.trim()).length;
     const entries = dsBuildOrderEntries();
+    c.done += dsDoneKeys(entries).size;
     const wEntries = dsBuildWaitingEntries();
     const orderChanged = dsMergeOrder(entries).join('|') !== entries.map(e => e.key).join('|')
       || dsMergeOrder(wEntries, ds.orderW).join('|') !== wEntries.map(e => e.key).join('|');
@@ -8352,7 +8359,7 @@
   }
 
   // 순서 목록 한 개(오늘 할 일 / 기다리는 중) — 한 줄에 하나, 손잡이(⋮⋮)는 순서 바꾸기 모드와 같은 모양.
-  function dsBuildReorderList(keys, byKey, setKeys, label, deletable, extra) {
+  function dsBuildReorderList(keys, byKey, setKeys, label, deletable, extra, checkable) {
     const list = dsEl('ol', 'search-list day-start__order-list');
     list.setAttribute('aria-label', label);
     const moveTo = (from, to, focusKey) => {
@@ -8374,6 +8381,8 @@
       li.dataset.key = key;
       li.appendChild(dsEl('span', 'day-start__num', String(i + 1)));
       li.appendChild(makeBoardIcon(e.board));
+      const isDone = !!checkable && (ds.doneKeys || []).includes(key);
+      if (isDone) li.classList.add('is-done');
       li.appendChild(dsEl('span', 'search-item-text', e.text));
       if (e.urgent) li.appendChild(makeSearchChip('긴급')); // 출처 칩(정비에서 가져옴 등)은 없앰 — 긴급만
       if (deletable && key.indexOf('p:') === 0) {
@@ -8389,6 +8398,19 @@
       }
       const extraBtn = extra ? extra(key, e) : null;
       if (extraBtn) li.appendChild(extraBtn);
+      if (checkable) {
+        // ✓ — 완료 표시(확정할 때 완료 처리). 다시 누르면 취소
+        const check = dsEl('button', 'day-start__check', '✓');
+        check.type = 'button';
+        check.setAttribute('aria-pressed', isDone ? 'true' : 'false');
+        check.setAttribute('aria-label', (isDone ? '완료 취소: ' : '완료로 표시: ') + e.text);
+        check.addEventListener('click', () => {
+          ds.doneKeys = isDone ? ds.doneKeys.filter(k => k !== key) : (ds.doneKeys || []).concat(key);
+          dsSaveDraft();
+          dsRender();
+        });
+        li.appendChild(check);
+      }
       const up = dsEl('button', 'day-start__move', '↑');
       up.type = 'button';
       up.setAttribute('aria-label', '위로');
@@ -8424,7 +8446,7 @@
       ? '급한 것부터 순서를 제안했어요. 바꾸고 싶으면 끌어 주세요.'
       : '오늘 할 일이 아직 없어요. 아래에서 추가할 수 있어요.'));
     if (keys.length) {
-      dayStartBodyEl.appendChild(dsBuildReorderList(keys, byKey, (next) => { ds.order = next; }, '오늘 실행 순서', true));
+      dayStartBodyEl.appendChild(dsBuildReorderList(keys, byKey, (next) => { ds.order = next; }, '오늘 실행 순서', true, null, true));
     }
 
     // 보드 맨 아래 "+ 끄적이기..." 줄과 같은 입력줄 — 오늘 할 일을 바로 추가
@@ -8723,7 +8745,7 @@
     const counter = { n: Date.now() };
     const newTasks = new Map();
     let changed = false;
-    let startTask = null; // 확정 뒤 '첫 번째 일을 바로 시작할래요?'에 쓸 첫 할 일
+    let hasLive = false; // 확정 뒤 오늘 목록에 남은 할 일이 있는지(있으면 포커스 할 일 고르기로 넘김)
     try {
       dsQuestions().forEach(({ item }) => {
         const d = dsEffective(item.key);
@@ -8776,6 +8798,15 @@
         changed = true;
       });
 
+      // 순서 화면에서 ✓로 완료 표시한 것 — 방금 만든/옮겨온 것까지 포함해 오늘 목록에서 찾아 완료 처리
+      dsDoneKeys(entries).forEach(k => {
+        const t = newTasks.get(k) || boards.today.find(x => String(x.id) === k && !x.done)
+          || boards.scheduled.find(x => String(x.id) === k && !x.done && x.dueDate === today);
+        if (!t) return;
+        dsCompleteTask(boards.today.includes(t) ? 'today' : 'scheduled', t);
+        changed = true;
+      });
+
       // 오늘 목록(일반 + 오늘 마감)에 남은 할 일에 확정한 순서를 그대로 기록
       const live = boards.today.filter(t => !t.done)
         .concat(boards.scheduled.filter(t => !t.done && t.dueDate === today));
@@ -8793,8 +8824,7 @@
         if (t && liveSet.has(t) && !placed.has(t)) { placed.add(t); place(t); }
       });
       live.forEach(t => { if (!placed.has(t)) { placed.add(t); place(t); } });
-      const first = live.find(t => t.order === 0);
-      if (first) startTask = { task: first, boardId: boards.today.includes(first) ? 'today' : 'scheduled' };
+      hasLive = live.length > 0;
 
       // 기다리는 중 순서(직접 바꾼 경우) — waiting 카드에 보이는 항목에 0부터 차례로
       if (finalWaitKeys) {
@@ -8822,21 +8852,8 @@
     updateDayStartBadge();
     renderAll();
     showToast(changed && !isTouchOnly() ? '오늘 계획을 확정했어요 · Ctrl+Z로 되돌릴 수 있어요' : '오늘 계획을 확정했어요');
-    // 정리한 다음 바로 손대도록 — 첫 번째 일을 포커스 모드(🍅)로 시작할지 물음
-    if (startTask && !isFocusCountdownLocked() && !focusState) {
-      showConfirm({
-        title: '첫 번째 일을 바로 시작할래요?',
-        message: startTask.task.text + '\n🍅 ' + DAYSTART_FOCUS_MIN + '분',
-        confirmLabel: '시작',
-        cancelLabel: '나중에'
-      }).then(ok => {
-        if (!ok || isFocusCountdownLocked() || focusState) return;
-        const t = boards[startTask.boardId].find(x => x.id === startTask.task.id);
-        if (!t || t.done) return;
-        enterFocusPickDuration(startTask.boardId, t.id);
-        startFocusCountdown(DAYSTART_FOCUS_MIN * 60);
-      });
-    }
+    // 정리한 다음 바로 손대도록 — 남은 할 일이 있으면 포커스(🍅)의 할 일 고르기 화면으로 넘김
+    if (hasLive && !isFocusCountdownLocked() && !focusState) enterFocusPickTask();
   }
 
   // ───── 열고 닫기 ─────
