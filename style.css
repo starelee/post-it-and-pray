@@ -3922,6 +3922,21 @@ body.reorder-mode .sticky:not(.reorder-active) {
   border-bottom-color: var(--accent);
 }
 
+/* 긴 글의 입력창은 글자 폭(px)만큼 늘어나 × ⇄가 목록 밖으로 밀려나 잘렸음 —
+   줄 안에서 입력창이 줄어들어 × ⇄가 항상 보이고 눌리게 함(넘치는 글은 입력창 안에서 스크롤). */
+.sub-draggable {
+  max-width: 100%;
+}
+
+.sub-draggable .subtask-line {
+  max-width: 100%;
+}
+
+.sub-draggable .sub-edit-input {
+  min-width: 0;
+  flex: 0 1 auto;
+}
+
 .sub-edit-move {
   background: none;
   border: none;
