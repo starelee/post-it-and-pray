@@ -2804,13 +2804,15 @@
     transform: scale(1.15);
   }
 
-  /* 묶음: 같이 처리하는 항목들을 왼쪽 여백의 선으로 이음(체크박스 중심 높이 18px에서 가지가 나옴) */
+  /* 묶음: 같이 처리하는 항목들의 체크박스를 세로 선으로 이음.
+     체크박스는 항목 위에서 8px~28px(padding 5 + margin-top 3, 높이 20) — 상자 안은 가리지 않게
+     위쪽 조각(::before, 첫 항목 제외)과 아래쪽 조각(::after, 마지막 항목 제외)으로 나눠 그림. */
   .group-rail {
     position: absolute;
-    left: -10px;
+    left: 9px;
     top: 0;
     bottom: 0;
-    width: 9px;
+    width: 2px;
     pointer-events: none;
     color: var(--ink-soft);
   }
@@ -2819,34 +2821,25 @@
   .group-rail::after {
     content: '';
     position: absolute;
+    left: 0;
+    width: 2px;
     background: currentColor;
     opacity: 0.6;
   }
 
   .group-rail::before {
-    left: 0;
-    width: 2px;
     top: 0;
-    bottom: 0;
+    height: 6px;
   }
 
   .group-rail::after {
-    left: 0;
-    top: 17px;
-    width: 9px;
-    height: 2px;
-    border-radius: 0 2px 2px 0;
+    top: 30px;
+    bottom: 0;
   }
 
-  .group-first > .group-rail::before {
-    top: 17px;
-    border-radius: 2px 0 0 0;
-  }
-
-  .group-last > .group-rail::before {
-    bottom: auto;
-    height: 19px;
-    border-radius: 0 0 0 2px;
+  .group-first > .group-rail::before,
+  .group-last > .group-rail::after {
+    display: none;
   }
 
   /* 묶기 고르는 중: 같은 카드의 항목만 눌러서 고를 수 있음 */
