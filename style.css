@@ -36,6 +36,8 @@
     .add-subtask-toggle,
     .date-btn,
     .note-btn,
+    .group-btn,
+    .ungroup-btn,
     .date-clear-btn,
     .sticky-title-toggle,
     .reply-later-toggle,
@@ -2784,6 +2786,81 @@
   .note-btn:hover {
     opacity: 1;
     transform: scale(1.15);
+  }
+
+  .group-btn,
+  .ungroup-btn {
+    flex: 0 0 auto;
+    font-size: 14px;
+    line-height: 1;
+    padding: 2px 3px;
+    opacity: 0.6;
+    transition: opacity 0.15s var(--ease-ui), transform 0.15s var(--ease-ui);
+  }
+
+  .group-btn:hover,
+  .ungroup-btn:hover {
+    opacity: 1;
+    transform: scale(1.15);
+  }
+
+  /* 묶음: 같이 처리하는 항목들을 왼쪽 여백의 선으로 이음(체크박스 중심 높이 18px에서 가지가 나옴) */
+  .group-rail {
+    position: absolute;
+    left: -10px;
+    top: 0;
+    bottom: 0;
+    width: 9px;
+    pointer-events: none;
+    color: var(--ink-soft);
+  }
+
+  .group-rail::before,
+  .group-rail::after {
+    content: '';
+    position: absolute;
+    background: currentColor;
+    opacity: 0.6;
+  }
+
+  .group-rail::before {
+    left: 0;
+    width: 2px;
+    top: 0;
+    bottom: 0;
+  }
+
+  .group-rail::after {
+    left: 0;
+    top: 17px;
+    width: 9px;
+    height: 2px;
+    border-radius: 0 2px 2px 0;
+  }
+
+  .group-first > .group-rail::before {
+    top: 17px;
+    border-radius: 2px 0 0 0;
+  }
+
+  .group-last > .group-rail::before {
+    bottom: auto;
+    height: 19px;
+    border-radius: 0 0 0 2px;
+  }
+
+  /* 묶기 고르는 중: 같은 카드의 항목만 눌러서 고를 수 있음 */
+  body.link-mode .link-candidate {
+    cursor: pointer;
+    border-radius: 4px;
+    outline: 2px dashed var(--accent);
+    outline-offset: 1px;
+  }
+
+  body.link-mode .link-source {
+    border-radius: 4px;
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
   }
 
   /* 메모 모달 */
