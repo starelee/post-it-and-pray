@@ -149,15 +149,28 @@
 
   const WEEKDAY_KO = ['일', '월', '화', '수', '목', '금', '토'];
 
-  // pray later 카드/리갈패드 "다가오는 일" 사이의 7일 경계를 실시간으로
+  // pray later 카드에 보이는 마지막 날(오늘 기준 D+6) — 7일째는 오늘과 같은 요일이라 머리글이 헷갈려서 6일까지만.
+  // 그 뒤는 리갈패드 "not my problem... yet".
+  const PRAY_LATER_DAYS = 6;
+
+  // pray later 카드/리갈패드 "다가오는 일" 사이의 경계(PRAY_LATER_DAYS)를 실시간으로
   // 가르는 데 씀 — 저장 시점 플래그가 아니라 매 렌더링마다 오늘 날짜
-  // 기준으로 다시 계산하므로, 하루 지나면 D+8이 자동으로 D+7이 되어
+  // 기준으로 다시 계산하므로, 하루 지나면 D+7이 자동으로 D+6이 되어
   // 경계를 넘어감.
   function daysUntilDue(dateStr) {
     const d = new Date(dateStr + 'T00:00:00');
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     return Math.round((d - today) / 86400000);
+  }
+
+  // pray later 날짜 머리글 — 6일 안이라 요일로만(내일/모레/수요일…)
+  const WEEKDAY_FULL_KO = ['일요일', '월요일', '화요일', '수요일', '목요일', '금요일', '토요일'];
+  function prayDayLabel(dateStr) {
+    const n = daysUntilDue(dateStr);
+    if (n === 1) return '내일';
+    if (n === 2) return '모레';
+    return WEEKDAY_FULL_KO[new Date(dateStr + 'T00:00:00').getDay()];
   }
 
   function formatDueDateRelative(dateStr) {
@@ -425,7 +438,7 @@
   }
 
   // 검색 결과를 누르면 원래 항목으로 이동 — 검색 패드를 닫고, 접힌 구역(someday/pray later/
-  // waiting의 ⋯)이나 done 패널(완료 기록, 7일 넘게 남은 "not my problem... yet") 안에 있으면
+  // waiting의 ⋯)이나 done 패널(완료 기록, 7일째부터인 "not my problem... yet") 안에 있으면
   // 먼저 펼친 뒤 스크롤하고, 항목에 포커스를 주고 잠깐 강조함.
   function goToTask(boardId, taskId) {
     closeSearchPanel();
@@ -517,6 +530,11 @@
       row.appendChild(makeSearchChip(formatDueDateRelative(task[dateKey])));
     }
     if (task.note) row.appendChild(makeSearchChip('메모'));
+    if (groupKey !== 'done' && isGrouped(task)) {
+      const chip = makeSearchChip('🔗');
+      chip.title = '다른 항목과 묶여 있어요';
+      row.appendChild(chip);
+    }
     li.appendChild(row);
 
     const addSnippet = (label, text) => {
@@ -1147,6 +1165,7 @@
       if (typeof t.note === 'string' && t.note.trim()) out.note = t.note.slice(0, NOTE_MAX);
       if (typeof t.from === 'string' && t.from) out.from = t.from;
       if (typeof t.order === 'number' && isFinite(t.order)) out.order = t.order;
+      if (typeof t.group === 'number' && isFinite(t.group)) out.group = t.group;
       if (typeof t.snoozedAt === 'string' && t.snoozedAt) out.snoozedAt = t.snoozedAt;
       if (typeof t.dueSetAt === 'string' && t.dueSetAt) out.dueSetAt = t.dueSetAt;
       if (t.todaySlot && t.todaySlot.date === todayStr() && Number.isInteger(t.todaySlot.index) && t.todaySlot.index >= 0) out.todaySlot = { date: t.todaySlot.date, index: t.todaySlot.index }; // 같은 날만 기억 — 다음 날이면 버림
@@ -1186,6 +1205,7 @@
       b[boardId].forEach(t => {
         if (t.done && predicate(t)) {
           t.from = boardId;
+          delete t.group; // done으로 가면 묶음에서 빠짐
           b.archive.push(t);
         } else {
           keep.push(t);
@@ -2048,6 +2068,157 @@
     return (a.dueDate || '').localeCompare(b.dueDate || '');
   }
 
+  // ───────── 묶음(group) ─────────
+  // 같이 처리하는 항목끼리 task.group(묶음 id, 처음 묶인 항목의 id)을 공유. 별도 이름/보드 없이
+  // 한 카드 안에서 붙어 보이고(선으로 연결), 옮기거나 날짜를 줄 때 같이 움직임. 규칙은 SCHEMA.md 참고.
+  function groupMembers(gid) {
+    const out = [];
+    BOARD_IDS.forEach(b => boards[b].forEach(t => {
+      if (t.group === gid && !t.done) out.push({ boardId: b, task: t });
+    }));
+    return out;
+  }
+
+  // 완료하지 않은 짝이 둘 이상 있어야 "묶여 있는" 항목 — 짝이 사라진 묶음 id는 화면/동작에서 무시됨
+  function isGrouped(task) {
+    return !task.done && typeof task.group === 'number' && groupMembers(task.group).length >= 2;
+  }
+
+  // 짝이 하나 이하로 줄어든 묶음은 흔적(group)까지 지움(완료한 짝 포함)
+  function cleanGroup(gid) {
+    if (typeof gid !== 'number' || groupMembers(gid).length >= 2) return;
+    BOARD_IDS.forEach(b => boards[b].forEach(t => { if (t.group === gid) delete t.group; }));
+  }
+
+  function ungroupTask(task) {
+    const gid = task.group;
+    delete task.group;
+    cleanGroup(gid);
+  }
+
+  // 정렬된 목록에서 같은 묶음은 가장 앞에 나온 멤버 자리로 모아 붙임(묶음 안 순서는 원래 순서 유지)
+  function clusterGroups(list, key) {
+    const gOf = (x) => { const g = (key ? key(x) : x).group; return typeof g === 'number' ? g : null; };
+    const out = [];
+    const seen = new Set();
+    list.forEach(x => {
+      const g = gOf(x);
+      if (g === null) { out.push(x); return; }
+      if (seen.has(g)) return;
+      seen.add(g);
+      list.forEach(y => { if (gOf(y) === g) out.push(y); });
+    });
+    return out;
+  }
+
+  // 목록 안에서 바로 이어진 같은 묶음 항목들에 연결선(.group-rail)을 그림 — 구분선/다른 묶음에서 끊김
+  function markGroupRuns(listEl) {
+    if (!listEl) return;
+    const items = Array.from(listEl.children);
+    const same = (el, g) => el.classList.contains('task-item') && el.dataset.group === g;
+    let i = 0;
+    while (i < items.length) {
+      const g = items[i].classList.contains('task-item') ? items[i].dataset.group : undefined;
+      if (!g) { i++; continue; }
+      let j = i;
+      while (j + 1 < items.length && same(items[j + 1], g)) j++;
+      for (let k = i; j > i && k <= j; k++) {
+        const li = items[k];
+        li.classList.add('group-run', k === i ? 'group-first' : (k === j ? 'group-last' : 'group-mid'));
+        const rail = document.createElement('span');
+        rail.className = 'group-rail';
+        rail.setAttribute('aria-hidden', 'true');
+        li.appendChild(rail);
+      }
+      i = j + 1;
+    }
+  }
+
+  function renderGroupBoards() {
+    render('today');
+    render('waiting');
+    render('someday');
+    render('scheduled');
+  }
+
+  function findTaskAnywhere(id) {
+    for (const b of BOARD_IDS) {
+      const t = boards[b].find(x => x.id === id);
+      if (t) return t;
+    }
+    return null;
+  }
+
+  // 묶기: 🔗를 누른 항목(출발)과, 이어서 같은 카드에서 누른 항목을 한 묶음으로. 이미 묶음이 있으면 합침.
+  let linkSource = null; // { id, listEl }
+  function cancelLinkMode() {
+    if (!linkSource) return;
+    linkSource = null;
+    document.body.classList.remove('link-mode');
+    document.querySelectorAll('.link-source, .link-candidate').forEach(el => el.classList.remove('link-source', 'link-candidate'));
+  }
+
+  function startLinkMode(li, task) {
+    cancelLinkMode();
+    const listEl = li.parentElement;
+    linkSource = { id: task.id, listEl };
+    document.body.classList.add('link-mode');
+    li.classList.add('link-source');
+    Array.from(listEl.children).forEach(el => {
+      if (el !== li && el.classList.contains('task-item') && !el.classList.contains('done')) el.classList.add('link-candidate');
+    });
+    showToast('같이 묶을 항목을 눌러요 (Esc로 취소)');
+  }
+
+  function linkTasks(src, dst) {
+    const gid = typeof src.group === 'number' ? src.group : src.id;
+    if (typeof dst.group === 'number' && dst.group !== gid) {
+      BOARD_IDS.forEach(b => boards[b].forEach(t => { if (t.group === dst.group) t.group = gid; }));
+    }
+    src.group = gid;
+    dst.group = gid;
+    saveBoards();
+    renderGroupBoards();
+    showToast('묶었어요');
+  }
+
+  document.addEventListener('click', (e) => {
+    if (!linkSource) return;
+    if (e.target.closest('.group-btn')) return; // 묶기를 시작한(또는 다시 고른) 그 클릭
+    const li = e.target.closest('.task-item.link-candidate');
+    if (!li || li.parentElement !== linkSource.listEl) { cancelLinkMode(); return; }
+    e.preventDefault();
+    e.stopPropagation();
+    const src = findTaskAnywhere(linkSource.id);
+    const dst = findTaskAnywhere(Number(li.dataset.id));
+    cancelLinkMode();
+    if (src && dst && src !== dst) linkTasks(src, dst);
+  }, true);
+
+  window.addEventListener('keydown', (e) => {
+    if (linkSource && e.key === 'Escape') {
+      e.preventDefault();
+      cancelLinkMode();
+    }
+  }, true);
+
+  // 묶인 항목 하나만 옮기거나 날짜를 바꾸려 할 때 한 번 더 물음 — 'together' | 'solo'(그룹 해제) | null(닫음)
+  async function askGroupedAction(task, kind) {
+    const n = groupMembers(task.group).length;
+    const move = kind === 'move';
+    const ok = await showConfirm({
+      title: '이 항목은 묶여 있어요',
+      message: (move ? '이 항목만 옮기려면 그룹을 해제해야 해요. ' : '이 항목만 날짜를 바꾸려면 그룹을 해제해야 해요. ')
+        + '묶인 ' + n + '개를 ' + (move ? '같이 옮길 수도 있어요.' : '같이 바꿀 수도 있어요.'),
+      confirmLabel: move ? '같이 옮기기' : '같이 적용하기',
+      cancelLabel: '그룹 해제하기',
+      anchorEl: findTaskLi(task.id),
+      dismissResult: 'dismiss'
+    });
+    if (ok === 'dismiss') return null;
+    return ok ? 'together' : 'solo';
+  }
+
   // getClientRects()가 주는 줄 높이는 line-height(1.3)까지 포함한 "줄
   // 상자" 전체라, 손글씨체(NostalgicMyoeunHeullim)처럼 잉크가 위쪽에
   // 몰리고 아래쪽에 여백이 많은 폰트에서는 그 상자의 기하학적 중앙이
@@ -2136,7 +2307,7 @@
     listEl.innerHTML = '';
 
     const tasks = boards[boardId];
-    const active = sortByOrder(tasks.filter(t => !t.done));
+    const active = clusterGroups(sortByOrder(tasks.filter(t => !t.done)));
     const done = tasks.filter(t => t.done);
 
     if (active.length === 0 && done.length === 0) {
@@ -2156,6 +2327,7 @@
       done.forEach(t => listEl.appendChild(renderItem(boardId, t)));
     }
 
+    markGroupRuns(listEl);
     layoutStrikeLines(listEl);
     updateCounter();
   }
@@ -2171,8 +2343,8 @@
     const today = todayStr();
     const isLater = t => !!t.replyDate && t.replyDate > today;
     const tasks = boards.waiting;
-    const normal = sortByOrder(tasks.filter(t => !isLater(t)));
-    const later = tasks.filter(isLater).sort((a, b) => a.replyDate.localeCompare(b.replyDate));
+    const normal = clusterGroups(sortByOrder(tasks.filter(t => !isLater(t))));
+    const later = clusterGroups(tasks.filter(isLater).sort((a, b) => a.replyDate.localeCompare(b.replyDate)));
 
     if (normal.length === 0) {
       const hint = document.createElement('li');
@@ -2181,12 +2353,14 @@
       listEl.appendChild(hint);
     }
     normal.forEach(t => listEl.appendChild(renderItem('waiting', t)));
+    markGroupRuns(listEl);
 
     const laterListEl = getListEl('waitingLater');
     const section = document.querySelector('[data-reply-later]');
     if (laterListEl && section) {
       laterListEl.innerHTML = '';
       later.forEach(t => laterListEl.appendChild(renderItem('waiting', t)));
+      markGroupRuns(laterListEl);
       section.hidden = later.length === 0;
       const toggle = section.querySelector('[data-collapse-toggle]');
       if (toggle) {
@@ -2211,7 +2385,7 @@
     // "oops, still here" — don't duplicate them. Anything more than 7 days
     // out moves to the legal pad's "다가오는 일" section instead (see
     // renderUpcoming) so this card doesn't pile up with far-future items.
-    const active = tasks.filter(t => !t.done && t.dueDate > today && daysUntilDue(t.dueDate) <= 7);
+    const active = tasks.filter(t => !t.done && t.dueDate > today && daysUntilDue(t.dueDate) <= PRAY_LATER_DAYS);
     const done = tasks.filter(t => t.done);
 
     if (active.length === 0 && done.length === 0) {
@@ -2221,7 +2395,17 @@
       listEl.appendChild(hint);
     }
 
-    active.forEach(t => listEl.appendChild(renderItem('scheduled', t)));
+    // 날짜별 머리글(🙏 내일 / 모레 / 수요일…) 아래에 항목을 모음 — 항목마다 날짜 알약을 붙이지 않음.
+    // 묶음은 같은 날짜 안에서만 붙임(날짜가 다른 짝은 각자 머리글 아래에 있음).
+    const dates = Array.from(new Set(active.map(t => t.dueDate))).sort();
+    dates.forEach(date => {
+      const head = document.createElement('li');
+      head.className = 'date-heading';
+      head.textContent = '🙏 ' + prayDayLabel(date);
+      listEl.appendChild(head);
+      clusterGroups(active.filter(t => t.dueDate === date))
+        .forEach(t => listEl.appendChild(renderItem('scheduled', t, { hideDate: true })));
+    });
 
     if (done.length > 0) {
       const divider = document.createElement('li');
@@ -2231,6 +2415,7 @@
       done.forEach(t => listEl.appendChild(renderItem('scheduled', t)));
     }
 
+    markGroupRuns(listEl);
     layoutStrikeLines(listEl);
   }
 
@@ -2297,11 +2482,11 @@
 
     // 직접 등록한 항목과 오늘 마감 항목을 한 줄로 합쳐 수동 순서(order)대로 — 순서를
     // 정한 적 없으면 예전처럼 일반 항목 → 오늘 마감 순.
-    const activeEntries = sortByOrder(
+    const activeEntries = clusterGroups(sortByOrder(
       active.map(t => ({ boardId: 'today', task: t }))
         .concat(dueToday.map(t => ({ boardId: 'scheduled', task: t }))),
       e => e.task
-    );
+    ), e => e.task);
     activeEntries.forEach(e => listEl.appendChild(renderItem(e.boardId, e.task, { showFocusBtn: true })));
 
     if (done.length > 0 || doneToday.length > 0) {
@@ -2332,6 +2517,7 @@
 
     if (focusState) renderFocusPanel();
 
+    markGroupRuns(listEl);
     layoutStrikeLines(listEl);
     updateCounter();
   }
@@ -2388,6 +2574,7 @@
       moveHighlight = null;
     }
     li.dataset.id = task.id;
+    if (isGrouped(task)) li.dataset.group = task.group;
     li.addEventListener('pointerenter', () => placeEditChip(li));
     li.addEventListener('focusin', () => placeEditChip(li));
     li.addEventListener('touchstart', () => placeEditChip(li), { passive: true });
@@ -2473,7 +2660,7 @@
     const dateKey = dateFieldOf(boardId);
     let badge = null;
     // gotta do 카드 안의 오늘 마감 항목은 "오늘"이 뻔하니 라벨만 숨김(날짜 값은 그대로 — 📅로 수정 가능)
-    if (task[dateKey] && !(boardId === 'scheduled' && task.dueDate === todayStr())) {
+    if (task[dateKey] && !opts.hideDate && !(boardId === 'scheduled' && task.dueDate === todayStr())) {
       badge = document.createElement('span');
       badge.className = 'due-badge';
       badge.textContent = formatDueDateRelative(task[dateKey]);
@@ -2573,6 +2760,35 @@
     controls.appendChild(urgentBtn);
     controls.appendChild(addToggle);
     controls.appendChild(noteBtn);
+
+    if (boardId !== 'lupin' && !task.done) {
+      const groupBtn = document.createElement('button');
+      groupBtn.className = 'group-btn';
+      groupBtn.type = 'button';
+      groupBtn.setAttribute('aria-label', isGrouped(task) ? '묶음에 항목 더하기' : '다른 항목과 묶기');
+      groupBtn.title = '같이 처리할 항목 묶기';
+      groupBtn.textContent = '🔗';
+      groupBtn.addEventListener('click', () => {
+        if (commitPendingEditThenRetry(li, task.id, '.group-btn')) return;
+        startLinkMode(li, task);
+      });
+      controls.appendChild(groupBtn);
+      if (isGrouped(task)) {
+        const ungroupBtn = document.createElement('button');
+        ungroupBtn.className = 'ungroup-btn';
+        ungroupBtn.type = 'button';
+        ungroupBtn.setAttribute('aria-label', '묶음에서 빼기');
+        ungroupBtn.title = '이 항목을 묶음에서 빼기';
+        ungroupBtn.textContent = '✂️';
+        ungroupBtn.addEventListener('click', () => {
+          ungroupTask(task);
+          saveBoards();
+          renderGroupBoards();
+          showToast('묶음에서 뺐어요');
+        });
+        controls.appendChild(ungroupBtn);
+      }
+    }
 
     if (opts.showFocusBtn) {
       const focusBtn = document.createElement('button');
@@ -3118,16 +3334,16 @@
     return li;
   }
 
-  // "다가오는 일" — pray later 카드에 안 보이는(7일 넘게 남은) scheduled
+  // "다가오는 일" — pray later 카드에 안 보이는(7일째부터인) scheduled
   // 항목들. 저장 시점 플래그가 아니라 dueDate로 매번 다시 걸러내므로,
-  // 하루 지나 7일 이내로 들어오면 다음 렌더링에서 자연스럽게 사라지고
+  // 하루 지나 6일 이내로 들어오면 다음 렌더링에서 자연스럽게 사라지고
   // pray later 쪽에 나타남.
   function renderUpcoming() {
     if (!archiveUpcomingEl) return;
     archiveUpcomingEl.innerHTML = '';
 
     const items = boards.scheduled
-      .filter(t => !t.done && daysUntilDue(t.dueDate) > 7)
+      .filter(t => !t.done && daysUntilDue(t.dueDate) > PRAY_LATER_DAYS)
       .sort((a, b) => a.dueDate.localeCompare(b.dueDate));
 
     if (items.length === 0) {
@@ -3750,7 +3966,9 @@
     confirmQueue = run.catch(() => {});
     return run;
   }
-  function showConfirmNow({ title, message = '', confirmLabel = '확인', cancelLabel = '취소', anchorEl = null, content = null, beforeConfirm = null, focusEl = null }) {
+  // dismissResult: Esc/바깥 클릭으로 닫을 때의 결과 — 기본은 취소 버튼과 같은 false.
+  // 취소 버튼이 "아니오"가 아니라 또 하나의 선택일 때(예: 그룹 해제하기) 닫기와 구분하려고 씀.
+  function showConfirmNow({ title, message = '', confirmLabel = '확인', cancelLabel = '취소', anchorEl = null, content = null, beforeConfirm = null, focusEl = null, dismissResult = false }) {
     const overlay = document.getElementById('confirmModal');
     if (!overlay) return Promise.resolve(false);
     const card = overlay.querySelector('.confirm-card');
@@ -3786,12 +4004,12 @@
         close(true);
       };
       const onCancel = () => close(false);
-      const onOverlay = e => { if (e.target === overlay) close(false); };
+      const onOverlay = e => { if (e.target === overlay) close(dismissResult); };
       function onKey(e) {
         if (e.key === 'Escape') {
           e.preventDefault();
           e.stopPropagation();
-          close(false);
+          close(dismissResult);
         } else if (e.key === 'Tab') {
           // 포커스가 모달 밖으로 나가지 않게 카드 안 요소들 사이에서만 순환
           const items = Array.from(card.querySelectorAll('button, input, select, textarea'))
@@ -4213,8 +4431,12 @@
     const [task] = boards[boardId].splice(idx, 1);
     delete task.dueDate;
     task.from = boardId;
+    const gid = task.group;
+    delete task.group; // done으로 가면 묶음에서 빠짐
     boards.archive.push(task);
+    cleanGroup(gid);
     saveBoards();
+    if (typeof gid === 'number') renderGroupBoards();
     render(boardId);
     if (boardId === 'scheduled') render('today');
     if (archivePanelEl.classList.contains('open')) renderArchive();
@@ -4224,10 +4446,14 @@
     const idx = boards[boardId].findIndex(t => t.id === id);
     if (idx === -1) return;
     const [task] = boards[boardId].splice(idx, 1);
+    const gid = task.group;
+    delete task.group; // 휴지통으로 가면 묶음에서 빠짐
+    cleanGroup(gid);
     task.from = boardId;
     task.deletedAt = todayStr();
     boards.trash.push(task);
     saveBoards();
+    if (typeof gid === 'number') renderGroupBoards();
     render(boardId);
     if (boardId === 'scheduled') {
       render('today');
@@ -4242,7 +4468,7 @@
   //     도착 자리를 펼치고 스크롤해서 포커스 + 반투명 막으로 보여줌.
   //  1. 손대지 않을 항목:
   //   1-1. 도착 자리가 지금 보이면: 출발 자리는 살짝(0.2초) 사라지고, 도착 자리에서 장난기 있는 흔들림.
-  //   1-2. 안 보이면(접힌 구역, 모바일에서 화면 밖, 7일 넘게 남은 pray later 등):
+  //   1-2. 안 보이면(접힌 구역, 모바일에서 화면 밖, 7일째부터인 pray later 등):
   //        출발 자리는 조금 더 길게(0.4초) 사라지고, 하단 알림으로 "○○으로 옮겼어요".
   // 데이터는 곧바로 옮기고 저장하며(되돌리기도 그대로), 화면 갱신만 사라지는 연출이 끝난 뒤에 함.
   // ─────────────────────────────
@@ -4260,7 +4486,7 @@
   // 도착 자리가 지금 사용자 눈에 보이나 — 목록이 펼쳐져 있고(접힌 구역/lupin 뒷면/focus 화면이
   // 아님) 화면 안에 있어야 함. 새 항목은 목록 맨 아래에 붙으므로 목록 아래쪽이 보이는지로 판단.
   function isMoveDestinationVisible(toBoardId, task) {
-    if (toBoardId === 'scheduled' && task.dueDate && daysUntilDue(task.dueDate) > 7) return false; // done 패널에만 있음
+    if (toBoardId === 'scheduled' && task.dueDate && daysUntilDue(task.dueDate) > PRAY_LATER_DAYS) return false; // done 패널에만 있음
     if (toBoardId === 'waiting' && isLupinOpen()) return false;
     const listEl = getListEl(toBoardId);
     if (!listEl || listEl.offsetParent === null) return false;
@@ -4302,14 +4528,33 @@
   // gotta do 카드에 지금 그려지는 미완료 항목들(직접 등록 + 오늘 마감)을 renderToday와 같은 순서로
   function todayActiveTasks() {
     const today = todayStr();
-    return sortByOrder(
+    return clusterGroups(sortByOrder(
       boards.today.filter(t => !t.done).map(t => ({ task: t }))
         .concat(boards.scheduled.filter(t => !t.done && t.dueDate === today).sort(byDueDate).map(t => ({ task: t }))),
       e => e.task
-    ).map(e => e.task);
+    ), e => e.task).map(e => e.task);
   }
 
+  // 묶인 항목이면 한 번 더 물음 — 같이 옮기거나, 그룹을 풀고 이 항목만 옮김
   function moveTask(fromBoardId, toBoardId, id) {
+    const task = boards[fromBoardId].find(t => t.id === id);
+    if (!task || !isGrouped(task)) return moveTaskCore(fromBoardId, toBoardId, id);
+    askGroupedAction(task, 'move').then(choice => {
+      if (!choice) return;
+      const cur = boards[fromBoardId].find(t => t.id === id);
+      if (!cur) return;
+      if (choice === 'together' && isGrouped(cur)) {
+        groupMembers(cur.group)
+          .filter(m => m.boardId !== toBoardId)
+          .forEach(m => moveTaskCore(m.boardId, toBoardId, m.task.id));
+        return;
+      }
+      ungroupTask(cur);
+      moveTaskCore(fromBoardId, toBoardId, id);
+    });
+  }
+
+  function moveTaskCore(fromBoardId, toBoardId, id) {
     const idx = boards[fromBoardId].findIndex(t => t.id === id);
     if (idx === -1) return;
     // gotta do를 떠나는 미완료 항목은 그날의 자리(몇 번째였는지)를 기억 — 같은 날 gotta do로 돌아오면 그 자리로
@@ -4355,7 +4600,26 @@
   // Assigning a date on a today/someday task moves it into `scheduled`;
   // changing the date on an already-scheduled task keeps it there;
   // clearing it sends it back to the board it came from.
+  // 묶인 항목이면 한 번 더 물음 — 같이 적용하거나, 그룹을 풀고 이 항목만 바꿈
   function setDueDate(boardId, id, dateValue) {
+    const task = boards[boardId].find(t => t.id === id);
+    const unchanged = task && (task[dateFieldOf(boardId)] || '') === (dateValue || '');
+    const invalidReply = boardId === 'waiting' && dateValue && dateValue < todayStr();
+    if (!task || unchanged || invalidReply || !isGrouped(task)) return setDueDateCore(boardId, id, dateValue);
+    askGroupedAction(task, 'date').then(choice => {
+      if (!choice) { renderGroupBoards(); return; } // 입력창 표시값을 원래대로
+      const cur = boards[boardId].find(t => t.id === id);
+      if (!cur) return;
+      if (choice === 'together' && isGrouped(cur)) {
+        groupMembers(cur.group).forEach(m => setDueDateCore(m.boardId, m.task.id, dateValue));
+        return;
+      }
+      ungroupTask(cur);
+      setDueDateCore(boardId, id, dateValue);
+    });
+  }
+
+  function setDueDateCore(boardId, id, dateValue) {
     const idx = boards[boardId].findIndex(t => t.id === id);
     if (idx === -1) return;
     const task = boards[boardId][idx];
@@ -7621,13 +7885,50 @@
     return q;
   }
 
+  // 묶인 항목들은 질문 하나로 — 가장 앞선 질문이 묶음의 대표(q.others에 나머지 짝)가 되고, 짝들의 질문은 접음.
+  // 대표의 답이 같은 묶음 전체에 적용됨(dsMemberDecision 참고).
   function dsQuestions() {
     const out = [];
+    const leads = new Set();
     dsTidyItems().forEach(item => {
       const q = dsQuestionFor(item);
-      if (q) out.push({ item, text: q.text, yes: q.yes, no: q.no, alts: q.alts });
+      if (!q) return;
+      const t = item.task;
+      if (isGrouped(t)) {
+        if (leads.has(t.group)) return;
+        leads.add(t.group);
+        out.push({ item, text: q.text, yes: q.yes, no: q.no, alts: q.alts, others: groupMembers(t.group).filter(m => m.task !== t) });
+        return;
+      }
+      out.push({ item, text: q.text, yes: q.yes, no: q.no, alts: q.alts });
     });
     return out;
+  }
+
+  // 대표 답을 묶음의 다른 짝에 적용할 때의 모양 — 짝에게 적용하지 않는 처리(합치기·맨 위로·복제)는 null.
+  // 후속 연락은 대표만 새 할 일을 만들고, 짝은 확인 날짜만 같이 잡음. 완료는 짝의 보드(waiting이면 해결)에 맞춤.
+  function dsMemberDecision(d, boardId) {
+    switch (d.action) {
+      case 'merge': case 'top': case 'repeat': return null;
+      case 'follow': return { action: 'setReply', date: d.date };
+      case 'done': case 'resolved': return Object.assign({}, d, { action: boardId === 'waiting' ? 'resolved' : 'done' });
+      default: return d;
+    }
+  }
+
+  // 묶음 대표가 답한 것 중 나머지 짝에게 적용될 답 — 짝 항목 id → 답. 순서/요약 시뮬레이션이 씀.
+  function dsGroupDecisions() {
+    const m = new Map();
+    dsQuestions().forEach(q => {
+      if (!q.others || !q.others.length) return;
+      const d = dsEffective(q.item.key);
+      if (!d) return;
+      q.others.forEach(o => {
+        const md = dsMemberDecision(d, o.boardId);
+        if (md) m.set(o.task.id, md);
+      });
+    });
+    return m;
   }
 
   // 날짜/제목이 필요한 처리(후속 연락)가 비어 있으면 아직 덜 정한 것 — 확정할 때 건너뜀
@@ -7663,8 +7964,9 @@
       e => e.task
     );
     const postponed = new Set((ds.overload && ds.overload.ids) || []);
+    const gdec = dsGroupDecisions();
     current.forEach(e => {
-      const d = dsEffective(e.task.id);
+      const d = dsEffective(e.task.id) || gdec.get(e.task.id);
       if (d && DAYSTART_LEAVES_TODAY.includes(d.action)) return;
       if (postponed.has(e.task.id)) return; // '내일로 미룰래요?'에 네
       // 이미 있던 항목은 출처 칩 없이(긴급만 표시) — 순서 제안용 rank: 긴급 → 오늘 마감 → 마무리만 남은 것 → 나머지
@@ -7680,9 +7982,7 @@
         board: 'today'
       });
     });
-    dsQuestions().forEach(({ item }) => {
-      const d = dsEffective(item.key);
-      if (!d) return;
+    const addEntry = (item, d) => {
       if (d.action === 'repeat') {
         entries.push({ key: item.key, text: item.task.text, origin: '', urgent: false, rank: 7, board: 'today' });
       } else if (d.action === 'today' && !dsAlreadyInToday(item)) {
@@ -7696,6 +7996,15 @@
       } else if (d.action === 'follow') {
         entries.push({ key: 'f:' + item.task.id, text: d.text.trim(), origin: '', urgent: false, rank: 3, board: 'today' });
       }
+    };
+    dsQuestions().forEach(q => {
+      const d = dsEffective(q.item.key);
+      if (!d) return;
+      addEntry(q.item, d);
+      (q.others || []).forEach(o => {
+        const md = dsMemberDecision(d, o.boardId);
+        if (md) addEntry({ task: o.task, boardId: o.boardId, key: String(o.task.id), group: q.item.group, tags: [] }, md);
+      });
     });
     // 오늘 순서 화면에서 '오늘로'를 눌러 기다리는 중에서 끌어온 것 — 확정하면 waiting에서 gotta do로 옮겨감
     dsWaitingToToday().forEach(t => {
@@ -7715,10 +8024,11 @@
   function dsBuildWaitingEntries() {
     const today = todayStr();
     const moved = new Set(ds.toToday);
+    const gdec = dsGroupDecisions();
     return sortByOrder(boards.waiting.filter(t => !(t.replyDate && t.replyDate > today)))
       .filter(t => {
         if (moved.has(String(t.id))) return false;
-        const d = dsEffective(String(t.id));
+        const d = dsEffective(String(t.id)) || gdec.get(t.id);
         return !(d && DAYSTART_LEAVES_WAITING.includes(d.action));
       })
       .map(t => ({ key: String(t.id), text: t.text, board: 'waiting', urgent: false, rank: 0 }));
@@ -7727,10 +8037,11 @@
   // '오늘로'로 끌어온 기다리는 중 항목 중 지금도 waiting에 있고 다른 정비 답으로 빠져나가지 않는 것
   function dsWaitingToToday() {
     const out = [];
+    const gdec = dsGroupDecisions();
     ds.toToday.forEach(k => {
       const t = boards.waiting.find(x => String(x.id) === k);
       if (!t) return;
-      const d = dsEffective(k);
+      const d = dsEffective(k) || gdec.get(t.id);
       if (d && DAYSTART_LEAVES_WAITING.includes(d.action)) return;
       out.push(t);
     });
@@ -7760,10 +8071,8 @@
   // ───── 변경 요약 ─────
   function dsSummary() {
     const c = { today: 0, done: 0, follow: 0, someday: 0, snooze: 0, urgent: 0, later: 0, reply: 0, merge: 0, repeat: 0, top: 0, unurgent: 0, waiting: 0, cleared: 0, drop: 0 };
-    Object.keys(ds.decisions).forEach(id => {
-      const s = dsDecisionState(id);
-      if (s.state !== 'ok') return;
-      const a = s.d.action;
+    const count = (d) => {
+      const a = d.action;
       if (a === 'today') c.today++;
       else if (a === 'done' || a === 'resolved') c.done++;
       else if (a === 'follow') c.follow++;
@@ -7778,7 +8087,17 @@
       else if (a === 'unurgent') c.unurgent++;
       else if (a === 'clearDate' || a === 'clearReply') c.cleared++;
       else if (a === 'toWaiting') c.waiting++;
-      else if (a === 'keep' && s.d.snooze) c.snooze++;
+      else if (a === 'keep' && d.snooze) c.snooze++;
+    };
+    Object.keys(ds.decisions).forEach(id => {
+      const s = dsDecisionState(id);
+      if (s.state === 'ok') count(s.d);
+    });
+    // 묶음 대표의 답은 짝 수만큼 더 셈
+    dsQuestions().forEach(q => {
+      const d = (q.others && q.others.length) ? dsEffective(q.item.key) : null;
+      if (!d) return;
+      q.others.forEach(o => { const md = dsMemberDecision(d, o.boardId); if (md && md.action !== 'follow') count(md); });
     });
     c.today += dsWaitingToToday().length;
     const postponed = ds.overload && ds.overload.ids ? ds.overload.ids.length : 0;
@@ -7874,6 +8193,14 @@
     for (let i = keys.length - 1; i >= 0 && picks.length < need; i--) {
       const e = live.get(keys[i]);
       if (e && !e.task.urgent) picks.push(e.task);
+    }
+    // 묶인 항목은 쪼개지 않음 — 짝도 같이 미루고, 짝 중 긴급이 있으면 그 묶음은 미루지 않음
+    for (let i = picks.length - 1; i >= 0; i--) {
+      const t = picks[i];
+      if (!isGrouped(t)) continue;
+      const mates = groupMembers(t.group).map(m => m.task);
+      if (mates.some(x => x.urgent)) { picks.splice(i, 1); continue; }
+      mates.forEach(x => { if (!picks.includes(x) && live.has(String(x.id))) picks.push(x); });
     }
     if (!picks.length) return null;
     return {
@@ -8016,6 +8343,7 @@
         row.appendChild(chip);
       });
       if (item.task.urgent) row.appendChild(makeSearchChip('긴급'));
+      if (q.others && q.others.length) row.appendChild(makeSearchChip('🔗 묶음 ' + (q.others.length + 1) + '개'));
       // 언제 하기로 한 일인지: 날짜가 있는데 태그에 이미 마감/회신이 없으면 날짜 칩을 덧붙임
       const dateKey = item.boardId === 'waiting' ? 'replyDate' : 'dueDate';
       if (item.task[dateKey] && !item.tags.some(tag => /마감|회신/.test(tag))) {
@@ -8024,12 +8352,18 @@
     }
     li.appendChild(row);
 
+    // 묶인 항목은 질문 하나 — 대표의 답이 아래 짝들에게도 같이 적용됨
+    if (!overload && q.others && q.others.length) {
+      const names = q.others.map(o => o.task.text.length > 18 ? o.task.text.slice(0, 18) + '…' : o.task.text).join(' · ');
+      li.appendChild(dsEl('div', 'search-snippet', '같이 처리돼요: ' + names));
+    }
+
     if (answered) {
       const res = dsEl('div', 'day-start__result');
       const d = overload ? null : ds.decisions[key];
       const text = overload
         ? (ds.overload.ids ? '내일로 미룸 · ' + ds.overload.ids.length + '개' : '그대로 둠')
-        : dsResultLabel(d);
+        : dsResultLabel(d) + (q.others && q.others.length && dsMemberDecision(d, 'today') ? ' · 묶음 ' + (q.others.length + 1) + '개 같이' : '');
       res.appendChild(dsEl('span', 'day-start__result-text', '✓ ' + text));
       const change = dsEl('button', 'day-start__change', '바꾸기');
       change.type = 'button';
@@ -8580,6 +8914,7 @@
       dsDetach(boardId, task);
       delete task.dueDate;
       task.from = boardId;
+      delete task.group; // done으로 가면 묶음에서 빠짐
       boards.archive.push(task);
     }
   }
@@ -8609,6 +8944,7 @@
         break;
       case 'drop':
         dsDetach(boardId, task);
+        delete task.group;
         task.from = boardId;
         task.deletedAt = todayStr();
         boards.trash.push(task);
@@ -8683,6 +9019,7 @@
           });
         }
         dsDetach(boardId, task);
+        delete task.group;
         task.from = boardId;
         task.deletedAt = todayStr();
         boards.trash.push(task);
@@ -8747,22 +9084,37 @@
     let changed = false;
     let hasLive = false; // 확정 뒤 오늘 목록에 남은 할 일이 있는지(있으면 포커스 할 일 고르기로 넘김)
     try {
-      dsQuestions().forEach(({ item }) => {
+      const touchedGroups = new Set();
+      dsQuestions().forEach(({ item, others }) => {
         const d = dsEffective(item.key);
         if (!d) return;
-        if (d.action === 'keep') {
-          // 아니오(미루기) = 미룬 날짜만 남김(updatedAt은 안 건드려 '손댄 때'와 섞이지 않음)
-          if (d.snooze) { item.task.snoozedAt = today; changed = true; }
-          return;
-        }
-        dsApplyOne(item, d, counter, newTasks);
-        changed = true;
+        // 묶음이면 대표의 답을 짝들에게도 적용 — 짝은 지금 있는 자리를 다시 찾아 그 보드 기준으로
+        const members = [{ item, d }];
+        (others || []).forEach(o => {
+          const f = dsFind(o.task.id);
+          const md = f && dsMemberDecision(d, f.boardId);
+          if (md) members.push({ item: { task: f.task, boardId: f.boardId, key: String(f.task.id), group: item.group, tags: [] }, d: md });
+        });
+        if (typeof item.task.group === 'number') touchedGroups.add(item.task.group);
+        members.forEach(m => {
+          if (m.d.action === 'keep') {
+            // 아니오(미루기) = 미룬 날짜만 남김(updatedAt은 안 건드려 '손댄 때'와 섞이지 않음)
+            if (m.d.snooze) { m.item.task.snoozedAt = today; changed = true; }
+            return;
+          }
+          dsApplyOne(m.item, m.d, counter, newTasks);
+          changed = true;
+        });
       });
+      touchedGroups.forEach(cleanGroup);
       // 오늘 순서 화면에서 '오늘로'로 끌어온 기다리는 중 항목 — waiting에서 gotta do로 옮김(날짜 값은 정리)
       dsWaitingToToday().forEach(t => {
         dsDetach('waiting', t);
         dsScrub(t);
+        const gid = t.group;
+        delete t.group; // 순서 화면에서 하나만 끌어온 것 — 짝은 waiting에 남으니 묶음에서 뺌
         boards.today.push(t);
+        cleanGroup(gid);
         changed = true;
       });
       // 오늘 너무 많아서 '내일로 미룰래요?'에 네 — 일반 항목은 내일 날짜로 pray later에, 오늘 마감은 날짜만 내일로

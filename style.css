@@ -36,6 +36,8 @@
     .add-subtask-toggle,
     .date-btn,
     .note-btn,
+    .group-btn,
+    .ungroup-btn,
     .date-clear-btn,
     .sticky-title-toggle,
     .reply-later-toggle,
@@ -2657,6 +2659,20 @@
     opacity: 0.7;
   }
 
+  /* pray later 날짜 머리글 — 크기·글꼴은 항목 본문(.task-text)과 같게, 색만 흐리게 */
+  .date-heading {
+    font-family: var(--font-task);
+    font-size: 19px;
+    line-height: 1.3;
+    color: var(--ink-soft);
+    padding: 8px 0 1px;
+    user-select: none;
+  }
+
+  .date-heading:first-child {
+    padding-top: 0;
+  }
+
   .divider {
     display: flex;
     justify-content: center;
@@ -2784,6 +2800,74 @@
   .note-btn:hover {
     opacity: 1;
     transform: scale(1.15);
+  }
+
+  .group-btn,
+  .ungroup-btn {
+    flex: 0 0 auto;
+    font-size: 14px;
+    line-height: 1;
+    padding: 2px 3px;
+    opacity: 0.6;
+    transition: opacity 0.15s var(--ease-ui), transform 0.15s var(--ease-ui);
+  }
+
+  .group-btn:hover,
+  .ungroup-btn:hover {
+    opacity: 1;
+    transform: scale(1.15);
+  }
+
+  /* 묶음: 같이 처리하는 항목들의 체크박스를 세로 선으로 이음.
+     체크박스는 항목 위에서 8px~28px(padding 5 + margin-top 3, 높이 20) — 상자 안은 가리지 않게
+     위쪽 조각(::before, 첫 항목 제외)과 아래쪽 조각(::after, 마지막 항목 제외)으로 나눠 그림. */
+  .group-rail {
+    position: absolute;
+    left: 9px;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    pointer-events: none;
+    color: var(--ink-soft);
+  }
+
+  .group-rail::before,
+  .group-rail::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    width: 2px;
+    background: currentColor;
+    opacity: 0.6;
+  }
+
+  .group-rail::before {
+    top: 0;
+    height: 6px;
+  }
+
+  .group-rail::after {
+    top: 30px;
+    bottom: 0;
+  }
+
+  .group-first > .group-rail::before,
+  .group-last > .group-rail::after {
+    display: none;
+  }
+
+  /* 묶기 고르는 중: 같은 카드의 항목만 눌러서 고를 수 있음 */
+  body.link-mode .link-candidate {
+    cursor: pointer;
+    border-radius: 4px;
+    outline: 2px dashed var(--accent);
+    outline-offset: 1px;
+  }
+
+  body.link-mode .link-source {
+    border-radius: 4px;
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
   }
 
   /* 메모 모달 */
