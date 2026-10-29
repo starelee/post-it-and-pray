@@ -149,9 +149,13 @@
 
   const WEEKDAY_KO = ['일', '월', '화', '수', '목', '금', '토'];
 
-  // pray later 카드/리갈패드 "다가오는 일" 사이의 7일 경계를 실시간으로
+  // pray later 카드에 보이는 마지막 날(오늘 기준 D+6) — 7일째는 오늘과 같은 요일이라 머리글이 헷갈려서 6일까지만.
+  // 그 뒤는 리갈패드 "not my problem... yet".
+  const PRAY_LATER_DAYS = 6;
+
+  // pray later 카드/리갈패드 "다가오는 일" 사이의 경계(PRAY_LATER_DAYS)를 실시간으로
   // 가르는 데 씀 — 저장 시점 플래그가 아니라 매 렌더링마다 오늘 날짜
-  // 기준으로 다시 계산하므로, 하루 지나면 D+8이 자동으로 D+7이 되어
+  // 기준으로 다시 계산하므로, 하루 지나면 D+7이 자동으로 D+6이 되어
   // 경계를 넘어감.
   function daysUntilDue(dateStr) {
     const d = new Date(dateStr + 'T00:00:00');
@@ -160,14 +164,13 @@
     return Math.round((d - today) / 86400000);
   }
 
-  // pray later 날짜 머리글 — 일주일 안이라 요일로만(내일/모레/수요일…). 7일 뒤는 오늘과 같은 요일이라 '다음 주'를 붙임.
+  // pray later 날짜 머리글 — 6일 안이라 요일로만(내일/모레/수요일…)
   const WEEKDAY_FULL_KO = ['일요일', '월요일', '화요일', '수요일', '목요일', '금요일', '토요일'];
   function prayDayLabel(dateStr) {
     const n = daysUntilDue(dateStr);
     if (n === 1) return '내일';
     if (n === 2) return '모레';
-    const name = WEEKDAY_FULL_KO[new Date(dateStr + 'T00:00:00').getDay()];
-    return n >= 7 ? '다음 주 ' + name : name;
+    return WEEKDAY_FULL_KO[new Date(dateStr + 'T00:00:00').getDay()];
   }
 
   function formatDueDateRelative(dateStr) {
@@ -435,7 +438,7 @@
   }
 
   // 검색 결과를 누르면 원래 항목으로 이동 — 검색 패드를 닫고, 접힌 구역(someday/pray later/
-  // waiting의 ⋯)이나 done 패널(완료 기록, 7일 넘게 남은 "not my problem... yet") 안에 있으면
+  // waiting의 ⋯)이나 done 패널(완료 기록, 7일째부터인 "not my problem... yet") 안에 있으면
   // 먼저 펼친 뒤 스크롤하고, 항목에 포커스를 주고 잠깐 강조함.
   function goToTask(boardId, taskId) {
     closeSearchPanel();
@@ -2376,7 +2379,7 @@
     // "oops, still here" — don't duplicate them. Anything more than 7 days
     // out moves to the legal pad's "다가오는 일" section instead (see
     // renderUpcoming) so this card doesn't pile up with far-future items.
-    const active = tasks.filter(t => !t.done && t.dueDate > today && daysUntilDue(t.dueDate) <= 7);
+    const active = tasks.filter(t => !t.done && t.dueDate > today && daysUntilDue(t.dueDate) <= PRAY_LATER_DAYS);
     const done = tasks.filter(t => t.done);
 
     if (active.length === 0 && done.length === 0) {
@@ -3325,16 +3328,16 @@
     return li;
   }
 
-  // "다가오는 일" — pray later 카드에 안 보이는(7일 넘게 남은) scheduled
+  // "다가오는 일" — pray later 카드에 안 보이는(7일째부터인) scheduled
   // 항목들. 저장 시점 플래그가 아니라 dueDate로 매번 다시 걸러내므로,
-  // 하루 지나 7일 이내로 들어오면 다음 렌더링에서 자연스럽게 사라지고
+  // 하루 지나 6일 이내로 들어오면 다음 렌더링에서 자연스럽게 사라지고
   // pray later 쪽에 나타남.
   function renderUpcoming() {
     if (!archiveUpcomingEl) return;
     archiveUpcomingEl.innerHTML = '';
 
     const items = boards.scheduled
-      .filter(t => !t.done && daysUntilDue(t.dueDate) > 7)
+      .filter(t => !t.done && daysUntilDue(t.dueDate) > PRAY_LATER_DAYS)
       .sort((a, b) => a.dueDate.localeCompare(b.dueDate));
 
     if (items.length === 0) {
@@ -4455,7 +4458,7 @@
   //     도착 자리를 펼치고 스크롤해서 포커스 + 반투명 막으로 보여줌.
   //  1. 손대지 않을 항목:
   //   1-1. 도착 자리가 지금 보이면: 출발 자리는 살짝(0.2초) 사라지고, 도착 자리에서 장난기 있는 흔들림.
-  //   1-2. 안 보이면(접힌 구역, 모바일에서 화면 밖, 7일 넘게 남은 pray later 등):
+  //   1-2. 안 보이면(접힌 구역, 모바일에서 화면 밖, 7일째부터인 pray later 등):
   //        출발 자리는 조금 더 길게(0.4초) 사라지고, 하단 알림으로 "○○으로 옮겼어요".
   // 데이터는 곧바로 옮기고 저장하며(되돌리기도 그대로), 화면 갱신만 사라지는 연출이 끝난 뒤에 함.
   // ─────────────────────────────
@@ -4473,7 +4476,7 @@
   // 도착 자리가 지금 사용자 눈에 보이나 — 목록이 펼쳐져 있고(접힌 구역/lupin 뒷면/focus 화면이
   // 아님) 화면 안에 있어야 함. 새 항목은 목록 맨 아래에 붙으므로 목록 아래쪽이 보이는지로 판단.
   function isMoveDestinationVisible(toBoardId, task) {
-    if (toBoardId === 'scheduled' && task.dueDate && daysUntilDue(task.dueDate) > 7) return false; // done 패널에만 있음
+    if (toBoardId === 'scheduled' && task.dueDate && daysUntilDue(task.dueDate) > PRAY_LATER_DAYS) return false; // done 패널에만 있음
     if (toBoardId === 'waiting' && isLupinOpen()) return false;
     const listEl = getListEl(toBoardId);
     if (!listEl || listEl.offsetParent === null) return false;
