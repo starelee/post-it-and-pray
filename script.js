@@ -160,6 +160,16 @@
     return Math.round((d - today) / 86400000);
   }
 
+  // pray later 날짜 머리글 — 일주일 안이라 요일로만(내일/모레/수요일…). 7일 뒤는 오늘과 같은 요일이라 '다음 주'를 붙임.
+  const WEEKDAY_FULL_KO = ['일요일', '월요일', '화요일', '수요일', '목요일', '금요일', '토요일'];
+  function prayDayLabel(dateStr) {
+    const n = daysUntilDue(dateStr);
+    if (n === 1) return '내일';
+    if (n === 2) return '모레';
+    const name = WEEKDAY_FULL_KO[new Date(dateStr + 'T00:00:00').getDay()];
+    return n >= 7 ? '다음 주 ' + name : name;
+  }
+
   function formatDueDateRelative(dateStr) {
     try {
       const d = new Date(dateStr + 'T00:00:00');
@@ -2366,7 +2376,7 @@
     // "oops, still here" — don't duplicate them. Anything more than 7 days
     // out moves to the legal pad's "다가오는 일" section instead (see
     // renderUpcoming) so this card doesn't pile up with far-future items.
-    const active = clusterGroups(tasks.filter(t => !t.done && t.dueDate > today && daysUntilDue(t.dueDate) <= 7));
+    const active = tasks.filter(t => !t.done && t.dueDate > today && daysUntilDue(t.dueDate) <= 7);
     const done = tasks.filter(t => t.done);
 
     if (active.length === 0 && done.length === 0) {
@@ -2376,7 +2386,17 @@
       listEl.appendChild(hint);
     }
 
-    active.forEach(t => listEl.appendChild(renderItem('scheduled', t)));
+    // 날짜별 머리글(🙏 내일 / 모레 / 수요일…) 아래에 항목을 모음 — 항목마다 날짜 알약을 붙이지 않음.
+    // 묶음은 같은 날짜 안에서만 붙임(날짜가 다른 짝은 각자 머리글 아래에 있음).
+    const dates = Array.from(new Set(active.map(t => t.dueDate))).sort();
+    dates.forEach(date => {
+      const head = document.createElement('li');
+      head.className = 'date-heading';
+      head.textContent = '🙏 ' + prayDayLabel(date);
+      listEl.appendChild(head);
+      clusterGroups(active.filter(t => t.dueDate === date))
+        .forEach(t => listEl.appendChild(renderItem('scheduled', t, { hideDate: true })));
+    });
 
     if (done.length > 0) {
       const divider = document.createElement('li');
@@ -2631,7 +2651,7 @@
     const dateKey = dateFieldOf(boardId);
     let badge = null;
     // gotta do 카드 안의 오늘 마감 항목은 "오늘"이 뻔하니 라벨만 숨김(날짜 값은 그대로 — 📅로 수정 가능)
-    if (task[dateKey] && !(boardId === 'scheduled' && task.dueDate === todayStr())) {
+    if (task[dateKey] && !opts.hideDate && !(boardId === 'scheduled' && task.dueDate === todayStr())) {
       badge = document.createElement('span');
       badge.className = 'due-badge';
       badge.textContent = formatDueDateRelative(task[dateKey]);
