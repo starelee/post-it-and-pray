@@ -7813,6 +7813,7 @@
         if (item.boardId === 'waiting') return null;
         const open = (t.subtasks || []).filter(x => !x.done).length;
         if (open === 0) {
+          if (isGrouped(t)) return null; // 묶인 항목은 완료를 묻지 않음 — 완료가 짝에게까지 번지지 않게
           return { text: '하위 항목을 모두 끝냈는데, 완료 처리할래요?', yes: { action: item.boardId === 'waiting' ? 'resolved' : 'done' }, no: noop };
         }
         if (!dsAlreadyInToday(item)) return { text: '하나만 남았는데, 오늘 마무리할래요?', yes: { action: 'today' }, no: noop };
@@ -7882,6 +7883,8 @@
     const q = dsQuestionBase(item);
     if (!q) return null;
     q.alts = dsAlternatives(item);
+    // 묶인 항목에는 '이미 끝났어요 (완료)'/'해결됐어요'도 안 보임 — 답이 묶음 전체에 적용되므로
+    if (isGrouped(item.task)) q.alts = q.alts.filter(a => !(a.patch && (a.patch.action === 'done' || a.patch.action === 'resolved')));
     return q;
   }
 
@@ -8359,8 +8362,9 @@
 
     // 묶인 항목은 질문 하나 — 대표의 답이 아래 짝들에게도 같이 적용됨
     if (!overload && q.others && q.others.length) {
-      const names = q.others.map(o => o.task.text.length > 18 ? o.task.text.slice(0, 18) + '…' : o.task.text).join(' · ');
-      li.appendChild(dsEl('div', 'search-snippet', '같이 처리돼요: ' + names));
+      // 질문 글(.day-start__qtext)과 같은 본문 스타일로 — 대표 항목은 위 줄에 있으니 짝만 적음
+      const names = q.others.map(o => '[' + o.task.text + ']').join(' ');
+      li.appendChild(dsEl('p', 'day-start__qtext', '묶여있어요 : ' + names));
     }
 
     if (answered) {
