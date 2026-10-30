@@ -7312,6 +7312,8 @@
   let dsCal = { state: 'idle', events: [], err: '' }; // 일정 단계: idle → loading → ok | needconnect | error
   let dsAltPickOpt = null;   // 날짜 고르기 대안의 설정(적용할 처리·라벨)
   let dsAltPick = null;     // 대안 중 '다음에 확인하기(날짜 지정)'를 눌러 날짜를 고르는 중인 질문의 키
+  let dsOverloadPick = {};   // '오늘 할 일이 많아요' 질문에서 고른 항목 id → 미룰 날짜(없으면 오늘 그대로)
+  let dsOverloadDateFor = null; // 날짜지정 입력을 펼친 항목 id
   let dsAltKey = null;       // '아니오'를 눌러 대안 선택지를 보여주는 중인 질문의 키
 
   function isDayStartOpen() {
@@ -8123,7 +8125,7 @@
     if (c.reply) parts.push('확인일 지정 ' + c.reply);
     if (c.merge) parts.push('합치기 ' + c.merge);
     if (c.top) parts.push('맨 위로 ' + c.top);
-    if (postponed) parts.push('내일로 ' + postponed);
+    if (postponed) parts.push('미룸 ' + postponed);
     if (c.snooze) parts.push(SNOOZE_DAYS + '일 미루기 ' + c.snooze);
     if (newTask) parts.push('새 할 일 ' + newTask);
     if (orderChanged) parts.push('순서 제안');
@@ -8211,8 +8213,30 @@
       key: 'overload',
       count: keys.length,
       picks,
-      text: '오늘 할 일이 ' + keys.length + '개인데, 급하지 않은 것 ' + picks.length + '개는 내일로 미룰래요?'
+      entries: dsOverloadEntries(picks),
+      text: '오늘 할 일이 많은데, 일부는 미룰래요?'
     };
+  }
+
+  // 미룰 후보를 한 줄씩 — 묶인 항목은 한 줄('[A] 외 1개')로 같이 움직임
+  function dsOverloadEntries(picks) {
+    const seen = new Set();
+    const out = [];
+    picks.forEach(t => {
+      if (seen.has(t.id)) return;
+      const mates = isGrouped(t) ? groupMembers(t.group).map(m => m.task).filter(x => picks.includes(x)) : [t];
+      mates.forEach(x => seen.add(x.id));
+      out.push({ tasks: mates, label: '[' + t.text + ']' + (mates.length > 1 ? ' 외 ' + (mates.length - 1) + '개' : '') });
+    });
+    return out;
+  }
+
+  // 미루는 날: 평일은 내일, 금·토·일은 주말을 건너뛴 월요일
+  function dsLaterOption() {
+    const wd = new Date().getDay();
+    return (wd === 5 || wd === 6 || wd === 0)
+      ? { label: '월요일', date: dsNextMonday() }
+      : { label: '내일', date: tomorrowStr() };
   }
 
   // 답하지 않은 질문들(건너뛰기 버튼의 '남은 N개'와 같은 수)
@@ -8255,7 +8279,15 @@
     dsAltKey = null;
     dsAltPick = null;
     if (q.kind === 'overload') {
-      ds.overload = yes ? { ids: q.picks.map(t => t.id) } : { skip: true };
+      // 고른 날짜가 있는 항목만 미룸(묶음은 짝째). 아무것도 안 골랐으면 그대로 둠
+      const dates = {};
+      (q.entries || []).forEach(e => {
+        const d = dsOverloadPick[e.tasks[0].id];
+        if (d) e.tasks.forEach(t => { dates[t.id] = d; });
+      });
+      const ids = Object.keys(dates).map(Number);
+      ds.overload = ids.length ? { ids, dates, count: q.count } : { skip: true, count: q.count };
+      dsOverloadDateFor = null;
       dsSaveDraft();
       dsRender();
       return;
@@ -8332,14 +8364,9 @@
     li.dataset.key = key;
 
     const row = dsEl('div', 'search-item-row');
-    let picksEl = null;
     if (overload) {
       row.appendChild(makeBoardIcon('today'));
       row.appendChild(dsEl('span', 'search-item-text day-start__title-fixed', '오늘 할 일 ' + q.count + '개'));
-      // 미룰 항목 칩은 제목 줄이 아니라 둘째 줄에 — 많아도 4개까지만 보이고 나머지는 개수로
-      picksEl = dsEl('div', 'day-start__picks');
-      q.picks.slice(0, 4).forEach(t => picksEl.appendChild(makeSearchChip(t.text.length > 14 ? t.text.slice(0, 14) + '…' : t.text)));
-      if (q.picks.length > 4) picksEl.appendChild(makeSearchChip('외 ' + (q.picks.length - 4) + '개'));
     } else {
       const item = q.item;
       row.appendChild(makeBoardIcon(dsIconKey(item.boardId, item.task)));
@@ -8358,7 +8385,6 @@
       }
     }
     li.appendChild(row);
-    if (picksEl) li.appendChild(picksEl);
 
     // 묶인 항목은 질문 하나 — 대표의 답이 아래 짝들에게도 같이 적용됨
     if (!overload && q.others && q.others.length) {
@@ -8371,7 +8397,7 @@
       const res = dsEl('div', 'day-start__result');
       const d = overload ? null : ds.decisions[key];
       const text = overload
-        ? (ds.overload.ids ? '내일로 미룸 · ' + ds.overload.ids.length + '개' : '그대로 둠')
+        ? (ds.overload.ids ? '미룸 · ' + ds.overload.ids.length + '개' : '그대로 둠')
         : dsResultLabel(d) + (q.others && q.others.length && dsMemberDecision(d, 'today') ? ' · 묶음 ' + (q.others.length + 1) + '개 같이' : '');
       res.appendChild(dsEl('span', 'day-start__result-text', '✓ ' + text));
       const change = dsEl('button', 'day-start__change', '바꾸기');
@@ -8385,7 +8411,42 @@
     li.appendChild(dsEl('p', 'day-start__qtext', q.text));
     const btns = dsEl('div', 'day-start__qbtns');
     const showAlts = !overload && dsAltKey === key && q.alts && q.alts.length;
-    if (!showAlts) {
+    if (overload) {
+      // 항목마다 오늘(그대로) / 내일(금·토·일엔 월요일) / 날짜지정 — 처음엔 아무것도 고르지 않은 상태(전부 오늘)
+      const later = dsLaterOption();
+      (q.entries || []).forEach(e => {
+        const id = e.tasks[0].id;
+        const cur = dsOverloadPick[id] || null;
+        const line = dsEl('div', 'day-start__qtext day-start__ovline');
+        line.appendChild(dsEl('span', 'day-start__ovname', e.label));
+        const opts = dsEl('span', 'day-start__ovopts');
+        const opt = (text, on, onClick) => {
+          const b = dsSmallButton((on ? 'confirm-btn-ok' : 'confirm-btn-cancel') + ' day-start__ovopt', text, onClick);
+          b.setAttribute('aria-pressed', on ? 'true' : 'false');
+          opts.appendChild(b);
+        };
+        opt('오늘', !cur, () => { dsOverloadPick[id] = null; delete dsOverloadPick[id]; dsOverloadDateFor = null; dsRender(); });
+        opt(later.label, cur === later.date, () => { dsOverloadPick[id] = later.date; dsOverloadDateFor = null; dsRender(); });
+        opt(cur && cur !== later.date ? dsShortDate(cur) : '날짜지정', !!cur && cur !== later.date, () => { dsOverloadDateFor = id; dsRender(); });
+        line.appendChild(opts);
+        li.appendChild(line);
+        if (dsOverloadDateFor === id) {
+          const prow = dsEl('div', 'day-start__field day-start__pick');
+          prow.appendChild(dsEl('span', 'day-start__field-label', '미룰 날짜'));
+          const input = document.createElement('input');
+          input.type = 'date';
+          input.className = 'date-picker-input';
+          input.min = dsDateAfter(1);
+          input.setAttribute('aria-label', '미룰 날짜');
+          input.addEventListener('change', () => {
+            if (input.value && input.value > todayStr()) { dsOverloadPick[id] = input.value; dsOverloadDateFor = null; dsRender(); }
+          });
+          prow.appendChild(wrapDateInputWithHint(input));
+          li.appendChild(prow);
+        }
+      });
+      btns.appendChild(dsSmallButton('confirm-btn-ok day-start__yes', '이대로 정하기', () => dsAnswer(q, true)));
+    } else if (!showAlts) {
       btns.appendChild(dsSmallButton('confirm-btn-cancel day-start__no', '아니오', () => dsSayNo(q)));
       btns.appendChild(dsSmallButton('confirm-btn-ok day-start__yes', '네', () => dsAnswer(q, true)));
     }
@@ -8444,7 +8505,7 @@
     if (over) {
       if (ds.overload !== undefined) {
         // 이미 답한 '오늘 너무 많음' — 줄에는 결과만(고른 개수는 저장된 ids로 표시)
-        list.appendChild(dsBuildQuestionRow({ kind: 'overload', count: (ds.overload.ids || []).length + DAYSTART_TODAY_LIMIT, picks: [], text: '' }));
+        list.appendChild(dsBuildQuestionRow({ kind: 'overload', count: ds.overload.count || (ds.overload.ids || []).length + DAYSTART_TODAY_LIMIT, picks: [], text: '' }));
       } else {
         list.appendChild(dsBuildQuestionRow(over));
       }
@@ -9129,17 +9190,18 @@
       // 오늘 너무 많아서 '내일로 미룰래요?'에 네 — 일반 항목은 내일 날짜로 pray later에, 오늘 마감은 날짜만 내일로
       const tomorrow = tomorrowStr();
       ((ds.overload && ds.overload.ids) || []).forEach(id => {
+        const later = (ds.overload.dates && ds.overload.dates[id]) || tomorrow;
         const inToday = boards.today.find(t => t.id === id && !t.done);
         const inSched = boards.scheduled.find(t => t.id === id && !t.done && t.dueDate === today);
         if (inToday) {
           dsDetach('today', inToday);
           dsScrub(inToday);
           inToday.from = 'today';
-          inToday.dueDate = tomorrow;
+          inToday.dueDate = later;
           boards.scheduled.push(inToday);
           changed = true;
         } else if (inSched) {
-          inSched.dueDate = tomorrow;
+          inSched.dueDate = later;
           changed = true;
         }
       });
@@ -9228,6 +9290,8 @@
     closeOpenControls();
     ds = dsLoadDraft();
     dsAltKey = null;
+    dsOverloadPick = {};
+    dsOverloadDateFor = null;
     dsCal = { state: 'idle', events: [], err: '' };
     gcalPreload();
     dsPrevFocus = document.activeElement;

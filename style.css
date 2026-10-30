@@ -4348,12 +4348,17 @@ body.reorder-mode .sticky:not(.reorder-active) {
   white-space: nowrap;
 }
 
-/* 오늘 할 일 N개 질문의 미룰 항목 칩 — 제목 아래 둘째 줄(질문 글과 같은 들여쓰기). 칩 높이 18 + 위 5 + 줄 간격 5 = 리갈패드 28px 줄 */
-.day-start__picks {
+/* 오늘 할 일 N개 질문 — 미룰 후보 한 줄: 제목 + 오늘/내일/날짜지정 (질문 글과 같은 본문 스타일) */
+.day-start__ovline {
   display: flex;
   flex-wrap: wrap;
-  gap: 5px 6px;
-  padding-left: 30px;
+  align-items: baseline;
+  column-gap: 10px;
+}
+
+.day-start__ovopts {
+  display: inline-flex;
+  gap: 6px;
 }
 
 .day-start__qtext {
