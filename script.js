@@ -2761,35 +2761,6 @@
     controls.appendChild(addToggle);
     controls.appendChild(noteBtn);
 
-    if (boardId !== 'lupin' && !task.done) {
-      const groupBtn = document.createElement('button');
-      groupBtn.className = 'group-btn';
-      groupBtn.type = 'button';
-      groupBtn.setAttribute('aria-label', isGrouped(task) ? '묶음에 항목 더하기' : '다른 항목과 묶기');
-      groupBtn.title = '같이 처리할 항목 묶기';
-      groupBtn.textContent = '🔗';
-      groupBtn.addEventListener('click', () => {
-        if (commitPendingEditThenRetry(li, task.id, '.group-btn')) return;
-        startLinkMode(li, task);
-      });
-      controls.appendChild(groupBtn);
-      if (isGrouped(task)) {
-        const ungroupBtn = document.createElement('button');
-        ungroupBtn.className = 'ungroup-btn';
-        ungroupBtn.type = 'button';
-        ungroupBtn.setAttribute('aria-label', '묶음에서 빼기');
-        ungroupBtn.title = '이 항목을 묶음에서 빼기';
-        ungroupBtn.textContent = '✂️';
-        ungroupBtn.addEventListener('click', () => {
-          ungroupTask(task);
-          saveBoards();
-          renderGroupBoards();
-          showToast('묶음에서 뺐어요');
-        });
-        controls.appendChild(ungroupBtn);
-      }
-    }
-
     if (opts.showFocusBtn) {
       const focusBtn = document.createElement('button');
       focusBtn.className = 'focus-btn';
@@ -2844,6 +2815,35 @@
       doneBtn.appendChild(makeCheckSvg('done-btn-icon'));
       doneBtn.addEventListener('click', () => completeWaitingTask(task.id));
       controls.appendChild(doneBtn);
+    }
+
+    if (boardId !== 'lupin' && !task.done) {
+      const groupBtn = document.createElement('button');
+      groupBtn.className = 'group-btn';
+      groupBtn.type = 'button';
+      groupBtn.setAttribute('aria-label', isGrouped(task) ? '묶음에 항목 더하기' : '다른 항목과 묶기');
+      groupBtn.title = '같이 처리할 항목 묶기';
+      groupBtn.textContent = '🔗';
+      groupBtn.addEventListener('click', () => {
+        if (commitPendingEditThenRetry(li, task.id, '.group-btn')) return;
+        startLinkMode(li, task);
+      });
+      controls.appendChild(groupBtn);
+      if (isGrouped(task)) {
+        const ungroupBtn = document.createElement('button');
+        ungroupBtn.className = 'ungroup-btn';
+        ungroupBtn.type = 'button';
+        ungroupBtn.setAttribute('aria-label', '묶음에서 빼기');
+        ungroupBtn.title = '이 항목을 묶음에서 빼기';
+        ungroupBtn.textContent = '✂️';
+        ungroupBtn.addEventListener('click', () => {
+          ungroupTask(task);
+          saveBoards();
+          renderGroupBoards();
+          showToast('묶음에서 뺐어요');
+        });
+        controls.appendChild(ungroupBtn);
+      }
     }
 
     const del = document.createElement('button');
@@ -8329,10 +8329,14 @@
     li.dataset.key = key;
 
     const row = dsEl('div', 'search-item-row');
+    let picksEl = null;
     if (overload) {
       row.appendChild(makeBoardIcon('today'));
-      row.appendChild(dsEl('span', 'search-item-text', '오늘 할 일 ' + q.count + '개'));
-      q.picks.forEach(t => row.appendChild(makeSearchChip(t.text.length > 14 ? t.text.slice(0, 14) + '…' : t.text)));
+      row.appendChild(dsEl('span', 'search-item-text day-start__title-fixed', '오늘 할 일 ' + q.count + '개'));
+      // 미룰 항목 칩은 제목 줄이 아니라 둘째 줄에 — 많아도 4개까지만 보이고 나머지는 개수로
+      picksEl = dsEl('div', 'day-start__picks');
+      q.picks.slice(0, 4).forEach(t => picksEl.appendChild(makeSearchChip(t.text.length > 14 ? t.text.slice(0, 14) + '…' : t.text)));
+      if (q.picks.length > 4) picksEl.appendChild(makeSearchChip('외 ' + (q.picks.length - 4) + '개'));
     } else {
       const item = q.item;
       row.appendChild(makeBoardIcon(dsIconKey(item.boardId, item.task)));
@@ -8351,6 +8355,7 @@
       }
     }
     li.appendChild(row);
+    if (picksEl) li.appendChild(picksEl);
 
     // 묶인 항목은 질문 하나 — 대표의 답이 아래 짝들에게도 같이 적용됨
     if (!overload && q.others && q.others.length) {

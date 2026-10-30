@@ -2812,6 +2812,15 @@
     transition: opacity 0.15s var(--ease-ui), transform 0.15s var(--ease-ui);
   }
 
+  /* 아이콘 줄 맨 오른쪽 묶음: 🔗 ✂️ 🗑️ — 🔗부터 오른쪽 끝으로 밀고, 휴지통은 그대로 맨 끝 */
+  .group-btn {
+    margin-left: auto;
+  }
+
+  .group-btn ~ .delete-btn {
+    margin-left: 0;
+  }
+
   .group-btn:hover,
   .ungroup-btn:hover {
     opacity: 1;
@@ -4327,6 +4336,24 @@ body.reorder-mode .sticky:not(.reorder-active) {
 .day-start__qrow .search-item-text {
   flex: 0 1 auto;
   font-size: 17px;
+}
+
+/* 칩이 많아도 제목이 한 글자씩 쪼개지지 않게 — 칩은 다음 줄로 넘기고, '오늘 할 일 N개' 제목은 줄이지 않음 */
+.day-start__qrow .search-item-row {
+  flex-wrap: wrap;
+}
+
+.day-start__title-fixed {
+  flex: none;
+  white-space: nowrap;
+}
+
+/* 오늘 할 일 N개 질문의 미룰 항목 칩 — 제목 아래 둘째 줄(질문 글과 같은 들여쓰기). 칩 높이 18 + 위 5 + 줄 간격 5 = 리갈패드 28px 줄 */
+.day-start__picks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px 6px;
+  padding-left: 30px;
 }
 
 .day-start__qtext {
