@@ -2402,7 +2402,12 @@
     dates.forEach(date => {
       const head = document.createElement('li');
       head.className = 'date-heading';
-      head.textContent = '🙏 ' + prayDayLabel(date);
+      const pray = document.createElement('span');
+      pray.className = 'date-heading-icon';
+      pray.setAttribute('aria-hidden', 'true');
+      pray.textContent = '🙏';
+      head.appendChild(pray);
+      head.appendChild(document.createTextNode(prayDayLabel(date)));
       listEl.appendChild(head);
       clusterGroups(active.filter(t => t.dueDate === date))
         .forEach(t => listEl.appendChild(renderItem('scheduled', t, { hideDate: true })));
