@@ -8362,8 +8362,9 @@
 
     // 묶인 항목은 질문 하나 — 대표의 답이 아래 짝들에게도 같이 적용됨
     if (!overload && q.others && q.others.length) {
-      const names = q.others.map(o => o.task.text.length > 18 ? o.task.text.slice(0, 18) + '…' : o.task.text).join(' · ');
-      li.appendChild(dsEl('div', 'search-snippet', '같이 처리돼요: ' + names));
+      // 질문 글(.day-start__qtext)과 같은 본문 스타일로 — 대표 항목은 위 줄에 있으니 짝만 적음
+      const names = q.others.map(o => '[' + o.task.text + ']').join(' ');
+      li.appendChild(dsEl('p', 'day-start__qtext', '묶여있어요 : ' + names));
     }
 
     if (answered) {
