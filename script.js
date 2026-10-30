@@ -7754,7 +7754,7 @@
       const newer = prev.task.id <= o.task.id ? o : prev;
       firstByText.set(k, older);
       if (byTask.has(newer.task.id)) return;
-      push({ task: newer.task, boardId: newer.boardId, tags: ['같은 제목'], group: 'dup', dupOf: older.task });
+      push({ task: newer.task, boardId: newer.boardId, tags: [], group: 'dup', dupOf: older.task });
     });
     // '오늘 마감인데, 긴급건으로?'는 너무 자주 떠서: 마감일을 방금 정한 건 이미 아는 일이라 빼고, 한 번에 N개까지만(나머지는 gotta do에 그대로 보임)
     let dueTodayAsked = 0;
