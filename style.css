@@ -4516,19 +4516,6 @@ body.reorder-mode .sticky:not(.reorder-active) {
   cursor: default;
 }
 
-.day-start__delete {
-  align-self: flex-start;
-  height: var(--day-start-line);
-  font-size: 14px;
-  line-height: var(--day-start-line);
-  padding: 0 4px;
-  opacity: 0.5;
-}
-
-.day-start__delete:hover {
-  opacity: 1;
-}
-
 /* 완료 표시(✓) — 평소엔 흐리게, 누르면 줄에 취소선 */
 .day-start__check {
   flex: 0 0 auto;

@@ -8776,7 +8776,7 @@
   }
 
   // 순서 목록 한 개(오늘 할 일 / 기다리는 중) — 한 줄에 하나, 손잡이(⋮⋮)는 순서 바꾸기 모드와 같은 모양.
-  function dsBuildReorderList(keys, byKey, setKeys, label, deletable, extra, checkable) {
+  function dsBuildReorderList(keys, byKey, setKeys, label, extra, checkable) {
     const list = dsEl('ol', 'search-list day-start__order-list');
     list.setAttribute('aria-label', label);
     const groupOf = (k) => { const g = byKey.get(k).group; return typeof g === 'number' ? g : null; };
@@ -8826,17 +8826,6 @@
       if (isDone) li.classList.add('is-done');
       li.appendChild(dsEl('span', 'search-item-text', e.text));
       if (e.urgent) li.appendChild(makeSearchChip('긴급')); // 출처 칩(정비에서 가져옴 등)은 없앰 — 긴급만
-      if (deletable && key.indexOf('p:') === 0) {
-        const del = dsEl('button', 'delete-btn day-start__delete', '🗑️');
-        del.type = 'button';
-        del.setAttribute('aria-label', '추가한 할 일 삭제');
-        del.addEventListener('click', () => {
-          ds.prep = ds.prep.filter(x => x.key !== key);
-          dsSaveDraft();
-          dsRender();
-        });
-        li.appendChild(del);
-      }
       const extraBtn = extra ? extra(key, e) : null;
       if (extraBtn) li.appendChild(extraBtn);
       if (checkable) {
@@ -8888,7 +8877,7 @@
       ? '급한 것부터 순서를 제안했어요. 바꾸고 싶으면 끌어 주세요.'
       : '오늘 할 일이 아직 없어요. 아래에서 추가할 수 있어요.'));
     if (keys.length) {
-      dayStartBodyEl.appendChild(dsBuildReorderList(keys, byKey, (next) => { ds.order = next; }, '오늘 실행 순서', true, null, true));
+      dayStartBodyEl.appendChild(dsBuildReorderList(keys, byKey, (next) => { ds.order = next; }, '오늘 실행 순서', null, true));
     }
 
     // 보드 맨 아래 "+ 끄적이기..." 줄과 같은 입력줄 — 오늘 할 일을 바로 추가
@@ -8937,7 +8926,7 @@
         });
         return b;
       };
-      dayStartBodyEl.appendChild(dsBuildReorderList(wKeys, wBy, (next) => { ds.orderW = next; }, 'waiting 순서', false, toTodayBtn));
+      dayStartBodyEl.appendChild(dsBuildReorderList(wKeys, wBy, (next) => { ds.orderW = next; }, 'waiting 순서', toTodayBtn));
     }
     // 일정 단계를 건너뛴(연결 안 한) 경우에만 — 나중에라도 연결할 수 있는 입구
     if (gcalConfigured() && !gcalGranted()) {
