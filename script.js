@@ -2761,35 +2761,6 @@
     controls.appendChild(addToggle);
     controls.appendChild(noteBtn);
 
-    if (boardId !== 'lupin' && !task.done) {
-      const groupBtn = document.createElement('button');
-      groupBtn.className = 'group-btn';
-      groupBtn.type = 'button';
-      groupBtn.setAttribute('aria-label', isGrouped(task) ? '묶음에 항목 더하기' : '다른 항목과 묶기');
-      groupBtn.title = '같이 처리할 항목 묶기';
-      groupBtn.textContent = '🔗';
-      groupBtn.addEventListener('click', () => {
-        if (commitPendingEditThenRetry(li, task.id, '.group-btn')) return;
-        startLinkMode(li, task);
-      });
-      controls.appendChild(groupBtn);
-      if (isGrouped(task)) {
-        const ungroupBtn = document.createElement('button');
-        ungroupBtn.className = 'ungroup-btn';
-        ungroupBtn.type = 'button';
-        ungroupBtn.setAttribute('aria-label', '묶음에서 빼기');
-        ungroupBtn.title = '이 항목을 묶음에서 빼기';
-        ungroupBtn.textContent = '✂️';
-        ungroupBtn.addEventListener('click', () => {
-          ungroupTask(task);
-          saveBoards();
-          renderGroupBoards();
-          showToast('묶음에서 뺐어요');
-        });
-        controls.appendChild(ungroupBtn);
-      }
-    }
-
     if (opts.showFocusBtn) {
       const focusBtn = document.createElement('button');
       focusBtn.className = 'focus-btn';
@@ -2844,6 +2815,35 @@
       doneBtn.appendChild(makeCheckSvg('done-btn-icon'));
       doneBtn.addEventListener('click', () => completeWaitingTask(task.id));
       controls.appendChild(doneBtn);
+    }
+
+    if (boardId !== 'lupin' && !task.done) {
+      const groupBtn = document.createElement('button');
+      groupBtn.className = 'group-btn';
+      groupBtn.type = 'button';
+      groupBtn.setAttribute('aria-label', isGrouped(task) ? '묶음에 항목 더하기' : '다른 항목과 묶기');
+      groupBtn.title = '같이 처리할 항목 묶기';
+      groupBtn.textContent = '🔗';
+      groupBtn.addEventListener('click', () => {
+        if (commitPendingEditThenRetry(li, task.id, '.group-btn')) return;
+        startLinkMode(li, task);
+      });
+      controls.appendChild(groupBtn);
+      if (isGrouped(task)) {
+        const ungroupBtn = document.createElement('button');
+        ungroupBtn.className = 'ungroup-btn';
+        ungroupBtn.type = 'button';
+        ungroupBtn.setAttribute('aria-label', '묶음에서 빼기');
+        ungroupBtn.title = '이 항목을 묶음에서 빼기';
+        ungroupBtn.textContent = '✂️';
+        ungroupBtn.addEventListener('click', () => {
+          ungroupTask(task);
+          saveBoards();
+          renderGroupBoards();
+          showToast('묶음에서 뺐어요');
+        });
+        controls.appendChild(ungroupBtn);
+      }
     }
 
     const del = document.createElement('button');

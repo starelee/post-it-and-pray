@@ -2812,6 +2812,15 @@
     transition: opacity 0.15s var(--ease-ui), transform 0.15s var(--ease-ui);
   }
 
+  /* 아이콘 줄 맨 오른쪽 묶음: 🔗 ✂️ 🗑️ — 🔗부터 오른쪽 끝으로 밀고, 휴지통은 그대로 맨 끝 */
+  .group-btn {
+    margin-left: auto;
+  }
+
+  .group-btn ~ .delete-btn {
+    margin-left: 0;
+  }
+
   .group-btn:hover,
   .ungroup-btn:hover {
     opacity: 1;
