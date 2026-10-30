@@ -4468,6 +4468,15 @@ body.reorder-mode .sticky:not(.reorder-active) {
   align-self: flex-start;
 }
 
+/* 묶음 연결선 — 오늘 순서 목록에서는 꽃 아이콘(왼쪽에서 47px) 위아래를 이음 */
+.day-start__order-item .group-rail {
+  left: 46px;
+}
+
+.day-start__order-item .group-rail::after {
+  top: 22px;
+}
+
 .day-start__num {
   flex: 0 0 22px;
   font-family: var(--font-hand);

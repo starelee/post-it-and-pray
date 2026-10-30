@@ -2112,13 +2112,14 @@
   }
 
   // 목록 안에서 바로 이어진 같은 묶음 항목들에 연결선(.group-rail)을 그림 — 구분선/다른 묶음에서 끊김
-  function markGroupRuns(listEl) {
+  function markGroupRuns(listEl, itemClass) {
     if (!listEl) return;
+    itemClass = itemClass || 'task-item';
     const items = Array.from(listEl.children);
-    const same = (el, g) => el.classList.contains('task-item') && el.dataset.group === g;
+    const same = (el, g) => el.classList.contains(itemClass) && el.dataset.group === g;
     let i = 0;
     while (i < items.length) {
-      const g = items[i].classList.contains('task-item') ? items[i].dataset.group : undefined;
+      const g = items[i].classList.contains(itemClass) ? items[i].dataset.group : undefined;
       if (!g) { i++; continue; }
       let j = i;
       while (j + 1 < items.length && same(items[j + 1], g)) j++;
@@ -8020,6 +8021,17 @@
         entries.push({ key: p.key, text: p.text.trim(), origin: '', urgent: false, rank: 8, board: 'today' });
       }
     });
+    dsMarkEntryGroups(entries);
+    return entries;
+  }
+
+  // 순서 목록 항목에 묶음 id를 달아 둠(키가 항목 id인 것만 — 후속 연락/추가한 할 일은 묶음이 없음)
+  function dsMarkEntryGroups(entries) {
+    entries.forEach(e => {
+      if (!/^\d+$/.test(e.key)) return;
+      const f = dsFind(Number(e.key));
+      if (f && isGrouped(f.task)) e.group = f.task.group;
+    });
     return entries;
   }
 
@@ -8030,13 +8042,13 @@
     const today = todayStr();
     const moved = new Set(ds.toToday);
     const gdec = dsGroupDecisions();
-    return sortByOrder(boards.waiting.filter(t => !(t.replyDate && t.replyDate > today)))
+    return dsMarkEntryGroups(sortByOrder(boards.waiting.filter(t => !(t.replyDate && t.replyDate > today)))
       .filter(t => {
         if (moved.has(String(t.id))) return false;
         const d = dsEffective(String(t.id)) || gdec.get(t.id);
         return !(d && DAYSTART_LEAVES_WAITING.includes(d.action));
       })
-      .map(t => ({ key: String(t.id), text: t.text, board: 'waiting', urgent: false, rank: 0 }));
+      .map(t => ({ key: String(t.id), text: t.text, board: 'waiting', urgent: false, rank: 0 })));
   }
 
   // '오늘로'로 끌어온 기다리는 중 항목 중 지금도 waiting에 있고 다른 정비 답으로 빠져나가지 않는 것
@@ -8070,7 +8082,8 @@
       .filter(x => !keys.includes(x.e.key))
       .sort((a, b) => ((a.e.rank || 0) - (b.e.rank || 0)) || (a.i - b.i))
       .forEach(x => keys.push(x.e.key));
-    return keys;
+    // 묶인 항목은 가장 앞선 짝 자리로 모아 붙임(보드도 같은 규칙으로 그림)
+    return clusterGroups(keys, k => byKey.get(k));
   }
 
   // ───── 변경 요약 ─────
@@ -8110,8 +8123,8 @@
     const entries = dsBuildOrderEntries();
     c.done += dsDoneKeys(entries).size;
     const wEntries = dsBuildWaitingEntries();
-    const orderChanged = dsMergeOrder(entries).join('|') !== entries.map(e => e.key).join('|')
-      || dsMergeOrder(wEntries, ds.orderW).join('|') !== wEntries.map(e => e.key).join('|');
+    const orderChanged = dsMergeOrder(entries).join('|') !== clusterGroups(entries).map(e => e.key).join('|')
+      || dsMergeOrder(wEntries, ds.orderW).join('|') !== clusterGroups(wEntries).map(e => e.key).join('|');
     const parts = [];
     if (c.today) parts.push('오늘로 ' + c.today);
     if (c.urgent) parts.push('긴급 ' + c.urgent);
@@ -8766,11 +8779,34 @@
   function dsBuildReorderList(keys, byKey, setKeys, label, deletable, extra, checkable) {
     const list = dsEl('ol', 'search-list day-start__order-list');
     list.setAttribute('aria-label', label);
+    const groupOf = (k) => { const g = byKey.get(k).group; return typeof g === 'number' ? g : null; };
+    // 묶인 짝들이 이어진 구간 [처음, 끝] — 묶음이 아니면 자기 자리 하나
+    const blockOf = (i) => {
+      const g = groupOf(keys[i]);
+      let a = i, b = i;
+      if (g !== null) {
+        while (a > 0 && groupOf(keys[a - 1]) === g) a--;
+        while (b < keys.length - 1 && groupOf(keys[b + 1]) === g) b++;
+      }
+      return [a, b];
+    };
     const moveTo = (from, to, focusKey) => {
       if (to < 0 || to >= keys.length || from === to) return;
-      const next = keys.slice();
-      const [k] = next.splice(from, 1);
-      next.splice(to, 0, k);
+      const [s, e] = blockOf(from);
+      let next;
+      if (to >= s && to <= e) {
+        // 같은 묶음 안에서는 자리만 바꿈
+        next = keys.slice();
+        const [k] = next.splice(from, 1);
+        next.splice(to, 0, k);
+      } else {
+        // 묶음(묶이지 않았으면 그 항목 하나)을 통째로 옮김 — 다른 묶음 한가운데로는 못 들어가고 그 묶음 앞/뒤로
+        const [ts, te] = blockOf(to);
+        const block = keys.slice(s, e + 1);
+        const rest = keys.slice(0, s).concat(keys.slice(e + 1));
+        const at = to < s ? ts : te - block.length + 1;
+        next = rest.slice(0, at).concat(block, rest.slice(at));
+      }
       setKeys(next);
       dsSaveDraft();
       dsRender();
@@ -8783,6 +8819,7 @@
       const e = byKey.get(key);
       const li = dsEl('li', 'day-start__order-item');
       li.dataset.key = key;
+      if (typeof e.group === 'number') li.dataset.group = String(e.group);
       li.appendChild(dsEl('span', 'day-start__num', String(i + 1)));
       li.appendChild(makeBoardIcon(e.board));
       const isDone = !!checkable && (ds.doneKeys || []).includes(key);
@@ -8838,6 +8875,7 @@
       li.appendChild(handle);
       list.appendChild(li);
     });
+    markGroupRuns(list, 'day-start__order-item');
     return list;
   }
 
