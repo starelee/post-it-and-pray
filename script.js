@@ -2156,7 +2156,7 @@
     if (!linkSource) return;
     linkSource = null;
     document.body.classList.remove('link-mode');
-    document.querySelectorAll('.link-source, .link-candidate, .link-peer').forEach(el => el.classList.remove('link-source', 'link-candidate', 'link-peer'));
+    document.querySelectorAll('.link-source, .link-candidate, .link-peer').forEach(el => el.classList.remove('link-source', 'link-candidate', 'link-peer', 'link-box-solo', 'link-box-first', 'link-box-mid', 'link-box-last'));
   }
 
   function startLinkMode(li, task) {
@@ -2172,6 +2172,15 @@
       if (mateIds.includes(Number(el.dataset.id))) el.classList.add('link-source', 'link-peer');
       else el.classList.add('link-candidate');
     });
+    // 이미 묶인 짝과 🔗를 누른 항목은 개별 실선 대신 바로 이어진 것끼리 큰 상자 하나로 감쌈
+    const kids = Array.from(listEl.children);
+    const inBox = el => !!el && el.classList.contains('link-source');
+    for (let i = 0; i < kids.length; i++) {
+      if (!inBox(kids[i])) continue;
+      const first = !inBox(kids[i - 1]);
+      const last = !inBox(kids[i + 1]);
+      kids[i].classList.add(first && last ? 'link-box-solo' : first ? 'link-box-first' : last ? 'link-box-last' : 'link-box-mid');
+    }
     showToast('같이 묶을 항목을 눌러요 (Esc로 취소)');
   }
 
