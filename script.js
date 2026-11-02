@@ -2157,12 +2157,35 @@
     linkSource = null;
     document.body.classList.remove('link-mode');
     document.querySelectorAll('.link-source, .link-candidate, .link-peer').forEach(el => el.classList.remove('link-source', 'link-candidate', 'link-peer'));
+    document.querySelectorAll('.link-done-row').forEach(el => el.remove());
+    document.querySelectorAll('.reorder-badge[data-link]').forEach(el => el.remove());
   }
 
-  function startLinkMode(li, task) {
+  // 묶는 동안 보드 제목 옆에 "그룹 묶는 중" 알약(누르면 끝)과 목록 맨 아래 ✓ 버튼을 둠 — 순서 바꾸기와 같은 모양
+  function showLinkUI(listEl) {
+    const sticky = listEl.closest('.sticky');
+    const boardId = sticky && sticky.dataset.board;
+    if (boardId) {
+      setReorderBadge(boardId, true, '🔗 그룹 묶는 중', cancelLinkMode, '그룹 묶기 끝내기');
+      const badge = reorderTitleEl(boardId) && reorderTitleEl(boardId).querySelector('.reorder-badge');
+      if (badge) badge.dataset.link = '1';
+    }
+    const row = document.createElement('li');
+    row.className = 'link-done-row';
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'confirm-btn confirm-btn-ok link-done-btn';
+    btn.textContent = '✓ 묶기 끝내기';
+    btn.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); cancelLinkMode(); });
+    row.appendChild(btn);
+    listEl.appendChild(row);
+  }
+
+  function startLinkMode(li, task, quiet) {
     cancelLinkMode();
     const listEl = li.parentElement;
     linkSource = { id: task.id, listEl };
+    showLinkUI(listEl);
     document.body.classList.add('link-mode');
     li.classList.add('link-source');
     // 이미 같은 묶음인 짝은 🔗를 누른 항목과 같은 실선 — "이 묶음에 더하는 중"이 보이게. 짝은 후보에서 뺌.
@@ -2172,7 +2195,7 @@
       if (mateIds.includes(Number(el.dataset.id))) el.classList.add('link-source', 'link-peer');
       else el.classList.add('link-candidate');
     });
-    showToast('같이 묶을 항목을 눌러요 (Esc로 취소)');
+    if (!quiet) showToast('같이 묶을 항목을 눌러요 (Esc로 취소)');
   }
 
   function linkTasks(src, dst) {
@@ -2190,6 +2213,7 @@
 
   document.addEventListener('click', (e) => {
     if (!linkSource) return;
+    if (e.target.closest('.reorder-badge[data-link], .link-done-row')) return; // 끝내기 알약/버튼은 자기 핸들러가 처리
     // 🔗를 누른 항목 자신의 버튼이면 묶기를 시작한(또는 다시 고른) 그 클릭 — 그대로 둠.
     // 다른 후보 항목의 🔗를 눌렀다면 "그 항목과 묶기"로 보고 항목을 누른 것과 똑같이 처리.
     const gb = e.target.closest('.group-btn');
@@ -2203,7 +2227,12 @@
     const src = findTaskAnywhere(linkSource.id);
     const dst = findTaskAnywhere(Number(li.dataset.id));
     cancelLinkMode();
-    if (src && dst && src !== dst) linkTasks(src, dst);
+    if (src && dst && src !== dst) {
+      linkTasks(src, dst);
+      // 묶는 중 상태를 이어 감 — 같은 묶음이 실선으로 보이고, 더 묶거나 ✓로 끝냄
+      const again = findTaskLi(src.id);
+      if (again) startLinkMode(again, src, true);
+    }
   }, true);
 
   window.addEventListener('keydown', (e) => {
@@ -4804,7 +4833,8 @@
     return sticky.querySelector('.sticky-title-toggle-spaced');
   }
 
-  function setReorderBadge(boardId, on, text) {
+  function setReorderBadge(boardId, on, text, onDone, ariaLabel) {
+    onDone = onDone || exitReorder;
     const title = reorderTitleEl(boardId);
     if (!title) return;
     const old = title.querySelector('.reorder-badge');
@@ -4817,17 +4847,17 @@
     // 누르면 순서 바꾸기 끝(모서리 ✓와 같음). 제목이 접기 버튼인 someday에서 접히지 않게 전파 차단.
     badge.setAttribute('role', 'button');
     badge.tabIndex = 0;
-    badge.setAttribute('aria-label', '순서 바꾸기 완료하기');
+    badge.setAttribute('aria-label', ariaLabel || '순서 바꾸기 완료하기');
     badge.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
-      exitReorder();
+      onDone();
     });
     badge.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' || e.key === ' ') {
         e.preventDefault();
         e.stopPropagation();
-        exitReorder();
+        onDone();
       }
     });
     const flower = title.querySelector('.flower');
