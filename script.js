@@ -2172,8 +2172,9 @@
 
   function linkTasks(src, dst) {
     const gid = typeof src.group === 'number' ? src.group : src.id;
-    if (typeof dst.group === 'number' && dst.group !== gid) {
-      BOARD_IDS.forEach(b => boards[b].forEach(t => { if (t.group === dst.group) t.group = gid; }));
+    const dstGroup = dst.group; // 반복 도중 dst.group이 바뀌어도 같은 묶음의 나머지 짝이 빠지지 않게 먼저 저장
+    if (typeof dstGroup === 'number' && dstGroup !== gid) {
+      BOARD_IDS.forEach(b => boards[b].forEach(t => { if (t.group === dstGroup) t.group = gid; }));
     }
     src.group = gid;
     dst.group = gid;
@@ -2184,7 +2185,10 @@
 
   document.addEventListener('click', (e) => {
     if (!linkSource) return;
-    if (e.target.closest('.group-btn')) return; // 묶기를 시작한(또는 다시 고른) 그 클릭
+    // 🔗를 누른 항목 자신의 버튼이면 묶기를 시작한(또는 다시 고른) 그 클릭 — 그대로 둠.
+    // 다른 후보 항목의 🔗를 눌렀다면 "그 항목과 묶기"로 보고 항목을 누른 것과 똑같이 처리.
+    const gb = e.target.closest('.group-btn');
+    if (gb && !gb.closest('.task-item.link-candidate')) return;
     const li = e.target.closest('.task-item.link-candidate');
     if (!li || li.parentElement !== linkSource.listEl) { cancelLinkMode(); return; }
     e.preventDefault();
