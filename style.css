@@ -4861,11 +4861,3 @@ body.reorder-mode .sticky:not(.reorder-active) {
 .day-start__calpick-item label {
   cursor: pointer;
 }
-
-/* 묶는 중 목록 맨 아래 ✓ 버튼 */
-.task-list .link-done-row {
-  list-style: none;
-  display: flex;
-  justify-content: center;
-  padding: 8px 0 2px;
-}
