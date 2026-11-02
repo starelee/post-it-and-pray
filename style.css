@@ -2454,6 +2454,7 @@
   .task-list[data-tasklist="waitingLater"] .subtask-progress,
   .task-list[data-tasklist="someday"] .subtask-progress,
   .task-list[data-tasklist="today"] .task-item.done .subtask-progress,
+  .task-list[data-tasklist="today"] .task-item.sub-fold .subtask-progress,
   .subtask-progress.subtask-progress-always:not([hidden]) {
     display: inline;
   }
@@ -2510,7 +2511,8 @@
      어색한 움직임이 생김 — 높이로 접으면 미완료 칩이 그냥 부드럽게 내려감. */
   .task-list[data-tasklist="waiting"] .subtask-item.done,
   .task-list[data-tasklist="scheduled"] .subtask-item.done,
-  .task-list[data-tasklist="waitingLater"] .subtask-item.done {
+  .task-list[data-tasklist="waitingLater"] .subtask-item.done,
+  .task-list[data-tasklist="today"] .task-item.sub-fold .subtask-item.done {
     flex: 0 0 100%;
     max-height: 3em;
     opacity: 1;
@@ -2523,7 +2525,8 @@
 
   .task-list[data-tasklist="waiting"] .task-item:not(.done-open) .subtask-item.done,
   .task-list[data-tasklist="scheduled"] .task-item:not(.done-open) .subtask-item.done,
-  .task-list[data-tasklist="waitingLater"] .task-item:not(.done-open) .subtask-item.done {
+  .task-list[data-tasklist="waitingLater"] .task-item:not(.done-open) .subtask-item.done,
+  .task-list[data-tasklist="today"] .task-item.sub-fold:not(.done-open) .subtask-item.done {
     max-height: 0;
     opacity: 0;
     margin-top: 0;
@@ -2533,6 +2536,7 @@
   .task-list[data-tasklist="waiting"] .task-item:not(.done-open) > .subtask-collapse:not(:has(.subtask-item:not(.done):not(.complete-all-item))),
   .task-list[data-tasklist="scheduled"] .task-item:not(.done-open) > .subtask-collapse:not(:has(.subtask-item:not(.done):not(.complete-all-item))),
   .task-list[data-tasklist="waitingLater"] .task-item:not(.done-open) > .subtask-collapse:not(:has(.subtask-item:not(.done):not(.complete-all-item))),
+  .task-list[data-tasklist="today"] .task-item.sub-fold:not(.done-open) > .subtask-collapse:not(:has(.subtask-item:not(.done):not(.complete-all-item))),
   .task-list[data-tasklist="someday"] .task-item:not(:hover):not(:focus-within) > .subtask-collapse,
   body.is-editing .task-list[data-tasklist="someday"] .task-item:not(:focus-within) > .subtask-collapse,
   .task-list[data-tasklist="today"] .task-item.done:not(.done-open) > .subtask-collapse {
@@ -3772,7 +3776,8 @@ body.reorder-mode .sticky:not(.reorder-active) {
    접혀 있을 땐 자리를 안 차지하게 display:none, (n/m) 알약을 눌러 펼치면 칩이 나란히 나타남. */
 .task-list[data-tasklist="waiting"] .subtask-item.done,
 .task-list[data-tasklist="scheduled"] .subtask-item.done,
-.task-list[data-tasklist="waitingLater"] .subtask-item.done {
+.task-list[data-tasklist="waitingLater"] .subtask-item.done,
+.task-list[data-tasklist="today"] .task-item.sub-fold .subtask-item.done {
   flex: 0 1 auto;
   max-height: none;
   overflow: visible;
@@ -3780,7 +3785,8 @@ body.reorder-mode .sticky:not(.reorder-active) {
 
 .task-list[data-tasklist="waiting"] .task-item:not(.done-open) .subtask-item.done,
 .task-list[data-tasklist="scheduled"] .task-item:not(.done-open) .subtask-item.done,
-.task-list[data-tasklist="waitingLater"] .task-item:not(.done-open) .subtask-item.done {
+.task-list[data-tasklist="waitingLater"] .task-item:not(.done-open) .subtask-item.done,
+.task-list[data-tasklist="today"] .task-item.sub-fold:not(.done-open) .subtask-item.done {
   display: none;
 }
 

@@ -22,6 +22,7 @@
   const DATE_COMMIT_WAIT_MS = 400;    // 날짜 입력은 키패드로 두 자리를 치는 중에 확정되지 않게 이만큼 기다림
   const REOPEN_VS_CLOSE_MS = 600;     // p/s 단축키: 이 안에 다시 누르면 입력창 포커스, 그 뒤면 닫기
   // ── 자동 접힘 / 복귀 (잊어버리고 길게 늘어져 있는 걸 막으려는 같은 취지)
+  const SUBTASK_FOLD_MIN = 4;           // gotta do: 하위 항목이 이만큼 이상이면 완료된 것만 (완료/전체) 뒤로 접음
   const DONE_OPEN_MS = 30 * 1000;     // waiting 완료 하위 항목을 펼쳐둔 채로 두는 시간
   const COLLAPSE_AUTO_CLOSE_MS = 15 * 60 * 1000;      // pray later / someday 펼침
   const COLLAPSE_AUTO_CLOSE_RETRY_MS = 60 * 1000;     // 그 안에서 고치는 중이면 이만큼 뒤에 다시 확인
@@ -2155,7 +2156,7 @@
     if (!linkSource) return;
     linkSource = null;
     document.body.classList.remove('link-mode');
-    document.querySelectorAll('.link-source, .link-candidate').forEach(el => el.classList.remove('link-source', 'link-candidate'));
+    document.querySelectorAll('.link-source, .link-candidate, .link-peer').forEach(el => el.classList.remove('link-source', 'link-candidate', 'link-peer'));
   }
 
   function startLinkMode(li, task) {
@@ -2164,16 +2165,21 @@
     linkSource = { id: task.id, listEl };
     document.body.classList.add('link-mode');
     li.classList.add('link-source');
+    // 이미 같은 묶음인 짝은 🔗를 누른 항목과 같은 실선 — "이 묶음에 더하는 중"이 보이게. 짝은 후보에서 뺌.
+    const mateIds = isGrouped(task) ? groupMembers(task.group).map(m => m.task.id) : [];
     Array.from(listEl.children).forEach(el => {
-      if (el !== li && el.classList.contains('task-item') && !el.classList.contains('done')) el.classList.add('link-candidate');
+      if (el === li || !el.classList.contains('task-item') || el.classList.contains('done')) return;
+      if (mateIds.includes(Number(el.dataset.id))) el.classList.add('link-source', 'link-peer');
+      else el.classList.add('link-candidate');
     });
     showToast('같이 묶을 항목을 눌러요 (Esc로 취소)');
   }
 
   function linkTasks(src, dst) {
     const gid = typeof src.group === 'number' ? src.group : src.id;
-    if (typeof dst.group === 'number' && dst.group !== gid) {
-      BOARD_IDS.forEach(b => boards[b].forEach(t => { if (t.group === dst.group) t.group = gid; }));
+    const dstGroup = dst.group; // 반복 도중 dst.group이 바뀌어도 같은 묶음의 나머지 짝이 빠지지 않게 먼저 저장
+    if (typeof dstGroup === 'number' && dstGroup !== gid) {
+      BOARD_IDS.forEach(b => boards[b].forEach(t => { if (t.group === dstGroup) t.group = gid; }));
     }
     src.group = gid;
     dst.group = gid;
@@ -2184,7 +2190,12 @@
 
   document.addEventListener('click', (e) => {
     if (!linkSource) return;
-    if (e.target.closest('.group-btn')) return; // 묶기를 시작한(또는 다시 고른) 그 클릭
+    // 🔗를 누른 항목 자신의 버튼이면 묶기를 시작한(또는 다시 고른) 그 클릭 — 그대로 둠.
+    // 다른 후보 항목의 🔗를 눌렀다면 "그 항목과 묶기"로 보고 항목을 누른 것과 똑같이 처리.
+    const gb = e.target.closest('.group-btn');
+    if (gb && !gb.closest('.task-item.link-candidate')) return;
+    // 이미 같은 묶음인 짝(실선)을 누르면 아무 일도 없이 묶기 상태를 유지
+    if (!gb && e.target.closest('.task-item.link-peer')) { e.preventDefault(); e.stopPropagation(); return; }
     const li = e.target.closest('.task-item.link-candidate');
     if (!li || li.parentElement !== linkSource.listEl) { cancelLinkMode(); return; }
     e.preventDefault();
@@ -2635,7 +2646,10 @@
     // 지나면 접힘.
     // waiting은 하위 항목이 있으면 늘 눌 수 있게 — 그릴 때의 완료 개수로 정하면, 나중에 체크한 뒤에
     // (다시 그려지기 전까지) (n/m) 알약이 안 눌렸음.
-    const togglable = (boardId === 'waiting' || boardId === 'scheduled') ? task.subtasks.length > 0 : task.done; // pray later도 waiting과 같음
+    // gotta do의 미완료 항목은 하위 항목이 SUBTASK_FOLD_MIN개 이상일 때만 완료된 것을 접음(CSS .sub-fold)
+    const foldable = !task.done && task.subtasks.length >= SUBTASK_FOLD_MIN;
+    if (foldable) li.classList.add('sub-fold');
+    const togglable = (boardId === 'waiting' || boardId === 'scheduled') ? task.subtasks.length > 0 : (task.done || foldable); // pray later도 waiting과 같음
     const makeToggle = (el) => {
       if (!togglable) return;
       el.classList.add('subtask-progress-toggle');
@@ -4711,6 +4725,19 @@
     return out;
   }
 
+  // 순서를 바꿀 때의 이동 단위 — 묶인 항목은 한 덩어리(묶음 전체), 나머지는 항목 하나.
+  // 묶음 항목은 렌더 때 이미 서로 붙어 있어서(clusterGroups) 같은 묶음 id가 이어진 구간이 한 덩어리.
+  function reorderUnits(boardId) {
+    const units = [];
+    reorderableLis(boardId).forEach(el => {
+      const g = el.dataset.group;
+      const last = units[units.length - 1];
+      if (g && last && last[0].dataset.group === g) last.push(el);
+      else units.push([el]);
+    });
+    return units;
+  }
+
   function reorderTaskById(boardId, id) {
     const found = boards[boardId].find(t => t.id === id);
     if (found) return found;
@@ -5217,7 +5244,9 @@
     const grab = e.clientY - li.getBoundingClientRect().top;
     let lastY = e.clientY;
     let raf = 0;
-    li.classList.add('dragging');
+    // 묶인 항목을 끌면 묶음 전체가 한 덩어리로 같이 움직임
+    const run = (reorderUnits(reorderBoard).find(u => u.includes(li))) || [li];
+    run.forEach(m => m.classList.add('dragging'));
 
     // 현재 translate(ty)를 알고 있으니 transform을 지웠다 다시 재지 않고도 "원래 자리"를 구할 수 있음
     // — 프레임마다 레이아웃을 여러 번 강제하지 않아서 훨씬 부드러움.
@@ -5225,35 +5254,45 @@
     const place = () => {
       const natural = li.getBoundingClientRect().top - ty;
       ty = lastY - grab - natural;
-      li.style.transform = 'translateY(' + ty + 'px)';
+      run.forEach(m => { m.style.transform = 'translateY(' + ty + 'px)'; });
     };
-    li.style.willChange = 'transform';
-    // 끌고 있는 항목의 중심이 이웃의 중심을 넘으면 그 자리로 DOM을 옮기고, 밀려난 이웃은 짧게 미끄러지듯 이동
+    run.forEach(m => { m.style.willChange = 'transform'; });
+    const spanOf = (els) => {
+      const first = els[0].getBoundingClientRect();
+      const last = els[els.length - 1].getBoundingClientRect();
+      return (first.top + last.bottom) / 2;
+    };
+    // 끌고 있는 덩어리의 중심이 이웃 덩어리의 중심을 넘으면 그 자리로 DOM을 옮기고, 밀려난 이웃은 짧게 미끄러지듯 이동
     const swap = () => {
-      const items = reorderableLis(reorderBoard);
-      const r = li.getBoundingClientRect();
-      const mid = r.top + r.height / 2;
-      const myIdx = items.indexOf(li);
-      for (let i = 0; i < items.length; i++) {
-        const other = items[i];
-        if (other === li) continue;
-        const o = other.getBoundingClientRect();
-        const omid = o.top + o.height / 2;
+      const units = reorderUnits(reorderBoard);
+      const myIdx = units.findIndex(u => u.includes(li));
+      if (myIdx === -1) return false;
+      const mid = spanOf(run);
+      for (let i = 0; i < units.length; i++) {
+        if (i === myIdx) continue;
+        const other = units[i];
+        const omid = spanOf(other);
+        const before = other.map(el => el.getBoundingClientRect().top);
         let moved = false;
-        if (i < myIdx && mid < omid) { li.parentNode.insertBefore(li, other); moved = true; }
-        else if (i > myIdx && mid > omid) { li.parentNode.insertBefore(li, other.nextSibling); moved = true; }
+        if (i < myIdx && mid < omid) { run.forEach(m => li.parentNode.insertBefore(m, other[0])); moved = true; }
+        else if (i > myIdx && mid > omid) {
+          const ref = other[other.length - 1].nextSibling;
+          run.forEach(m => li.parentNode.insertBefore(m, ref));
+          moved = true;
+        }
         if (moved) {
           place();
-          const delta = o.top - other.getBoundingClientRect().top;
-          if (delta) {
-            other.style.transition = 'none';
-            other.style.transform = 'translateY(' + delta + 'px)';
+          other.forEach((el, k) => {
+            const delta = before[k] - el.getBoundingClientRect().top;
+            if (!delta) return;
+            el.style.transition = 'none';
+            el.style.transform = 'translateY(' + delta + 'px)';
             requestAnimationFrame(() => {
-              other.style.transition = 'transform 0.14s ease-out';
-              other.style.transform = '';
-              setTimeout(() => { other.style.transition = ''; }, 180);
+              el.style.transition = 'transform 0.14s ease-out';
+              el.style.transform = '';
+              setTimeout(() => { el.style.transition = ''; }, 180);
             });
-          }
+          });
           return true;
         }
       }
@@ -5281,9 +5320,11 @@
       document.removeEventListener('pointermove', onMove, true);
       document.removeEventListener('pointerup', finish, true);
       document.removeEventListener('pointercancel', finish, true);
-      li.classList.remove('dragging');
-      li.style.transform = '';
-      li.style.willChange = '';
+      run.forEach(m => {
+        m.classList.remove('dragging');
+        m.style.transform = '';
+        m.style.willChange = '';
+      });
       commitReorder(li.dataset.id);
     };
     // 항목을 DOM에서 옮기면 포인터 캡처가 풀릴 수 있어서, 이동/종료는 document에서 받음
@@ -5330,10 +5371,13 @@
       e.stopImmediatePropagation();
       const li = handle.closest('li');
       const id = li.dataset.id;
-      const items = reorderableLis(reorderBoard);
-      const target = items[items.indexOf(li) + (e.key === 'ArrowUp' ? -1 : 1)];
+      const units = reorderUnits(reorderBoard);
+      const ui = units.findIndex(u => u.includes(li));
+      const up = e.key === 'ArrowUp';
+      const target = units[ui + (up ? -1 : 1)];
       if (!target) return;
-      li.parentNode.insertBefore(li, e.key === 'ArrowUp' ? target : target.nextSibling);
+      const ref = up ? target[0] : target[target.length - 1].nextSibling;
+      units[ui].forEach(m => li.parentNode.insertBefore(m, ref)); // 묶음은 통째로
       commitReorder(id);
       return;
     }
