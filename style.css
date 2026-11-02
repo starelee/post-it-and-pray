@@ -2874,13 +2874,13 @@
     cursor: pointer;
     border-radius: 4px;
     outline: 2px dashed var(--accent);
-    outline-offset: 1px;
+    outline-offset: -2px; /* 안쪽으로 — 붙어 있는 이웃 항목의 선과 겹쳐 이중선처럼 보이지 않게 */
   }
 
   body.link-mode .link-source {
     border-radius: 4px;
     outline: 2px solid var(--accent);
-    outline-offset: 1px;
+    outline-offset: -2px;
   }
 
   /* 메모 모달 */
