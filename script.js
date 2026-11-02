@@ -22,6 +22,7 @@
   const DATE_COMMIT_WAIT_MS = 400;    // 날짜 입력은 키패드로 두 자리를 치는 중에 확정되지 않게 이만큼 기다림
   const REOPEN_VS_CLOSE_MS = 600;     // p/s 단축키: 이 안에 다시 누르면 입력창 포커스, 그 뒤면 닫기
   // ── 자동 접힘 / 복귀 (잊어버리고 길게 늘어져 있는 걸 막으려는 같은 취지)
+  const SUBTASK_FOLD_MIN = 4;           // gotta do: 하위 항목이 이만큼 이상이면 완료된 것만 (완료/전체) 뒤로 접음
   const DONE_OPEN_MS = 30 * 1000;     // waiting 완료 하위 항목을 펼쳐둔 채로 두는 시간
   const COLLAPSE_AUTO_CLOSE_MS = 15 * 60 * 1000;      // pray later / someday 펼침
   const COLLAPSE_AUTO_CLOSE_RETRY_MS = 60 * 1000;     // 그 안에서 고치는 중이면 이만큼 뒤에 다시 확인
@@ -2155,7 +2156,7 @@
     if (!linkSource) return;
     linkSource = null;
     document.body.classList.remove('link-mode');
-    document.querySelectorAll('.link-source, .link-candidate').forEach(el => el.classList.remove('link-source', 'link-candidate'));
+    document.querySelectorAll('.link-source, .link-candidate, .link-peer').forEach(el => el.classList.remove('link-source', 'link-candidate', 'link-peer'));
   }
 
   function startLinkMode(li, task) {
@@ -2164,8 +2165,12 @@
     linkSource = { id: task.id, listEl };
     document.body.classList.add('link-mode');
     li.classList.add('link-source');
+    // 이미 같은 묶음인 짝은 🔗를 누른 항목과 같은 실선 — "이 묶음에 더하는 중"이 보이게. 짝은 후보에서 뺌.
+    const mateIds = isGrouped(task) ? groupMembers(task.group).map(m => m.task.id) : [];
     Array.from(listEl.children).forEach(el => {
-      if (el !== li && el.classList.contains('task-item') && !el.classList.contains('done')) el.classList.add('link-candidate');
+      if (el === li || !el.classList.contains('task-item') || el.classList.contains('done')) return;
+      if (mateIds.includes(Number(el.dataset.id))) el.classList.add('link-source', 'link-peer');
+      else el.classList.add('link-candidate');
     });
     showToast('같이 묶을 항목을 눌러요 (Esc로 취소)');
   }
@@ -2189,6 +2194,8 @@
     // 다른 후보 항목의 🔗를 눌렀다면 "그 항목과 묶기"로 보고 항목을 누른 것과 똑같이 처리.
     const gb = e.target.closest('.group-btn');
     if (gb && !gb.closest('.task-item.link-candidate')) return;
+    // 이미 같은 묶음인 짝(실선)을 누르면 아무 일도 없이 묶기 상태를 유지
+    if (!gb && e.target.closest('.task-item.link-peer')) { e.preventDefault(); e.stopPropagation(); return; }
     const li = e.target.closest('.task-item.link-candidate');
     if (!li || li.parentElement !== linkSource.listEl) { cancelLinkMode(); return; }
     e.preventDefault();
@@ -2639,7 +2646,10 @@
     // 지나면 접힘.
     // waiting은 하위 항목이 있으면 늘 눌 수 있게 — 그릴 때의 완료 개수로 정하면, 나중에 체크한 뒤에
     // (다시 그려지기 전까지) (n/m) 알약이 안 눌렸음.
-    const togglable = (boardId === 'waiting' || boardId === 'scheduled') ? task.subtasks.length > 0 : task.done; // pray later도 waiting과 같음
+    // gotta do의 미완료 항목은 하위 항목이 SUBTASK_FOLD_MIN개 이상일 때만 완료된 것을 접음(CSS .sub-fold)
+    const foldable = !task.done && task.subtasks.length >= SUBTASK_FOLD_MIN;
+    if (foldable) li.classList.add('sub-fold');
+    const togglable = (boardId === 'waiting' || boardId === 'scheduled') ? task.subtasks.length > 0 : (task.done || foldable); // pray later도 waiting과 같음
     const makeToggle = (el) => {
       if (!togglable) return;
       el.classList.add('subtask-progress-toggle');
