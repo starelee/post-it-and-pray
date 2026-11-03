@@ -2877,10 +2877,25 @@
     outline-offset: -2px; /* 안쪽으로 — 붙어 있는 이웃 항목의 선과 겹쳐 이중선처럼 보이지 않게 */
   }
 
+  /* 묶인 항목들은 개별 상자 대신 이어진 것끼리 큰 상자 하나(위·아래는 맨 앞/맨 뒤 항목만) */
   body.link-mode .link-source {
+    --lk: var(--accent);
+    box-shadow: inset 2px 0 0 var(--lk), inset -2px 0 0 var(--lk);
+  }
+
+  body.link-mode .link-source.link-box-solo {
     border-radius: 4px;
-    outline: 2px solid var(--accent);
-    outline-offset: -2px;
+    box-shadow: inset 0 0 0 2px var(--lk);
+  }
+
+  body.link-mode .link-source.link-box-first {
+    border-radius: 4px 4px 0 0;
+    box-shadow: inset 2px 0 0 var(--lk), inset -2px 0 0 var(--lk), inset 0 2px 0 var(--lk);
+  }
+
+  body.link-mode .link-source.link-box-last {
+    border-radius: 0 0 4px 4px;
+    box-shadow: inset 2px 0 0 var(--lk), inset -2px 0 0 var(--lk), inset 0 -2px 0 var(--lk);
   }
 
   /* 메모 모달 */
