@@ -8832,10 +8832,21 @@
         if (h) h.focus({ preventScroll: true });
       }
     };
+    // 묶인 항목은 바로 이어진 것끼리 왼쪽 선으로 이어 보임(메인 보드의 묶음 연결선과 같은 뜻)
+    const groupOf = keys.map(k => {
+      const t = /^\d+$/.test(k) ? findTaskAnywhere(Number(k)) : null;
+      return t && isGrouped(t) ? t.group : null;
+    });
     keys.forEach((key, i) => {
       const e = byKey.get(key);
       const li = dsEl('li', 'day-start__order-item');
       li.dataset.key = key;
+      const g = groupOf[i];
+      if (g !== null) {
+        const prev = i > 0 && groupOf[i - 1] === g;
+        const next = i < keys.length - 1 && groupOf[i + 1] === g;
+        if (prev || next) li.classList.add('group-run', prev && next ? 'group-mid' : (next ? 'group-first' : 'group-last'));
+      }
       li.appendChild(dsEl('span', 'day-start__num', String(i + 1)));
       li.appendChild(makeBoardIcon(e.board));
       const isDone = !!checkable && (ds.doneKeys || []).includes(key);

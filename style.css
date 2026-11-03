@@ -4596,6 +4596,21 @@ body.reorder-mode .sticky:not(.reorder-active) {
   outline-offset: 2px;
 }
 
+/* 묶인 항목: 이어진 줄들의 왼쪽에 선 하나(첫 줄은 아래 절반, 끝 줄은 위 절반) */
+.day-start__order-item.group-run {
+  --grp: color-mix(in srgb, var(--accent) 85%, transparent);
+  background: linear-gradient(var(--grp), var(--grp)) left 2px top 0 / 4px 100% no-repeat;
+}
+
+.day-start__order-item.group-run.group-first {
+  background-position: left 2px bottom 0;
+  background-size: 4px 50%;
+}
+
+.day-start__order-item.group-run.group-last {
+  background-size: 4px 50%;
+}
+
 /* 끌고 있는 줄은 순서 바꾸기 모드(.task-item.dragging)처럼 종이가 살짝 떠오름 */
 .day-start__order-item.is-dragging {
   z-index: 5;
