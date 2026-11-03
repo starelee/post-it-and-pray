@@ -8314,7 +8314,7 @@
     dsAnswer(q, false);
   }
 
-  // 대안 하나를 고름(patch가 null이면 그대로 두기/3일 뒤에 다시 = 원래 '아니오')
+  // 대안 하나를 고름(patch가 null이면 그대로 두기/3일 뒤에 다시 묻기 = 원래 '아니오')
   function dsAnswerAlt(q, patch) {
     dsAltKey = null;
     dsAltPick = null;
@@ -8394,7 +8394,7 @@
       case 'toWaiting': return '대기중으로';
       case 'clearDate':
       case 'clearReply': return '날짜 지움';
-      default: return d.snooze ? SNOOZE_DAYS + '일 뒤에 다시' : '그대로 둠';
+      default: return d.snooze ? SNOOZE_DAYS + '일 뒤에 다시 묻기' : '그대로 둠';
     }
   }
 
@@ -8509,8 +8509,8 @@
       // '아니오' 뒤: 아니오/네 버튼이 사라지고 그 자리에 대안 + 그대로 두기가 버튼으로 나타남
       li.classList.add('has-alts');
       btns.classList.add('has-alts');
-      // 가장 많이 누르는 '그대로 두기'(또는 3일 뒤에 다시)를 맨 앞에 둠
-      [{ label: q.no.snooze ? SNOOZE_DAYS + '일 뒤에 다시' : '그대로 두기', patch: null }]
+      // 가장 많이 누르는 '그대로 두기'(또는 3일 뒤에 다시 묻기)를 맨 앞에 둠
+      [{ label: q.no.snooze ? SNOOZE_DAYS + '일 뒤에 다시 묻기' : '그대로 두기', patch: null }]
         .concat(q.alts.map(a => ({ label: a.label, patch: a.patch, pickDate: a.pickDate, pickAction: a.pickAction, pickLabel: a.pickLabel, pickMoved: a.pickMoved })))
         .forEach(o => {
           const b = dsSmallButton('confirm-btn-cancel day-start__alt', o.label, () => {});
