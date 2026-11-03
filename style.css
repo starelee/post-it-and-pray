@@ -2272,6 +2272,17 @@
     transition: max-height var(--collapse-dur) var(--collapse-ease) var(--collapse-delay), opacity var(--collapse-dur) var(--collapse-ease) var(--collapse-delay), margin-top var(--collapse-dur) var(--collapse-ease) var(--collapse-delay);
   }
 
+  /* 묶인 항목은 ✂️가 하나 더 붙어 아이콘이 많음 — 간격을 고정하지 않고 가로폭에 맞춰 고르게 나눔
+     (최소 간격 2px, 폭이 넉넉하면 그만큼 벌어짐). 안 그러면 맨 끝 🗑️가 잘려서 삭제를 못 누름. */
+  .task-item[data-group] > .task-controls {
+    gap: 2px;
+    justify-content: space-between;
+  }
+
+  .task-item[data-group] > .task-controls > button {
+    flex: 0 0 auto;
+  }
+
   /* 아이콘 줄이 열린 모양 — 열리는 이유(트리거)가 달라도 모양은 여기 한 곳에서만 정함.
      편집 중(:focus-within), 날짜 행이 열려 고정(.row-pinned), 터치에서 탭으로 연 항목(.controls-open —
      터치는 :hover를 안정적으로 감지 못해서(호버 흉내→지연된 클릭 등) 탭이 직접 이 클래스를 붙임,
