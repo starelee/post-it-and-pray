@@ -4596,19 +4596,28 @@ body.reorder-mode .sticky:not(.reorder-active) {
   outline-offset: 2px;
 }
 
-/* 묶인 항목: 이어진 줄들의 왼쪽에 선 하나(첫 줄은 아래 절반, 끝 줄은 위 절반) */
-.day-start__order-item.group-run {
+/* 묶인 항목: 이어진 줄들의 왼쪽을 "(" 모양 괄호로 감쌈 — 첫 줄 위쪽과 끝 줄 아래쪽이 안쪽으로 휨 */
+.day-start__brace {
   --grp: color-mix(in srgb, var(--accent) 85%, transparent);
-  background: linear-gradient(var(--grp), var(--grp)) left 2px top 0 / 4px 100% no-repeat;
+  position: absolute;
+  left: 2px;
+  top: 0;
+  bottom: 0;
+  width: 9px;
+  border-left: 3px solid var(--grp);
+  pointer-events: none;
 }
 
-.day-start__order-item.group-run.group-first {
-  background-position: left 2px bottom 0;
-  background-size: 4px 50%;
+.group-first > .day-start__brace {
+  top: 50%;
+  border-top: 3px solid var(--grp);
+  border-top-left-radius: 9px;
 }
 
-.day-start__order-item.group-run.group-last {
-  background-size: 4px 50%;
+.group-last > .day-start__brace {
+  bottom: 50%;
+  border-bottom: 3px solid var(--grp);
+  border-bottom-left-radius: 9px;
 }
 
 /* 끌고 있는 줄은 순서 바꾸기 모드(.task-item.dragging)처럼 종이가 살짝 떠오름 */

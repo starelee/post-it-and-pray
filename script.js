@@ -8845,7 +8845,10 @@
       if (g !== null) {
         const prev = i > 0 && groupOf[i - 1] === g;
         const next = i < keys.length - 1 && groupOf[i + 1] === g;
-        if (prev || next) li.classList.add('group-run', prev && next ? 'group-mid' : (next ? 'group-first' : 'group-last'));
+        if (prev || next) {
+          li.classList.add('group-run', prev && next ? 'group-mid' : (next ? 'group-first' : 'group-last'));
+          li.appendChild(dsEl('span', 'day-start__brace')); // 묶음을 "(" 모양 괄호로 감쌈
+        }
       }
       li.appendChild(dsEl('span', 'day-start__num', String(i + 1)));
       li.appendChild(makeBoardIcon(e.board));
