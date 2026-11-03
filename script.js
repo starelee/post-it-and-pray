@@ -2877,6 +2877,13 @@
     del.addEventListener('click', () => deleteTask(boardId, task.id));
     controls.appendChild(del);
 
+    // 아이콘만 있는 버튼에 마우스를 올리면 뜻이 보이게 — 이미 title이 있는 것(🔗 ✂️ 완료)은 그대로
+    controls.querySelectorAll(':scope > button').forEach(btn => {
+      const label = btn.getAttribute('aria-label');
+      // 보드 이름 뒤의 "..."는 툴팁에선 빼고 조사를 맞춤(waiting...로 → waiting으로)
+      if (!btn.title && label) btn.title = label.replace('waiting...로', 'waiting으로').replace(/\.{3}/g, '');
+    });
+
     li.appendChild(controls);
 
     if (canDate) {
