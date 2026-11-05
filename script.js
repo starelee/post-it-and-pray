@@ -5020,20 +5020,19 @@
     addLi.appendChild(addBtn);
     addLi.appendChild(addField);
     list.appendChild(addLi);
-    if (task.subtasks.filter(x => !x.done).length >= 2) {
-      const allLi = document.createElement('li');
-      allLi.className = 'subtask-item sub-complete-all';
-      const allBtn = document.createElement('button');
-      allBtn.type = 'button';
-      allBtn.className = 'subtask-chip complete-all-btn';
-      allBtn.textContent = '[✓ 모두 완료]';
-      allBtn.addEventListener('click', () => {
-        commitSubEditInputs();
-        completeAllSubtasks(reorderSubBoard, reorderSubId);
-      });
-      allLi.appendChild(allBtn);
-      list.appendChild(allLi);
-    }
+    // 편집 중에는 '모두 완료'가 필요 없고 ✓가 "수정 끝"으로 읽히므로, 그 자리에 편집을 끝내는 버튼을 둠
+    const doneLi = document.createElement('li');
+    doneLi.className = 'subtask-item sub-complete-all';
+    const doneBtn = document.createElement('button');
+    doneBtn.type = 'button';
+    doneBtn.className = 'subtask-chip complete-all-btn';
+    doneBtn.setAttribute('aria-label', '하위 항목 수정 끝내기');
+    doneBtn.textContent = '[✓ 수정 완료]';
+    // 누르는 순간 [+추가] 입력창이 포커스를 잃어 줄 배치가 바뀌면 클릭이 빗나감 — 포커스를 뺏지 않음
+    doneBtn.addEventListener('mousedown', (e) => e.preventDefault());
+    doneBtn.addEventListener('click', () => exitReorder()); // 입력창 글자는 exitReorder가 항목에 반영
+    doneLi.appendChild(doneBtn);
+    list.appendChild(doneLi);
   }
 
   // 편집 입력창의 글자를 항목에 반영(비우면 원래 글자 유지 — 지우기는 ×로).
