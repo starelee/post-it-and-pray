@@ -9821,7 +9821,7 @@
       card.className = 'backup-card';
       const hint = document.createElement('p');
       hint.className = 'backup-hint';
-      hint.textContent = '이름은 구분용 라벨이에요. 바꿔도 안의 항목은 그대로예요.';
+      hint.textContent = '새 프로젝트를 생성하거나 기존 프로젝트의 이름을 바꾸거나 삭제해요. 프로젝트 간의 항목은 이동할 수 없어요.';
       const err = document.createElement('p');
       err.className = 'backup-hint project-error';
       err.hidden = true;
@@ -9959,18 +9959,6 @@
       });
       projectMenuEl.appendChild(item);
     });
-    const add = document.createElement('button');
-    add.type = 'button';
-    add.className = 'menu-item menu-item-add';
-    add.setAttribute('role', 'menuitem');
-    add.textContent = '＋ 새 프로젝트';
-    add.addEventListener('click', async () => {
-      closeHeaderMenus();
-      if (isFocusLocked() || isConfirmModalOpen()) { showToast(projectBlockedReason()); return; }
-      const id = await promptNewProject();
-      if (id) switchProject(id);
-    });
-    projectMenuEl.appendChild(add);
   }
 
   // 헤더의 두 드롭다운(프로젝트 / 설정) — 하나만 열리고, 바깥을 누르거나 Esc로 닫힘
