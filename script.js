@@ -9748,7 +9748,7 @@
   async function promptNewProject() {
     const name = await promptProjectName({
       title: '새 프로젝트',
-      message: '새로운 프로젝트를 시작해요. Lupin 보드는 그대로 따라와요.',
+      message: '새로운 프로젝트를 시작해요. Lupin 보드는 그대로 따라와요.\n프로젝트 간의 항목 이동은 불가능해요.',
       confirmLabel: '만들기'
     });
     if (!name) return null;
