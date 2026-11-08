@@ -1,13 +1,46 @@
 # 데이터 스키마
 
-앱의 전체 상태는 하나의 JSON 객체(`boards`)로 관리됨. 이 객체가 그대로:
+앱의 전체 상태는 하나의 JSON 객체(**저장소 `Store`**, 버전 2)로 관리됨. 이 객체가 그대로:
 
-- `localStorage`의 `postit-todo-boards-v1` 키에 직렬화되어 저장되고,
+- `localStorage`의 `postit-todo-store-v2` 키에 직렬화되어 저장되고,
 - 로그인 상태면 Supabase `postit_data` 테이블의 `data` 컬럼(유저 id를 PK로 하는 행)에도 그대로 저장됨.
 
-두 저장소 모두 **같은 shape**을 씀 — 별도의 서버용/클라이언트용 변환이 없음.
+두 저장소 모두 **같은 shape**을 씀 — 별도의 서버용/클라이언트용 변환이 없음. 프로젝트 도입 전(v1)에는 아래 `Boards` 하나가 그 자리였음(`postit-todo-boards-v1` 키 / 클라우드 행의 `data`) — 아래 "프로젝트와 v1 마이그레이션" 참고.
 
-## `boards`
+## 프로젝트와 `Store`
+
+```ts
+type Store = {
+  version: 2;
+  projects: Project[];   // 1개 이상. 배열 순서 = 프로젝트 목록 순서
+  lupin: Task[];         // 월급루팡 — 모든 프로젝트 공통 한 벌
+  removed: string[];     // 지운 프로젝트 id(최대 50개) — 병합 때 되살아나지 않게 하는 기록
+};
+
+type Project = {
+  id: string;            // /^[A-Za-z0-9_-]{1,40}$/. 처음 프로젝트는 'main', 새로 만들면 'p' + 시각(36진수) + 난수. 바뀌지 않고 재사용되지 않음
+  name: string;          // 사람이 보는 라벨(최대 20자, 공백 정리). 바꿔도 id·항목은 그대로. 같은 이름(대소문자·공백 무시)은 UI가 막음
+  boards: Boards;        // 이 프로젝트의 보드. 단 `lupin` 키는 저장하지 않음(공통 `Store.lupin`을 씀)
+};
+```
+
+- **프로젝트는 서로 완전히 분리**됨: 항목은 한 프로젝트의 `boards`에만 있고, 프로젝트 사이로 옮기는 기능은 없음. 검색·하루 시작하기·묶음·삭제 기록(`trash`)·되돌리기(`Ctrl+Z`)는 모두 열어 둔 프로젝트 안에서만 동작함.
+- **메모리에서는** 나머지 코드가 전부 `boards`(= 열어 둔 프로젝트의 `Boards` + 공통 `lupin`) 하나만 봄. 저장할 때 `serializeStore`가 열어 둔 프로젝트의 `boards`에서 `lupin`을 빼 그 프로젝트 자리에 넣고, `lupin`은 `Store.lupin`으로 올림. 불러올 때 `applyStore`가 반대로 합침.
+- **열어 둔 프로젝트(`activeProject`)는 저장소에 없음**: 이 기기의 `localStorage['postit-active-project']`(프로젝트 id)에만 기억하는 기기별 값. 목록에 없는 id면 첫 프로젝트로 열림.
+- **프로젝트 전환 규칙**: 지금 프로젝트의 `boards`를 목록에 갈무리하고 다음 프로젝트의 `boards` + 공통 `lupin`을 `boards`로 삼은 뒤, 되돌리기 기록을 비우고 새 프로젝트에 `migrateArchive`를 한 번 적용(켜 둔 채 날짜가 바뀐 경우를 위해). 하루 시작하기·포커스가 진행 중이거나 확인 모달이 떠 있으면 전환하지 않음.
+- **프로젝트 지우기**: 항목이 하나라도 있으면(done·gone 포함) 프로젝트 이름을 직접 입력해야 함. 지우면 `projects`에서 빠지고 id가 `removed`에 들어감(복구 없음). 마지막 프로젝트는 지울 수 없음. 열어 둔 프로젝트를 지우면 먼저 다른(첫) 프로젝트로 옮겨 감.
+- **프로젝트별 기기 값**: 하루 시작하기 초안/확정 날짜 키(`postit-daystart-draft-v1`, `postit-daystart-confirmed-v1`)는 `main`이면 그대로, 다른 프로젝트는 뒤에 `:<프로젝트 id>`가 붙음. 구글 캘린더 연결·테마·포커스 세션 키는 프로젝트와 무관한 공통 값.
+- **병합(`mergeStores`)**: 프로젝트 id별로 `mergeBoards`(아래 항목 단위 규칙)를 적용하고 `lupin`도 같은 규칙으로 따로 병합함. `removed`는 양쪽의 합집합이고, 거기 있는 id의 프로젝트는 결과에서 빠짐. 이름은 이 기기 쪽이 이김. 프로젝트를 한쪽에서 새로 만들었으면 합집합으로 남음. 지운 프로젝트에 다른 기기가 나중에 더한 항목은 지운 것과 함께 사라짐.
+- **백업 파일(v2)**: `{ app: 'post-it-and-pray', version: 2, exportedAt, projects, lupin }`. 복구하면 프로젝트 전체가 파일 내용으로 바뀌고(파일에 없는 지금 프로젝트는 지운 것으로 기록, 이미 지운 id가 파일에 있으면 새 id로 되살림), 되돌리기 기록은 비워서 `Ctrl+Z`로 되돌릴 수 없음.
+
+### 프로젝트와 v1 마이그레이션
+
+- `normalizeStore`는 v1 모양(`Boards` 객체, `projects` 키 없음)을 만나면 그것을 id `main`, 이름 `기본`인 프로젝트 하나로 감싸고 그 `Boards`의 `lupin`을 공통 `Store.lupin`으로 올림. 로컬 로드, 클라우드 로드, 백업 복구가 전부 이 함수를 거치므로 어디서 읽어도 같은 결과.
+- 로컬은 `postit-todo-store-v2`가 없을 때만 v1 키(`postit-todo-boards-v1`) → 그보다 옛 `postit-todo-tasks-v1` 순으로 읽음. **v1 키는 지우지도 다시 쓰지도 않으므로** 처음 저장되기 전까지(그리고 그 뒤에도) 옛 데이터가 그대로 남아 있음.
+- 클라우드 행은 처음 저장하는 순간 v2 모양으로 바뀜. v1 모양 행도 위 규칙으로 읽히고, v1 백업 파일(`{ app, version: 1, boards }`)은 복구할 때 **지금 열어 둔 프로젝트 하나만** 바꿈(공통 `lupin` 포함, 다른 프로젝트는 그대로).
+- 프로젝트 도입 전 앱 버전으로 되돌리면 v2 데이터를 읽지 못함(v1 키의 옛 값이 보임) — 되돌리기 전에 백업 데이터를 받아 둘 것.
+
+## `boards` (프로젝트 하나의 `Boards`)
 
 ```ts
 type Boards = {
@@ -19,6 +52,8 @@ type Boards = {
   lupin: Task[];
 };
 ```
+
+(`lupin`은 메모리에서 열어 둔 프로젝트의 `boards`에 공통 월급루팡이 합쳐져 있을 뿐, 저장된 프로젝트의 `boards`에는 없음 — 위 `Store.lupin`. v1 저장 데이터에는 여기 들어 있었음.)
 
 여섯 개 배열 모두 `Task` 객체의 배열이며, **어느 배열에 들어있느냐 자체가 그 항목이 어떤 보드에 속해 있는지를 결정함**(별도의 `boardId` 필드 없음). 항목이 보드를 이동하면(예: 날짜 지정, 완료 처리, waiting → today 복귀) 실제로 한 배열에서 `splice`해서 다른 배열로 `push`함. 단, `lupin`은 예외 — 아래 참고.
 
@@ -94,36 +129,39 @@ type Subtask = {
 
 ## 마이그레이션/정규화
 
-앱은 로드할 때마다(로컬 로드, 클라우드 동기화 둘 다) `normalizeBoards()`를 거침:
+앱은 로드할 때마다(로컬 로드, 클라우드 동기화 둘 다) `normalizeStore()`를 거치고, 그 안에서 프로젝트마다 `normalizeBoards()`를 거침(아래 1~2는 프로젝트 하나 기준):
 
 1. 각 보드 배열을 `normalizeTasks()`로 정리 — 알 수 없는/누락된 필드 정리, `doneAt` 없는 완료 항목은 오늘 날짜로 백필.
 2. `migrateArchive()` 실행 — 유예 기간이 지난 완료 항목들을 `archive`로 스윕. 같은 함수가 로컬 새로고침과 클라우드 동기화 양쪽에서 다 호출되므로, "다음날 새로고침" 케이스와 "다른 기기에서 나중에 열어봄" 케이스를 하나의 로직으로 커버함.
 
 ## 저장 위치 참고
 
-- 로컬: `localStorage['postit-todo-boards-v1']` — 위 `Boards` shape을 그대로 `JSON.stringify`.
-- 클라우드(로그인 시): Supabase `postit_data` 테이블, `id` = Supabase 유저 id, `data` 컬럼에 같은 `Boards` JSON. 본인 행에만 접근 가능.
+- 로컬: `localStorage['postit-todo-store-v2']` — 위 `Store` shape을 그대로 `JSON.stringify`. (프로젝트 도입 전 키 `postit-todo-boards-v1`은 읽기만 함 — 위 "프로젝트와 v1 마이그레이션")
+- `localStorage['postit-active-project']`: 이 기기에서 열어 둔 프로젝트 id. 클라우드에는 안 올라가는 기기별 값.
+- 클라우드(로그인 시): Supabase `postit_data` 테이블, `id` = Supabase 유저 id, `data` 컬럼에 같은 `Store` JSON. 본인 행에만 접근 가능.
 - `localStorage['postit-cloud-dirty']`: 로그인한 채 이 기기에서 고쳤는데 아직 클라우드에 못 올린 변경이 있을 때 그 계정(Supabase 유저 id)을 적어 둠. 클라우드에 올리기가 성공하면(그 사이 더 고친 게 없을 때) 지움. 새로 열 때 이 값이 있으면 클라우드 내용으로 덮어쓰지 않고 항목별로 합친 뒤 다시 올림. `boards`/백업/클라우드에는 안 들어가는 기기별 값.
 - 테마 설정(`light`/`dark`)은 별도로 `localStorage['postit-theme']`에 저장 — `boards`와 무관.
 
 ## 백업 파일
 
-헤더의 💾 버튼으로 내려받는 백업 파일은 위 `boards`를 래퍼로 감싼 JSON임:
+헤더 ⚙️ 설정 → 클라우드 / 백업 모달로 내려받는 백업 파일은 모든 프로젝트를 담은 JSON임:
 
 ```ts
 type BackupFile = {
   app: 'post-it-and-pray';
-  version: 1;          // 파일 형식 버전. 더 큰 값은 복구 시 거절됨
+  version: 2;          // 파일 형식 버전. 더 큰 값은 복구 시 거절됨 (1 = 프로젝트 도입 전, boards 하나)
   exportedAt: string;  // ISO 8601
-  boards: Boards;      // lupin, trash 포함 전체
+  projects: Project[]; // 프로젝트별 boards(trash 포함, lupin은 없음)
+  lupin: Task[];       // 공통 월급루팡
 };
+// v1: { app, version: 1, exportedAt, boards: Boards } — boards만 있는 파일(래퍼 없음)도 받아줌
 ```
 
-복구는 `boards`를 `normalizeBoards`로 정리한 뒤 통째로 교체함. `boards`만 있는 파일(래퍼 없음)도 받아줌.
+v2 복구는 `normalizeStore`로 정리한 뒤 프로젝트 전체를 통째로 교체함(위 "백업 파일(v2)"). v1 파일은 `normalizeBoards`로 정리해 열어 둔 프로젝트 하나만 교체함.
 
 ## 하루 시작하기 초안(`boards`와 별개)
 
-하루 시작하기 패드는 확정 전까지의 답을 `localStorage['postit-daystart-draft-v1']`에 둠 — `boards`/백업/클라우드에는 들어가지 않는 기기별 임시 값이라 `Task` 스키마는 바뀌지 않음(미루기 `snoozedAt`만 확정 때 `Task`에 기록됨). 마지막으로 확정한 날짜는 `localStorage['postit-daystart-confirmed-v1']`(`YYYY-MM-DD`, 헤더 버튼의 "미확정" 점 표시용).
+하루 시작하기 패드는 확정 전까지의 답을 `localStorage['postit-daystart-draft-v1']`(프로젝트별 — 기본 프로젝트가 아니면 `:<프로젝트 id>`가 붙음)에 둠 — `boards`/백업/클라우드에는 들어가지 않는 기기별 임시 값이라 `Task` 스키마는 바뀌지 않음(미루기 `snoozedAt`만 확정 때 `Task`에 기록됨). 마지막으로 확정한 날짜는 `localStorage['postit-daystart-confirmed-v1']`(`YYYY-MM-DD`, 헤더 버튼의 "미확정" 점 표시용, 같은 방식으로 프로젝트별).
 
 ```ts
 type DayStartDraft = {

@@ -1,5 +1,7 @@
 (function () {
-  const STORAGE_KEY = 'postit-todo-boards-v1';
+  const STORAGE_KEY = 'postit-todo-boards-v1'; // 프로젝트 도입 전(v1) 저장 키 — 읽기만 하고 쓰지 않음(그대로 남아 있어 옛 데이터의 원본 구실)
+  const STORE_KEY = 'postit-todo-store-v2';    // 프로젝트 목록 + 공통 루팡(SCHEMA.md '프로젝트' 참고)
+  const ACTIVE_PROJECT_KEY = 'postit-active-project'; // 이 기기에서 열어 둔 프로젝트 id(기기별 값, 클라우드에 안 올라감)
   const OLD_STORAGE_KEY = 'postit-todo-tasks-v1';
   const THEME_KEY = 'postit-theme';
   const SUPABASE_URL = 'https://ytnlgabrbrddfpjzzrrn.supabase.co';
@@ -557,21 +559,23 @@
   }
 
   // ─────────────────────────────
-  // 백업 / 복구 — 전체 데이터(boards)를 JSON 파일로 내려받고, 그 파일로 되돌림.
-  // 파일 모양: { app, version, exportedAt, boards }. boards는 localStorage/클라우드에
-  // 저장되는 것과 같은 shape(월급루팡·삭제 기록 포함)이라 완전한 백업이 됨.
-  // 복구는 "통째로 바꾸기"만 — saveBoards()를 거치므로 Ctrl+Z로 되돌릴 수 있고,
-  // 로그인 상태면 평소 저장처럼 클라우드에도 반영됨.
+  // 백업 / 복구 — 전체 데이터(모든 프로젝트 + 공통 월급루팡)를 JSON 파일로 내려받고, 그 파일로 되돌림.
+  // 파일 모양(v2): { app, version: 2, exportedAt, projects, lupin }. 프로젝트별 boards는 저장되는 것과
+  // 같은 shape(삭제 기록 포함)이라 완전한 백업이 됨. 프로젝트 도입 전(v1) 파일 { app, version: 1, boards }도
+  // 받아주며, 그 경우 지금 열어 둔 프로젝트 하나만 파일 내용으로 바꿈(다른 프로젝트는 그대로).
+  // 복구는 "통째로 바꾸기"만 — v1 파일(프로젝트 하나)은 saveBoards()를 거치므로 Ctrl+Z로 되돌릴 수 있지만,
+  // v2 파일(프로젝트 전체)은 되돌릴 수 없음. 로그인 상태면 평소 저장처럼 클라우드에도 반영됨.
   // ─────────────────────────────
   const BACKUP_APP = 'post-it-and-pray';
-  const BACKUP_VERSION = 1;
+  const BACKUP_VERSION = 2;
   const backupBtn = document.getElementById('backupBtn');
   if (backupBtn) backupBtn.addEventListener('click', openBackupModal);
   const cloudWarnEl = document.getElementById('cloudWarn');
   if (cloudWarnEl) cloudWarnEl.addEventListener('click', openBackupModal);
 
   function downloadBackup() {
-    const payload = { app: BACKUP_APP, version: BACKUP_VERSION, exportedAt: new Date().toISOString(), boards };
+    const st = serializeStore();
+    const payload = { app: BACKUP_APP, version: BACKUP_VERSION, exportedAt: new Date().toISOString(), projects: st.projects, lupin: st.lupin };
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -584,8 +588,8 @@
     showToast('백업 파일을 내려받았어요');
   }
 
-  // 백업 파일 내용을 검사해 정리된 boards를 돌려줌. 앱이 쓰는 필드만 남기는
-  // normalizeBoards를 거치므로 알 수 없는 값은 걸러짐. 형식이 아니면 reason.
+  // 백업 파일 내용을 검사해 정리된 값을 돌려줌 — v2 파일은 { store }, v1 파일은 { boards }.
+  // 앱이 쓰는 필드만 남기는 normalizeBoards/normalizeStore를 거치므로 알 수 없는 값은 걸러짐. 형식이 아니면 reason.
   function parseBackup(text) {
     let data;
     try {
@@ -596,6 +600,10 @@
     if (!data || typeof data !== 'object' || Array.isArray(data)) return { reason: '이 앱의 백업 파일이 아니에요' };
     if (data.app && data.app !== BACKUP_APP) return { reason: '이 앱의 백업 파일이 아니에요' };
     if (typeof data.version === 'number' && data.version > BACKUP_VERSION) return { reason: '더 새로운 버전의 백업 파일이에요' };
+    if (Array.isArray(data.projects)) {
+      if (!data.projects.some(p => p && typeof p === 'object' && p.boards && typeof p.boards === 'object')) return { reason: '이 앱의 백업 파일이 아니에요' };
+      return { store: normalizeStore(data) };
+    }
     // 래퍼({app, boards}) 없이 boards 객체만 있는 파일도 받아줌
     const raw = data.boards && typeof data.boards === 'object' ? data.boards : data;
     const known = BOARD_IDS.concat(['archive', 'lupin', 'trash']);
@@ -617,13 +625,40 @@
       return;
     }
     const parsed = parseBackup(text);
-    if (!parsed.boards) {
+    if (!parsed.boards && !parsed.store) {
       showToast(parsed.reason);
       return;
     }
+    if (parsed.store) {
+      const ok = await showConfirm({
+        title: '이 백업으로 복구할까요?',
+        message: summarizeStore(parsed.store) + '\n\n지금 모든 프로젝트가 이 파일의 내용으로 바뀌어요.\n되돌릴 수 없어요. 필요하면 먼저 백업 데이터를 받아 두세요.',
+        confirmLabel: '복구',
+        cancelLabel: '취소'
+      });
+      if (!ok) return;
+      const st = parsed.store;
+      // 파일에 없는 지금 프로젝트는 지운 것으로 기록(다른 기기의 사본이 병합 때 되살리지 않게),
+      // 이미 지운 id가 파일에 있으면 새 id를 줘서 되살림
+      const keep = new Set(st.projects.map(pr => pr.id));
+      const removed = removedProjects.concat(projects.filter(pr => !keep.has(pr.id)).map(pr => pr.id));
+      st.projects.forEach(pr => { if (removedProjects.includes(pr.id)) pr.id = newProjectId(); });
+      st.removed = Array.from(new Set(removed)).slice(-REMOVED_PROJECTS_MAX);
+      applyStore(st);
+      saveBoards(); // localStorage + (로그인 시) 클라우드. 바뀐 항목에 새 시각이 찍혀 클라우드 병합에서도 이 복구가 이김
+      resetHistory(); // 프로젝트 전체가 바뀌었으니 되돌리기 기록은 비움
+      closeArchivePanel();
+      closeSearchPanel();
+      renderAll();
+      showToast('복구했어요');
+      return;
+    }
+    const cur = projects.find(pr => pr.id === activeProjectId);
     const ok = await showConfirm({
       title: '이 백업으로 복구할까요?',
-      message: summarizeBoards(parsed.boards) + '\n\n지금 데이터는 이 파일의 내용으로 바뀌어요.\n(Ctrl+Z로 되돌릴 수 있어요)',
+      message: summarizeBoards(parsed.boards) + '\n\n' +
+        (projects.length > 1 ? '프로젝트가 생기기 전의 백업이에요. 지금 열어 둔 프로젝트(' + (cur ? cur.name : '') + ')만 이 파일의 내용으로 바뀌고, 다른 프로젝트는 그대로예요.' : '지금 데이터는 이 파일의 내용으로 바뀌어요.') +
+        '\n(Ctrl+Z로 되돌릴 수 있어요)',
       confirmLabel: '복구',
       cancelLabel: '취소'
     });
@@ -659,7 +694,7 @@
         .maybeSingle();
       if (error) throw error;
       if (!data || !data.data) return { empty: true };
-      return { boards: normalizeBoards(data.data), updatedAt: data.updated_at };
+      return { store: normalizeStore(data.data), updatedAt: data.updated_at };
     } catch (e) {
       return null;
     }
@@ -682,7 +717,7 @@
   function cloudSummaryText(snap) {
     if (!snap) return '불러오지 못했어요';
     if (snap.empty) return '저장된 데이터 없음';
-    return summarizeBoards(snap.boards) + '\n마지막 저장 ' + formatCloudTime(snap.updatedAt);
+    return summarizeStore(snap.store) + '\n마지막 저장 ' + formatCloudTime(snap.updatedAt);
   }
 
   async function pushDeviceToCloud() {
@@ -690,7 +725,7 @@
     if (!snap) { showToast('클라우드에 연결하지 못했어요'); return; }
     const ok = await showConfirm({
       title: '클라우드를 이 기기 값으로 바꿀까요?',
-      message: '이 기기\n' + summarizeBoards(boards) + '\n\n클라우드 (지워져요)\n' + cloudSummaryText(snap) +
+      message: '이 기기\n' + summarizeStore(serializeStore()) + '\n\n클라우드 (지워져요)\n' + cloudSummaryText(snap) +
         '\n\n다른 기기는 새로고침해야 이 값을 받아요. 그 전에 거기서 수정하면 옛 내용이 섞일 수 있어요.',
       confirmLabel: '클라우드에 덮어쓰기',
       cancelLabel: '취소'
@@ -701,12 +736,12 @@
     try {
       let res = await cloudClient
         .from('postit_data')
-        .update({ data: boards, updated_at: newUpdatedAt })
+        .update({ data: serializeStore(), updated_at: newUpdatedAt })
         .eq('id', activeRowId)
         .select('updated_at');
       if (res.error) throw res.error;
       if (!res.data || !res.data.length) {
-        res = await cloudClient.from('postit_data').insert({ id: activeRowId, data: boards, updated_at: newUpdatedAt });
+        res = await cloudClient.from('postit_data').insert({ id: activeRowId, data: serializeStore(), updated_at: newUpdatedAt });
         if (res.error) throw res.error;
       }
       lastKnownServerUpdatedAt = newUpdatedAt;
@@ -723,20 +758,16 @@
     if (snap.empty) { showToast('클라우드에 저장된 데이터가 없어요'); return; }
     const ok = await showConfirm({
       title: '이 기기를 클라우드 값으로 바꿀까요?',
-      message: '클라우드\n' + cloudSummaryText(snap) + '\n\n이 기기 (지워져요)\n' + summarizeBoards(boards) +
+      message: '클라우드\n' + cloudSummaryText(snap) + '\n\n이 기기 (지워져요)\n' + summarizeStore(serializeStore()) +
         '\n\n되돌릴 수 없어요. 필요하면 먼저 백업 데이터를 받아 두세요.',
       confirmLabel: '이 기기에 가져오기',
       cancelLabel: '취소'
     });
     if (!ok) return;
     clearTimeout(cloudPushTimer);
-    boards = snap.boards;
+    applyStore(snap.store);
     resetHistory();
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(boards));
-    } catch (e) {
-      /* ignore */
-    }
+    persistLocal();
     lastKnownServerUpdatedAt = snap.updatedAt;
     cloudLoadFailed = false;
     markCloudSynced(localVersion);
@@ -767,7 +798,7 @@
       hint.textContent = '기기마다 내용이 다를 때, 어느 쪽이 마지막 값인지 직접 골라 한쪽으로 맞춰요. 합치지 않고 통째로 바꿔요.';
       const deviceLine = document.createElement('p');
       deviceLine.className = 'backup-summary';
-      deviceLine.textContent = '이 기기: ' + summarizeBoards(boards);
+      deviceLine.textContent = '이 기기: ' + summarizeStore(serializeStore());
       const cloudLine = document.createElement('p');
       cloudLine.className = 'backup-summary';
       cloudLine.textContent = '클라우드: 불러오는 중…';
@@ -788,7 +819,7 @@
       card.append(hint, deviceLine, cloudLine, freshLine, pushBtn, pullBtn);
       fetchCloudSnapshot().then(snap => {
         if (!cloudLine.isConnected) return;
-        cloudLine.textContent = '클라우드: ' + cloudSummaryText(snap).replace('\n', ' · ');
+        cloudLine.textContent = '클라우드: ' + cloudSummaryText(snap);
         freshLine.textContent = cloudFreshnessText(snap);
         freshLine.hidden = !freshLine.textContent;
         pushBtn.disabled = !snap;
@@ -1131,7 +1162,15 @@
     ];
   }
 
-  function loadBoards() {
+  // 저장된 원본을 그대로 돌려줌(v2 저장소 → v1 boards → 아주 옛 today 배열 → 예시 데이터 순).
+  // 모양 정리는 normalizeStore가 함 — v1 boards도 거기서 '기본' 프로젝트 하나로 바뀜.
+  function loadStoredData() {
+    try {
+      const raw = localStorage.getItem(STORE_KEY);
+      if (raw) return JSON.parse(raw);
+    } catch (e) {
+      /* fall through */
+    }
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (raw) return JSON.parse(raw);
@@ -1237,6 +1276,156 @@
     b.lupin = (b.lupin || []).filter(t => !(t.done && t.doneAt !== today));
   }
 
+  // ───────── 프로젝트(업무 세트) ─────────
+  // 화면과 나머지 코드는 전부 `boards`(= 지금 열어 둔 프로젝트의 Boards + 공통 lupin)만 봄.
+  // 프로젝트 목록·저장·클라우드·백업만 이 계층이 감싸서, 프로젝트 사이는 서로 섞이지 않음.
+  //  · projects: 모든 프로젝트 [{ id, name, boards }]. 열어 둔 프로젝트의 최신 내용은 `boards`에 있고
+  //    (그 항목의 boards는 전환할 때 갱신됨), 저장할 때는 serializeStore가 `boards`를 끼워 넣음.
+  //  · lupin은 프로젝트 공통이라 저장소 바깥(store.lupin)에 한 벌만 둠. 프로젝트의 boards.lupin은 항상 [].
+  const STORE_VERSION = 2;
+  const DEFAULT_PROJECT_ID = 'main';
+  const DEFAULT_PROJECT_NAME = '기본';
+  const PROJECT_NAME_MAX = 20;
+  const REMOVED_PROJECTS_MAX = 50;
+  let projects = [];
+  let removedProjects = []; // 지운 프로젝트 id(다른 기기의 옛 사본이 병합 때 되살리지 못하게)
+  let activeProjectId = DEFAULT_PROJECT_ID;
+
+  function cleanProjectName(name) {
+    return String(name == null ? '' : name).replace(/\s+/g, ' ').trim().slice(0, PROJECT_NAME_MAX);
+  }
+
+  function isValidProjectId(id) {
+    return typeof id === 'string' && /^[A-Za-z0-9_-]{1,40}$/.test(id);
+  }
+
+  function newProjectId() {
+    let id;
+    do {
+      id = 'p' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
+    } while (projects.some(p => p.id === id) || removedProjects.includes(id));
+    return id;
+  }
+
+  function stripLupin(b) {
+    const out = {};
+    Object.keys(b).forEach(k => { if (k !== 'lupin') out[k] = b[k]; });
+    return out;
+  }
+
+  // 저장된 원본(v2 저장소 또는 v1 boards)을 정리된 저장소로. 어느 쪽이든 같은 모양이 나옴.
+  function normalizeStore(data) {
+    data = data && typeof data === 'object' && !Array.isArray(data) ? data : {};
+    const removed = Array.isArray(data.removed)
+      ? Array.from(new Set(data.removed.filter(isValidProjectId))).slice(-REMOVED_PROJECTS_MAX)
+      : [];
+    let list = [];
+    let rawLupin;
+    if (Array.isArray(data.projects)) {
+      const seen = new Set();
+      data.projects.forEach(p => {
+        if (!p || typeof p !== 'object' || !isValidProjectId(p.id) || seen.has(p.id) || removed.includes(p.id)) return;
+        seen.add(p.id);
+        list.push({
+          id: p.id,
+          name: cleanProjectName(p.name) || DEFAULT_PROJECT_NAME,
+          boards: normalizeBoards(p.boards && typeof p.boards === 'object' ? p.boards : {})
+        });
+      });
+      rawLupin = data.lupin;
+    } else {
+      // v1: boards 객체 하나 → '기본' 프로젝트 하나(루팡은 공통 쪽으로)
+      list.push({ id: DEFAULT_PROJECT_ID, name: DEFAULT_PROJECT_NAME, boards: normalizeBoards(data) });
+      rawLupin = list[0].boards.lupin;
+    }
+    if (!list.length) list.push({ id: DEFAULT_PROJECT_ID, name: DEFAULT_PROJECT_NAME, boards: normalizeBoards({}) });
+    list.forEach(p => { p.boards.lupin = []; });
+    // 공통 lupin도 같은 규칙(어제 이전에 체크한 항목은 삭제)으로 정리
+    const lupin = normalizeBoards({ lupin: Array.isArray(rawLupin) ? rawLupin : [] }).lupin;
+    return { projects: list, lupin, removed };
+  }
+
+  function readActiveProjectId() {
+    try { return localStorage.getItem(ACTIVE_PROJECT_KEY) || DEFAULT_PROJECT_ID; } catch (e) { return DEFAULT_PROJECT_ID; }
+  }
+
+  function writeActiveProjectId(id) {
+    try { localStorage.setItem(ACTIVE_PROJECT_KEY, id); } catch (e) { /* 무시 */ }
+  }
+
+  // 지금 메모리 상태 전체를 저장 모양으로. 열어 둔 프로젝트는 `boards`에서 가져옴.
+  function serializeStore() {
+    return {
+      version: STORE_VERSION,
+      projects: projects.map(p => ({ id: p.id, name: p.name, boards: stripLupin(p.id === activeProjectId ? boards : p.boards) })),
+      lupin: boards.lupin,
+      removed: removedProjects.slice()
+    };
+  }
+
+  // 정리된 저장소를 메모리에 적용 — 프로젝트 목록을 통째로 바꾸고, 열어 둔 프로젝트가 없어졌으면 첫 프로젝트로.
+  function applyStore(store) {
+    projects = store.projects;
+    removedProjects = store.removed;
+    let id = readActiveProjectId();
+    if (!projects.some(p => p.id === id)) id = projects[0].id;
+    activeProjectId = id;
+    writeActiveProjectId(id);
+    const cur = projects.find(p => p.id === id);
+    boards = Object.assign({}, cur.boards, { lupin: store.lupin });
+  }
+
+  function persistLocal() {
+    try {
+      localStorage.setItem(STORE_KEY, JSON.stringify(serializeStore()));
+    } catch (e) {
+      /* storage unavailable — state just won't persist */
+    }
+  }
+
+  // 클라우드 병합 — 프로젝트 id별로 항목 병합(mergeBoards), 루팡은 공통 한 벌로 병합.
+  // 한쪽이 지운 프로젝트(removed)는 양쪽에서 빠짐. 이름은 이 기기 쪽이 이김.
+  function mergeStores(serverStore, localStore) {
+    const removed = Array.from(new Set(serverStore.removed.concat(localStore.removed))).slice(-REMOVED_PROJECTS_MAX);
+    const byId = (list) => new Map(list.map(p => [p.id, p]));
+    const sMap = byId(serverStore.projects);
+    const lMap = byId(localStore.projects);
+    const ids = [];
+    localStore.projects.concat(serverStore.projects).forEach(p => {
+      if (!ids.includes(p.id) && !removed.includes(p.id)) ids.push(p.id);
+    });
+    const merged = ids.map(id => {
+      const s = sMap.get(id);
+      const l = lMap.get(id);
+      const b = s && l ? mergeBoards(s.boards, l.boards) : (l || s).boards;
+      b.lupin = [];
+      return { id, name: (l || s).name, boards: b };
+    });
+    if (!merged.length) merged.push({ id: DEFAULT_PROJECT_ID, name: DEFAULT_PROJECT_NAME, boards: normalizeBoards({}) });
+    merged.forEach(p => migrateArchive(p.boards));
+    const lupin = normalizeBoards({ lupin: mergeBoards({ lupin: serverStore.lupin }, { lupin: localStore.lupin }).lupin }).lupin;
+    return { projects: merged, lupin, removed };
+  }
+
+  // 저장소 내용 비교용 키 — 프로젝트 순서·이름·항목 내용(순서와 updatedAt은 무시)
+  function storeContentKey(store) {
+    const list = store.projects.slice().sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+    return list.map(p => p.id + '\u0001' + p.name + '\u0001' + boardsContentKey(p.boards)).join('\u0002') +
+      '\u0003' + boardsContentKey({ lupin: store.lupin }) + '\u0003' + store.removed.slice().sort().join(',') +
+      '\u0003' + store.projects.map(p => p.id).join(',');
+  }
+
+  // 사용자가 넣은 내용이 하나라도 있는지(로그인 때 '이 기기 데이터 vs 클라우드' 확인창을 띄울지 판단)
+  function storeHasData(store) {
+    return store.lupin.length > 0 || store.projects.some(p =>
+      Object.keys(p.boards).some(id => Array.isArray(p.boards[id]) && p.boards[id].length > 0));
+  }
+
+  function summarizeStore(store) {
+    if (store.projects.length === 1) return summarizeBoards(store.projects[0].boards);
+    return store.projects.map(p => p.name + ': ' + summarizeBoards(p.boards)).join('\n');
+  }
+
   // Bumped on every local edit so an in-flight cloud fetch (see syncRow)
   // can tell whether the user changed something while it was loading and
   // back off instead of clobbering that edit with stale server data.
@@ -1287,11 +1476,7 @@
     localVersion++;
     stampChangedTasks();
     recordHistory();
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(boards));
-    } catch (e) {
-      /* storage unavailable — state just won't persist */
-    }
+    persistLocal();
     // Guests (activeRowId === null) stay local-only — no cloud write at all.
     if (activeRowId) { setCloudDirtyUser(activeRowId); pushToCloud(); }
   }
@@ -1391,7 +1576,7 @@
     try {
       const { data, error } = await cloudClient
         .from('postit_data')
-        .update({ data: boards, updated_at: newUpdatedAt })
+        .update({ data: serializeStore(), updated_at: newUpdatedAt })
         .eq('id', activeRowId)
         .eq('updated_at', lastKnownServerUpdatedAt)
         .select('updated_at');
@@ -1414,7 +1599,7 @@
       if (!current) {
         // Row genuinely doesn't exist yet (first sync for this account) —
         // safe to create it outright.
-        const ins = await cloudClient.from('postit_data').insert({ id: activeRowId, data: boards, updated_at: newUpdatedAt });
+        const ins = await cloudClient.from('postit_data').insert({ id: activeRowId, data: serializeStore(), updated_at: newUpdatedAt });
         if (ins && ins.error) throw ins.error;
         lastKnownServerUpdatedAt = newUpdatedAt;
         markCloudSynced(versionAtPush);
@@ -1427,20 +1612,16 @@
         cloudPushTimer = setTimeout(pushToCloudNow, 800);
         return;
       }
-      const merged = mergeBoards(normalizeBoards(current.data), boards);
-      migrateArchive(merged);
+      const localStore = serializeStore();
+      const merged = mergeStores(normalizeStore(current.data), localStore);
       lastKnownServerUpdatedAt = current.updated_at;
       // 합쳐도 내용이 그대로면(다른 기기가 저장했지만 이 화면에 보일 변화가 없는 경우) 화면을 다시
       // 그리지도, 되돌리기 기록을 비우지도 않음 — 예전엔 이때도 전체가 새로 그려져 "혼자 새로고침"처럼 보였음.
-      const changed = boardsContentKey(merged) !== boardsContentKey(boards);
+      const changed = storeContentKey(merged) !== storeContentKey(localStore);
       if (changed) {
-        boards = merged;
+        applyStore(merged);
         resetHistory();
-        try {
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(boards));
-        } catch (e) {
-          /* ignore */
-        }
+        persistLocal();
         renderAll();
       }
       pushToCloud(); // retry with the merged state, now conditioned on the version we just saw
@@ -1520,8 +1701,8 @@
         return;
       }
       if (data && data.data) {
-        const cloudBoards = normalizeBoards(data.data);
-        const hasLocalData = Object.keys(boards).some(id => Array.isArray(boards[id]) && boards[id].length > 0);
+        const cloudStore = normalizeStore(data.data);
+        const hasLocalData = storeHasData(serializeStore());
         if (hasLocalData && getSyncedUserId() !== rowId) {
           const useCloud = await showConfirm({
             title: '이 계정에 저장된 데이터가 있어요',
@@ -1543,18 +1724,14 @@
         // 이 기기에 못 올린 변경이 남은 채 새로 연 경우(올리기가 실패했거나 끝나기 전에 닫음) — 클라우드로
         // 덮어쓰면 그 변경이 사라지므로 항목별로 합친 뒤 다시 올림.
         if (getCloudDirtyUser() === rowId) {
-          const merged = mergeBoards(cloudBoards, boards);
-          migrateArchive(merged);
+          const localStore = serializeStore();
+          const merged = mergeStores(cloudStore, localStore);
           lastKnownServerUpdatedAt = data.updated_at;
           cloudLoadFailed = false;
-          if (boardsContentKey(merged) !== boardsContentKey(boards)) {
-            boards = merged;
+          if (storeContentKey(merged) !== storeContentKey(localStore)) {
+            applyStore(merged);
             resetHistory();
-            try {
-              localStorage.setItem(STORAGE_KEY, JSON.stringify(boards));
-            } catch (e) {
-              /* ignore */
-            }
+            persistLocal();
             renderAll();
           }
           pushToCloud();
@@ -1563,14 +1740,10 @@
         }
         // 화면에 이미 있는 내용과 같으면(보통 새로고침 직후) 다시 그리지 않음 — 안 그러면 열자마자 한 번
         // 더 전체가 갈아엎어져 "혼자 새로고침"처럼 보임.
-        if (boardsContentKey(cloudBoards) !== boardsContentKey(boards)) {
-          boards = cloudBoards;
+        if (storeContentKey(cloudStore) !== storeContentKey(serializeStore())) {
+          applyStore(cloudStore);
           resetHistory();
-          try {
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(boards));
-          } catch (e) {
-            /* ignore */
-          }
+          persistLocal();
           renderAll();
         }
         lastKnownServerUpdatedAt = data.updated_at;
@@ -1627,16 +1800,12 @@
       if (cloudMs === null || knownMs === null || cloudMs <= knownMs) return; // 이 기기가 이미 아는 시점이거나 더 오래됨
       if (hasUnsyncedLocal()) { pushToCloud(); return; } // 못 올린 변경이 있음 — 병합은 저장 경로가 함
       if (localVersion !== versionAtStart || !canRefreshFromCloudNow()) return; // 기다리는 사이 손댔으면 다음에
-      const cloudBoards = normalizeBoards(data.data);
+      const cloudStore = normalizeStore(data.data);
       lastKnownServerUpdatedAt = data.updated_at;
-      if (boardsContentKey(cloudBoards) !== boardsContentKey(boards)) {
-        boards = cloudBoards;
+      if (storeContentKey(cloudStore) !== storeContentKey(serializeStore())) {
+        applyStore(cloudStore);
         resetHistory();
-        try {
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(boards));
-        } catch (e) {
-          /* ignore */
-        }
+        persistLocal();
         renderAll();
         showToast('다른 기기의 변경을 불러왔어요');
       }
@@ -1745,7 +1914,8 @@
     });
   }
 
-  let boards = normalizeBoards(loadBoards());
+  let boards = null; // 지금 열어 둔 프로젝트(+ 공통 루팡) — 바로 아래 applyStore가 채움
+  applyStore(normalizeStore(loadStoredData()));
 
   // Ctrl+Z / Ctrl+Shift+Z — 저장(saveBoards)될 때마다 "저장 직전 상태"를
   // 스냅샷으로 쌓아두고, 되돌리기는 그걸 꺼내 boards를 통째로 교체함.
@@ -2050,6 +2220,7 @@
     BOARD_IDS.forEach(render);
     render('lupin');
     updateCounter();
+    renderProjectUI();
   }
 
   // 수동 순서(task.order)대로 정렬 — order가 없는 항목은 원래 순서를 지킨 채 맨 뒤로 감.
@@ -7329,8 +7500,11 @@
   // 모든 선택은 "초안"(localStorage, 기기별·동기화 안 함)에만 쌓이고, 확정할 때 saveBoards 한 번으로
   // 반영됨(그래서 Ctrl+Z 한 번에 통째로 되돌아감). 순서는 기존 gotta do의 task.order를 그대로 씀.
   // ─────────────────────────────
-  const DAYSTART_DRAFT_KEY = 'postit-daystart-draft-v1';
-  const DAYSTART_DONE_KEY = 'postit-daystart-confirmed-v1'; // 마지막으로 확정한 날짜(YYYY-MM-DD)
+  // 하루 시작하기 초안과 '마지막으로 확정한 날짜'(YYYY-MM-DD)는 프로젝트별 — 기본 프로젝트는 예전 키 그대로,
+  // 나머지는 키 뒤에 프로젝트 id를 붙임(기존 사용자의 초안이 그대로 이어짐).
+  const DAYSTART_DRAFT_BASE = 'postit-daystart-draft-v1';
+  const DAYSTART_DONE_BASE = 'postit-daystart-confirmed-v1';
+  const dayStartKey = (base) => (activeProjectId === DEFAULT_PROJECT_ID ? base : base + ':' + activeProjectId);
   const DAYSTART_STEPS = [
     { id: 'tidy', label: '정비하기' },
     { id: 'cal', label: '일정 살펴보기' }, // 구글 캘린더를 연결했을 때만(dsSteps)
@@ -7610,7 +7784,7 @@
 
   function dsLoadDraft() {
     try {
-      const raw = localStorage.getItem(DAYSTART_DRAFT_KEY);
+      const raw = localStorage.getItem(dayStartKey(DAYSTART_DRAFT_BASE));
       if (raw) {
         const d = JSON.parse(raw);
         // 어제 초안은 이어 쓰지 않음(같은 날 다시 열었을 때만 이어서)
@@ -7640,18 +7814,18 @@
   function dsSaveDraft() {
     if (!ds) return;
     try {
-      localStorage.setItem(DAYSTART_DRAFT_KEY, JSON.stringify(ds));
+      localStorage.setItem(dayStartKey(DAYSTART_DRAFT_BASE), JSON.stringify(ds));
     } catch (e) {
       /* 저장 불가 — 이번 화면에서만 유지 */
     }
   }
 
   function dsClearDraft() {
-    try { localStorage.removeItem(DAYSTART_DRAFT_KEY); } catch (e) { /* 무시 */ }
+    try { localStorage.removeItem(dayStartKey(DAYSTART_DRAFT_BASE)); } catch (e) { /* 무시 */ }
   }
 
   function dsConfirmedToday() {
-    try { return localStorage.getItem(DAYSTART_DONE_KEY) === todayStr(); } catch (e) { return false; }
+    try { return localStorage.getItem(dayStartKey(DAYSTART_DONE_BASE)) === todayStr(); } catch (e) { return false; }
   }
 
   function updateDayStartBadge() {
@@ -9342,7 +9516,7 @@
     }
 
     dsClearDraft();
-    try { localStorage.setItem(DAYSTART_DONE_KEY, today); } catch (e) { /* 무시 */ }
+    try { localStorage.setItem(dayStartKey(DAYSTART_DONE_BASE), today); } catch (e) { /* 무시 */ }
     ds = null;
     closeDayStart();
     updateDayStartBadge();
@@ -9444,6 +9618,391 @@
     document.addEventListener('visibilitychange', updateDayStartBadge);
     updateDayStartBadge();
   }
+
+  // ───────── 프로젝트 바꾸기 / 설정 메뉴 ─────────
+  // 프로젝트는 업무 세트를 통째로 바꿔 보는 단위. 열어 둔 프로젝트의 보드만 화면·검색·하루 시작하기에 나오고,
+  // 월급루팡만 모든 프로젝트에서 같이 따라옴. 전환 규칙·저장 구조는 SCHEMA.md '프로젝트' 참고.
+  const projectBtn = document.getElementById('projectBtn');
+  const projectMenuEl = document.getElementById('projectMenu');
+  const settingsBtn = document.getElementById('settingsBtn');
+  const settingsMenuEl = document.getElementById('settingsMenu');
+  const projectManageBtn = document.getElementById('projectManageBtn');
+
+  function getActiveProject() {
+    return projects.find(p => p.id === activeProjectId);
+  }
+
+  // 프로젝트 안의 항목 수(삭제 확인 강도를 정하는 기준 — 완료 기록과 지운 기록까지 전부 셈)
+  function projectItemCount(p) {
+    const b = p.id === activeProjectId ? boards : p.boards;
+    return BOARD_IDS.concat(['archive', 'trash']).reduce((n, id) => n + (Array.isArray(b[id]) ? b[id].length : 0), 0);
+  }
+
+  // 같은 이름이 이미 있는지(대소문자·공백 무시) — 이름은 사람이 구분하는 라벨이라 겹치면 헷갈림
+  function projectNameTaken(name, exceptId) {
+    const norm = (s) => s.replace(/\s+/g, '').toLowerCase();
+    return projects.some(p => p.id !== exceptId && norm(p.name) === norm(name));
+  }
+
+  function projectBlockedReason() {
+    if (isFocusLocked()) return '하루 시작하기나 포커스를 끝낸 뒤에 바꿀 수 있어요';
+    if (isConfirmModalOpen()) return '열려 있는 창을 먼저 닫아 주세요';
+    return '';
+  }
+
+  // 열어 둔 프로젝트를 바꿈. 지금 프로젝트의 내용은 목록에 갈무리하고, 되돌리기 기록·열려 있는 패널은 비움
+  // (프로젝트 사이에 아무것도 새어 나가지 않게). 루팡은 공통이라 그대로 가져감.
+  function switchProject(id) {
+    if (id === activeProjectId) return true;
+    const next = projects.find(p => p.id === id);
+    if (!next) return false;
+    const blocked = projectBlockedReason();
+    if (blocked) { showToast(blocked); return false; }
+    if (reorderBoard) exitReorder();
+    closeSearchPanel();
+    if (archivePanelEl.classList.contains('open')) closeArchivePanel();
+    closeOpenControls();
+    const cur = getActiveProject();
+    const lupin = boards.lupin;
+    if (cur) cur.boards = stripLupin(boards);
+    activeProjectId = id;
+    writeActiveProjectId(id);
+    boards = Object.assign({}, next.boards, { lupin });
+    migrateArchive(boards); // 앱을 켜 둔 채 날짜가 바뀌었을 수 있어, 안 보던 프로젝트도 여기서 한 번 정리
+    resetHistory();
+    renderAll();
+    updateDayStartBadge();
+    return true;
+  }
+
+  function createProject(name) {
+    const nm = cleanProjectName(name);
+    if (!nm) return null;
+    const id = newProjectId();
+    projects.push({ id, name: nm, boards: Object.assign(normalizeBoards({}), { lupin: [] }) });
+    saveBoards(); // localStorage + (로그인 시) 클라우드
+    return id;
+  }
+
+  // 이름(라벨)만 바꿈 — 안의 항목과 id는 그대로. 바꿀 수 없으면 이유를 돌려줌
+  function renameProject(id, name) {
+    const p = projects.find(x => x.id === id);
+    const nm = cleanProjectName(name);
+    if (!p) return '프로젝트를 찾을 수 없어요';
+    if (!nm) return '이름을 입력해 주세요';
+    if (projectNameTaken(nm, id)) return '같은 이름의 프로젝트가 있어요';
+    if (nm === p.name) return '';
+    p.name = nm;
+    saveBoards();
+    renderProjectUI();
+    return '';
+  }
+
+  // 지움 — 열어 둔 프로젝트면 먼저 다른 프로젝트로 옮겨 감. 지운 id는 removed에 남겨 다른 기기가 되살리지 못하게 함
+  function deleteProject(id) {
+    if (projects.length <= 1 || !projects.some(p => p.id === id)) return false;
+    if (id === activeProjectId) {
+      const other = projects.find(p => p.id !== id);
+      if (!switchProject(other.id)) return false;
+    }
+    projects = projects.filter(p => p.id !== id);
+    removedProjects = removedProjects.filter(x => x !== id).concat(id).slice(-REMOVED_PROJECTS_MAX);
+    saveBoards();
+    renderProjectUI();
+    return true;
+  }
+
+  // 이름 하나를 입력받는 작은 모달. 이름이 비었거나 겹치면 닫히지 않고 이유를 보여줌. 취소하면 null
+  async function promptProjectName({ title, message, confirmLabel, initial, exceptId }) {
+    const card = document.createElement('div');
+    card.className = 'backup-card';
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'project-name-input';
+    input.maxLength = PROJECT_NAME_MAX;
+    input.value = initial || '';
+    input.placeholder = '프로젝트 이름';
+    input.setAttribute('aria-label', '프로젝트 이름');
+    const err = document.createElement('p');
+    err.className = 'backup-hint project-error';
+    err.hidden = true;
+    card.append(input, err);
+    const okBtn = document.getElementById('confirmOk');
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); okBtn.click(); } // 한글 조합 중 Enter는 조합 확정이라 제외
+    });
+    const ok = await showConfirm({
+      title, message, confirmLabel, cancelLabel: '취소', content: card, focusEl: input,
+      beforeConfirm: () => {
+        const nm = cleanProjectName(input.value);
+        const problem = !nm ? '이름을 입력해 주세요' : (projectNameTaken(nm, exceptId) ? '같은 이름의 프로젝트가 있어요' : '');
+        err.textContent = problem;
+        err.hidden = !problem;
+        if (problem) { input.focus(); return false; }
+        return true;
+      }
+    });
+    return ok ? cleanProjectName(input.value) : null;
+  }
+
+  async function promptNewProject() {
+    const name = await promptProjectName({
+      title: '새 프로젝트',
+      message: '빈 보드로 시작해요. 월급루팡 메모는 프로젝트가 달라도 그대로 따라와요.',
+      confirmLabel: '만들기'
+    });
+    if (!name) return null;
+    const id = createProject(name);
+    if (id) showToast('프로젝트를 만들었어요');
+    return id;
+  }
+
+  // 지우기 확인 — 항목이 없으면 한 번만 묻고, 있으면 프로젝트 이름을 직접 입력해야 지워짐
+  async function confirmDeleteProject(p) {
+    const count = projectItemCount(p);
+    if (count === 0) {
+      return showConfirm({
+        title: '이 프로젝트를 지울까요?',
+        message: '\'' + p.name + '\' 프로젝트에는 항목이 없어요.',
+        confirmLabel: '지우기',
+        cancelLabel: '취소'
+      });
+    }
+    const b = p.id === activeProjectId ? boards : p.boards;
+    const card = document.createElement('div');
+    card.className = 'backup-card';
+    const hint = document.createElement('p');
+    hint.className = 'backup-hint';
+    hint.textContent = '\'' + p.name + '\' 프로젝트의 모든 항목(완료 기록과 지운 기록 포함)이 사라지고 되돌릴 수 없어요. 필요하면 먼저 백업 데이터를 받아 두세요.';
+    const summary = document.createElement('p');
+    summary.className = 'backup-summary';
+    summary.textContent = summarizeBoards(b);
+    const ask = document.createElement('p');
+    ask.className = 'backup-hint';
+    ask.textContent = '지우려면 프로젝트 이름을 똑같이 입력해 주세요.';
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'project-name-input';
+    input.setAttribute('aria-label', '지울 프로젝트 이름 입력');
+    input.placeholder = p.name;
+    const err = document.createElement('p');
+    err.className = 'backup-hint project-error';
+    err.hidden = true;
+    card.append(hint, summary, ask, input, err);
+    const okBtn = document.getElementById('confirmOk');
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); okBtn.click(); }
+    });
+    return showConfirm({
+      title: '이 프로젝트를 지울까요?',
+      content: card,
+      confirmLabel: '지우기',
+      cancelLabel: '취소',
+      focusEl: input,
+      beforeConfirm: () => {
+        const same = cleanProjectName(input.value) === p.name;
+        err.textContent = same ? '' : '이름이 달라요. 지우지 않았어요';
+        err.hidden = same;
+        if (!same) input.focus();
+        return same;
+      }
+    });
+  }
+
+  // 설정 > 프로젝트 관리 — 목록에서 이름을 고치고, 새로 만들고, 지움. 다른 모달을 겹쳐 띄울 수 없어서
+  // 만들기/지우기는 이 창을 닫고 처리한 뒤 다시 엶.
+  async function openProjectManager() {
+    if (isFocusLocked() || isConfirmModalOpen()) return;
+    const okBtn = document.getElementById('confirmOk');
+    const cancelBtn = document.getElementById('confirmCancel');
+    for (;;) {
+      let next = null; // { type: 'add' } | { type: 'delete', id }
+      const card = document.createElement('div');
+      card.className = 'backup-card';
+      const hint = document.createElement('p');
+      hint.className = 'backup-hint';
+      hint.textContent = '이름은 구분용 라벨이에요. 바꿔도 안의 항목은 그대로예요. 지금 열어 둔 프로젝트에 ✓ 표시가 있어요.';
+      const err = document.createElement('p');
+      err.className = 'backup-hint project-error';
+      err.hidden = true;
+      const list = document.createElement('ul');
+      list.className = 'project-list';
+      projects.forEach(p => {
+        const li = document.createElement('li');
+        li.className = 'project-row';
+        const mark = document.createElement('span');
+        mark.className = 'project-row-mark';
+        mark.textContent = p.id === activeProjectId ? '✓' : '';
+        mark.setAttribute('aria-hidden', 'true');
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.className = 'project-name-input';
+        input.maxLength = PROJECT_NAME_MAX;
+        input.value = p.name;
+        input.setAttribute('aria-label', '프로젝트 이름' + (p.id === activeProjectId ? ' (지금 열어 둔 프로젝트)' : ''));
+        const commit = () => {
+          if (input.value === p.name) return;
+          const problem = renameProject(p.id, input.value);
+          err.textContent = problem;
+          err.hidden = !problem;
+          input.value = p.name; // 성공이면 새 이름, 실패면 원래 이름으로
+        };
+        input.addEventListener('change', commit);
+        input.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); commit(); input.blur(); }
+        });
+        const del = document.createElement('button');
+        del.type = 'button';
+        del.className = 'confirm-btn project-del-btn';
+        del.textContent = '삭제';
+        del.disabled = projects.length <= 1;
+        del.title = projects.length <= 1 ? '마지막 프로젝트는 지울 수 없어요' : '';
+        del.addEventListener('click', () => { next = { type: 'delete', id: p.id }; cancelBtn.click(); });
+        li.append(mark, input, del);
+        list.appendChild(li);
+      });
+      const add = document.createElement('button');
+      add.type = 'button';
+      add.className = 'confirm-btn backup-restore-btn';
+      add.textContent = '＋ 새 프로젝트';
+      add.addEventListener('click', () => { next = { type: 'add' }; cancelBtn.click(); });
+      card.append(hint, err, list, add);
+      cancelBtn.hidden = true; // 이 창은 '닫기' 하나만
+      try {
+        await showConfirm({ title: '프로젝트 관리', content: card, confirmLabel: '닫기', cancelLabel: '닫기' });
+      } finally {
+        cancelBtn.hidden = false;
+      }
+      if (!next) return;
+      if (next.type === 'add') {
+        const id = await promptNewProject();
+        if (id) switchProject(id);
+      } else {
+        const p = projects.find(x => x.id === next.id);
+        if (p && await confirmDeleteProject(p)) {
+          deleteProject(p.id);
+          showToast('프로젝트를 지웠어요');
+        }
+      }
+    }
+  }
+
+  // 헤더의 프로젝트 이름 버튼 + 열려 있는 목록 갱신
+  function renderProjectUI() {
+    if (!projectBtn) return;
+    const cur = getActiveProject();
+    const name = cur ? cur.name : DEFAULT_PROJECT_NAME;
+    projectBtn.textContent = '';
+    const icon = document.createElement('span');
+    icon.setAttribute('aria-hidden', 'true');
+    icon.textContent = '📁 ';
+    const label = document.createElement('span');
+    label.className = 'project-btn-name';
+    label.textContent = name;
+    const caret = document.createElement('span');
+    caret.setAttribute('aria-hidden', 'true');
+    caret.textContent = ' ▾';
+    projectBtn.append(icon, label, caret);
+    projectBtn.setAttribute('aria-label', '프로젝트 바꾸기 · 지금: ' + name);
+    if (projectMenuEl && !projectMenuEl.hidden) buildProjectMenu();
+  }
+
+  function buildProjectMenu() {
+    clearEl(projectMenuEl);
+    projects.forEach(p => {
+      const item = document.createElement('button');
+      item.type = 'button';
+      item.className = 'menu-item' + (p.id === activeProjectId ? ' is-current' : '');
+      item.setAttribute('role', 'menuitemradio');
+      item.setAttribute('aria-checked', p.id === activeProjectId ? 'true' : 'false');
+      const mark = document.createElement('span');
+      mark.className = 'menu-item-mark';
+      mark.setAttribute('aria-hidden', 'true');
+      mark.textContent = p.id === activeProjectId ? '✓' : '';
+      const text = document.createElement('span');
+      text.className = 'menu-item-text';
+      text.textContent = p.name;
+      item.append(mark, text);
+      item.addEventListener('click', () => {
+        closeHeaderMenus();
+        switchProject(p.id);
+      });
+      projectMenuEl.appendChild(item);
+    });
+    const add = document.createElement('button');
+    add.type = 'button';
+    add.className = 'menu-item menu-item-add';
+    add.setAttribute('role', 'menuitem');
+    add.textContent = '＋ 새 프로젝트';
+    add.addEventListener('click', async () => {
+      closeHeaderMenus();
+      if (isFocusLocked() || isConfirmModalOpen()) { showToast(projectBlockedReason()); return; }
+      const id = await promptNewProject();
+      if (id) switchProject(id);
+    });
+    projectMenuEl.appendChild(add);
+  }
+
+  // 헤더의 두 드롭다운(프로젝트 / 설정) — 하나만 열리고, 바깥을 누르거나 Esc로 닫힘
+  function positionHeaderMenu(menu) {
+    // 가운데 정렬로 열되, 화면 밖으로 나가면 안쪽으로 밀어 넣음
+    menu.style.transform = 'translateX(-50%)';
+    const r = menu.getBoundingClientRect();
+    const margin = 8;
+    let shift = 0;
+    if (r.left < margin) shift = margin - r.left;
+    else if (r.right > window.innerWidth - margin) shift = window.innerWidth - margin - r.right;
+    if (shift) menu.style.transform = 'translateX(calc(-50% + ' + Math.round(shift) + 'px))';
+  }
+
+  function closeHeaderMenus() {
+    [[projectBtn, projectMenuEl], [settingsBtn, settingsMenuEl]].forEach(([btn, menu]) => {
+      if (!btn || !menu || menu.hidden) return;
+      menu.hidden = true;
+      btn.setAttribute('aria-expanded', 'false');
+    });
+  }
+
+  function toggleHeaderMenu(btn, menu, build) {
+    const willOpen = menu.hidden;
+    closeHeaderMenus();
+    if (!willOpen) return;
+    if (build) build();
+    menu.hidden = false;
+    btn.setAttribute('aria-expanded', 'true');
+    positionHeaderMenu(menu);
+    const first = menu.querySelector('.is-current, button');
+    if (first) first.focus({ preventScroll: true });
+  }
+
+  if (projectBtn && projectMenuEl) {
+    projectBtn.addEventListener('click', () => {
+      const blocked = projectBlockedReason();
+      if (blocked && projectMenuEl.hidden) { showToast(blocked); return; } // 열어도 못 바꾸는 순간엔 목록 대신 이유만
+      toggleHeaderMenu(projectBtn, projectMenuEl, buildProjectMenu);
+    });
+  }
+  if (settingsBtn && settingsMenuEl) {
+    settingsBtn.addEventListener('click', () => toggleHeaderMenu(settingsBtn, settingsMenuEl, null));
+    // 메뉴 안의 버튼을 누르면(테마 전환 포함) 메뉴를 닫음 — 로그인/로그아웃은 화면이 바뀌므로 같이 닫힘
+    settingsMenuEl.addEventListener('click', (e) => {
+      if (e.target.closest('button')) closeHeaderMenus();
+    });
+  }
+  if (projectManageBtn) projectManageBtn.addEventListener('click', openProjectManager);
+  document.addEventListener('click', (e) => {
+    if (e.target.closest('.menu-wrap')) return;
+    closeHeaderMenus();
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape' || e.defaultPrevented) return;
+    const open = [projectMenuEl, settingsMenuEl].find(m => m && !m.hidden);
+    if (!open) return;
+    e.preventDefault();
+    const btn = open === projectMenuEl ? projectBtn : settingsBtn;
+    closeHeaderMenus();
+    if (btn) btn.focus({ preventScroll: true });
+  });
 
   restoreFocusSession();
   renderAll();

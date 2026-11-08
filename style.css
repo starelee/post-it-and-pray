@@ -502,6 +502,176 @@
     border-color: var(--accent);
   }
 
+  /* ───── 헤더 드롭다운(프로젝트 바꾸기 / 설정) ───── */
+  .menu-wrap {
+    position: relative;
+  }
+
+  .project-btn {
+    max-width: 180px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .project-btn-name {
+    display: inline-block;
+    max-width: 120px;
+    vertical-align: bottom;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .settings-btn {
+    padding: 3px 8px;
+  }
+
+  .header-menu {
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 150; /* 하루 시작하기·done·검색 패널(z-index 100) 위로 */
+    min-width: 190px;
+    max-width: calc(100vw - 16px);
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 2px;
+    padding: 6px;
+    background: var(--paper);
+    color: var(--ink);
+    border: 1px solid var(--divider);
+    border-radius: 10px;
+    box-shadow: 0 6px 18px var(--paper-shadow);
+    text-align: left;
+  }
+
+  .header-menu[hidden] {
+    display: none;
+  }
+
+  .header-menu .auth-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 4px;
+    min-height: 0;
+    padding: 4px 6px 6px;
+    border-bottom: 1px solid var(--divider);
+    margin-bottom: 2px;
+    text-align: left;
+  }
+
+  .header-menu .auth-row:empty {
+    display: none;
+  }
+
+  .header-menu .auth-user {
+    overflow-wrap: anywhere;
+  }
+
+  .menu-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+    background: none;
+    border: none;
+    border-radius: 6px;
+    padding: 6px 8px;
+    font-family: var(--font-ui);
+    letter-spacing: var(--ui-letter-spacing);
+    font-size: 14px;
+    line-height: 20px;
+    color: var(--ink);
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .menu-item:hover,
+  .menu-item:focus-visible {
+    background: var(--input-line);
+    outline: none;
+  }
+
+  .menu-item-mark {
+    flex: none;
+    width: 1em;
+    color: var(--accent);
+  }
+
+  .menu-item-text {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .menu-item-add {
+    color: var(--ink-soft);
+    border-top: 1px solid var(--divider);
+    border-radius: 0 0 6px 6px;
+    margin-top: 2px;
+  }
+
+  /* ───── 프로젝트 관리 모달 ───── */
+  .project-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .project-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .project-row-mark {
+    flex: none;
+    width: 1em;
+    color: var(--accent);
+    text-align: center;
+  }
+
+  .project-name-input {
+    flex: 1;
+    min-width: 0;
+    box-sizing: border-box;
+    font-family: var(--font-ui);
+    letter-spacing: var(--ui-letter-spacing);
+    font-size: 16px;
+    color: var(--ink);
+    background: transparent;
+    border: none;
+    border-bottom: 1px dashed var(--input-line);
+    padding: 4px 2px;
+  }
+
+  .project-name-input:focus {
+    outline: none;
+    border-bottom-color: var(--accent);
+  }
+
+  .project-del-btn {
+    flex: none;
+  }
+
+  .project-del-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+
+  .project-error {
+    color: var(--urgent, #d43d3d);
+  }
+
+  .project-error[hidden] {
+    display: none;
+  }
+
   .archive-flag,
   .search-flag {
     /* 아이콘은 깃발 위쪽에 붙임(가운데 정렬보다 귀여움) */
@@ -3433,6 +3603,7 @@
 
   .backup-summary {
     margin: 0;
+    white-space: pre-line;
     font-family: var(--font-note);
     font-size: 12px;
     color: var(--ink);
