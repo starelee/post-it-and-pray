@@ -22,10 +22,20 @@
       <p class="counter" id="taskCounter"></p>
       <div class="header-actions">
         <button class="theme-toggle day-start-btn" id="dayStartBtn" type="button" aria-expanded="false" title="하루 시작하기"><span aria-hidden="true">🌅</span> 하루 시작하기<span class="day-start-dot" id="dayStartDot" hidden aria-label="오늘 계획 미확정"></span></button>
-        <div class="auth-row" id="authRow"></div>
+        <div class="menu-wrap">
+          <button class="theme-toggle project-btn" id="projectBtn" type="button" aria-haspopup="true" aria-expanded="false" title="프로젝트 바꾸기"></button>
+          <div class="header-menu" id="projectMenu" role="menu" aria-label="프로젝트" hidden></div>
+        </div>
         <button class="auth-btn cloud-warn" id="cloudWarn" type="button" hidden title="클라우드와 맞지 않아요 · 눌러서 확인">⚠ 동기화 안 됨</button>
-        <button class="theme-toggle" id="themeToggle" type="button" aria-label="테마 전환"></button>
-        <button class="theme-toggle backup-btn" id="backupBtn" type="button" aria-label="클라우드 / 백업" title="클라우드 / 백업">💾</button>
+        <div class="menu-wrap">
+          <button class="theme-toggle settings-btn" id="settingsBtn" type="button" aria-haspopup="true" aria-expanded="false" aria-label="설정" title="설정">⚙️</button>
+          <div class="header-menu settings-menu" id="settingsMenu" role="menu" aria-label="설정" hidden>
+            <div class="auth-row" id="authRow"></div>
+            <button class="menu-item" id="projectManageBtn" type="button" role="menuitem">📁 프로젝트 관리</button>
+            <button class="menu-item" id="themeToggle" type="button" role="menuitem" aria-label="테마 전환"></button>
+            <button class="menu-item" id="backupBtn" type="button" role="menuitem" aria-label="클라우드 / 백업">💾 클라우드 / 백업</button>
+          </div>
+        </div>
       </div>
     </div>
 
