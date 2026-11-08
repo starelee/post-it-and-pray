@@ -606,13 +606,6 @@
     white-space: nowrap;
   }
 
-  .menu-item-add {
-    color: var(--ink-soft);
-    border-top: 1px solid var(--divider);
-    border-radius: 0 0 6px 6px;
-    margin-top: 2px;
-  }
-
   /* ───── 프로젝트 관리 모달 ───── */
   .project-list {
     list-style: none;
@@ -629,11 +622,36 @@
     gap: 6px;
   }
 
-  .project-row-mark {
+  .project-badge {
     flex: none;
-    width: 1em;
+    min-width: 2.6em;
+    box-sizing: border-box;
+    padding: 1px 6px;
+    border: 1px solid var(--accent);
+    border-radius: 10px;
+    font-family: var(--font-ui);
+    letter-spacing: var(--ui-letter-spacing);
+    font-size: 12px;
+    line-height: 16px;
     color: var(--accent);
     text-align: center;
+  }
+
+  /* 현재가 아닌 줄도 이름 줄이 맞도록 자리만 차지 */
+  .project-badge.is-empty {
+    visibility: hidden;
+  }
+
+  .project-row-name {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-family: var(--font-ui);
+    letter-spacing: var(--ui-letter-spacing);
+    font-size: 16px;
+    color: var(--ink);
   }
 
   .project-name-input {
@@ -655,11 +673,11 @@
     border-bottom-color: var(--accent);
   }
 
-  .project-del-btn {
+  .project-row-btn {
     flex: none;
   }
 
-  .project-del-btn:disabled {
+  .project-row-btn:disabled {
     opacity: 0.4;
     cursor: not-allowed;
   }

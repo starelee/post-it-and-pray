@@ -9748,7 +9748,7 @@
   async function promptNewProject() {
     const name = await promptProjectName({
       title: '새 프로젝트',
-      message: '빈 보드로 시작해요. 월급루팡 메모는 프로젝트가 달라도 그대로 따라와요.',
+      message: '새로운 프로젝트를 시작해요. Lupin 보드는 그대로 따라와요.\n프로젝트 간의 항목 이동은 불가능해요.',
       confirmLabel: '만들기'
     });
     if (!name) return null;
@@ -9821,7 +9821,7 @@
       card.className = 'backup-card';
       const hint = document.createElement('p');
       hint.className = 'backup-hint';
-      hint.textContent = '이름은 구분용 라벨이에요. 바꿔도 안의 항목은 그대로예요. 지금 열어 둔 프로젝트에 ✓ 표시가 있어요.';
+      hint.textContent = '새 프로젝트를 생성하거나 기존 프로젝트의 이름을 바꾸거나 삭제해요. 프로젝트 간의 항목은 이동할 수 없어요.';
       const err = document.createElement('p');
       err.className = 'backup-hint project-error';
       err.hidden = true;
@@ -9830,35 +9830,65 @@
       projects.forEach(p => {
         const li = document.createElement('li');
         li.className = 'project-row';
-        const mark = document.createElement('span');
-        mark.className = 'project-row-mark';
-        mark.textContent = p.id === activeProjectId ? '✓' : '';
-        mark.setAttribute('aria-hidden', 'true');
-        const input = document.createElement('input');
-        input.type = 'text';
-        input.className = 'project-name-input';
-        input.maxLength = PROJECT_NAME_MAX;
-        input.value = p.name;
-        input.setAttribute('aria-label', '프로젝트 이름' + (p.id === activeProjectId ? ' (지금 열어 둔 프로젝트)' : ''));
-        const commit = () => {
-          if (input.value === p.name) return;
-          const problem = renameProject(p.id, input.value);
-          err.textContent = problem;
-          err.hidden = !problem;
-          input.value = p.name; // 성공이면 새 이름, 실패면 원래 이름으로
+        const isCur = p.id === activeProjectId;
+        const mkBtn = (label, cls) => {
+          const b = document.createElement('button');
+          b.type = 'button';
+          b.className = 'confirm-btn ' + cls;
+          b.textContent = label;
+          return b;
         };
-        input.addEventListener('change', commit);
-        input.addEventListener('keydown', (e) => {
-          if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); commit(); input.blur(); }
-        });
-        const del = document.createElement('button');
-        del.type = 'button';
-        del.className = 'confirm-btn project-del-btn';
-        del.textContent = '삭제';
-        del.disabled = projects.length <= 1;
-        del.title = projects.length <= 1 ? '마지막 프로젝트는 지울 수 없어요' : '';
-        del.addEventListener('click', () => { next = { type: 'delete', id: p.id }; cancelBtn.click(); });
-        li.append(mark, input, del);
+        // 평소 모습: [현재] 이름 [수정][삭제] — 수정을 눌러야 이름이 입력칸으로 바뀜
+        const renderView = () => {
+          clearEl(li);
+          const badge = document.createElement('span');
+          badge.className = 'project-badge' + (isCur ? '' : ' is-empty');
+          badge.textContent = isCur ? '현재' : '';
+          const name = document.createElement('span');
+          name.className = 'project-row-name';
+          name.textContent = p.name;
+          const edit = mkBtn('수정', 'project-row-btn');
+          edit.setAttribute('aria-label', '\'' + p.name + '\' 이름 수정');
+          edit.addEventListener('click', renderEdit);
+          const del = mkBtn('삭제', 'project-row-btn');
+          del.setAttribute('aria-label', '\'' + p.name + '\' 삭제');
+          del.disabled = projects.length <= 1;
+          del.title = projects.length <= 1 ? '마지막 프로젝트는 지울 수 없어요' : '';
+          del.addEventListener('click', () => { next = { type: 'delete', id: p.id }; cancelBtn.click(); });
+          li.append(badge, name, edit, del);
+        };
+        // 수정 중: 입력칸 + [저장][취소]. Enter=저장, 같은 이름이거나 취소면 그대로
+        const renderEdit = () => {
+          clearEl(li);
+          err.hidden = true;
+          const badge = document.createElement('span');
+          badge.className = 'project-badge' + (isCur ? '' : ' is-empty');
+          badge.textContent = isCur ? '현재' : '';
+          const input = document.createElement('input');
+          input.type = 'text';
+          input.className = 'project-name-input';
+          input.maxLength = PROJECT_NAME_MAX;
+          input.value = p.name;
+          input.setAttribute('aria-label', '프로젝트 이름');
+          const save = mkBtn('저장', 'project-row-btn');
+          const cancel = mkBtn('취소', 'project-row-btn');
+          const commit = () => {
+            const problem = input.value === p.name ? '' : renameProject(p.id, input.value);
+            err.textContent = problem;
+            err.hidden = !problem;
+            if (problem) { input.focus(); return; } // 못 바꾸면 수정 중 그대로 두고 이유를 보여줌
+            renderView();
+          };
+          save.addEventListener('click', commit);
+          cancel.addEventListener('click', () => { err.hidden = true; renderView(); });
+          input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); commit(); } // 한글 조합 중 Enter는 조합 확정이라 제외
+          });
+          li.append(badge, input, save, cancel);
+          input.focus();
+          input.select();
+        };
+        renderView();
         list.appendChild(li);
       });
       const add = document.createElement('button');
@@ -9929,18 +9959,6 @@
       });
       projectMenuEl.appendChild(item);
     });
-    const add = document.createElement('button');
-    add.type = 'button';
-    add.className = 'menu-item menu-item-add';
-    add.setAttribute('role', 'menuitem');
-    add.textContent = '＋ 새 프로젝트';
-    add.addEventListener('click', async () => {
-      closeHeaderMenus();
-      if (isFocusLocked() || isConfirmModalOpen()) { showToast(projectBlockedReason()); return; }
-      const id = await promptNewProject();
-      if (id) switchProject(id);
-    });
-    projectMenuEl.appendChild(add);
   }
 
   // 헤더의 두 드롭다운(프로젝트 / 설정) — 하나만 열리고, 바깥을 누르거나 Esc로 닫힘
