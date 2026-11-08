@@ -218,6 +218,24 @@
             />
           </div>
         </div>
+
+        <div class="sticky memo-sticky" id="memoSticky" style="--rot: 0.9deg; --paper: var(--paper-memo);">
+          <div class="tape"></div>
+          <h2 class="sticky-title">memo... <span class="flower">📌</span>
+            <span class="memo-count" id="memoCount" aria-live="polite"></span>
+          </h2>
+          <ul class="memo-list" id="memoList"></ul>
+          <div class="add-row memo-add" id="memoAdd">
+            <button type="button" class="plus" id="memoAddBtn" aria-label="새 메모 등록">+</button>
+            <input
+              class="new-task-input"
+              id="memoNewInput"
+              placeholder="자주 꺼내볼 메모..."
+              autocomplete="off"
+              maxlength="40"
+            />
+          </div>
+        </div>
       </div>
       </div>
     </div>
