@@ -7545,6 +7545,7 @@
   let dsCal = { state: 'idle', events: [], err: '' }; // 일정 단계: idle → loading → ok | needconnect | error
   let dsAltPickOpt = null;   // 날짜 고르기 대안의 설정(적용할 처리·라벨)
   let dsAltPick = null;     // 대안 중 '다음에 확인하기(날짜 지정)'를 눌러 날짜를 고르는 중인 질문의 키
+  const DS_OVERLOAD_WAITING = 'waiting'; // 미루기 질문에서 날짜 대신 '대기중으로' 보내는 값
   let dsOverloadPick = {};   // '오늘 할 일이 많아요' 질문에서 고른 항목 id → 미룰 날짜(없으면 오늘 그대로)
   let dsOverloadDateFor = null; // 날짜지정 입력을 펼친 항목 id
   let dsAltKey = null;       // '아니오'를 눌러 대안 선택지를 보여주는 중인 질문의 키
@@ -8106,7 +8107,7 @@
       case 'stale':
         return item.boardId === 'waiting'
           ? [checkTomorrow, checkLater, finished('해결됐어요'), skip]
-          : [pickStart, finished('이미 끝났어요 (완료)'), skip]; // someday는 '언젠가' 항목이라 내일 대신 착수일을 직접 고름
+          : [{ label: '오늘 할 일로', patch: { action: 'today' } }, pickStart,finished('이미 끝났어요 (완료)'), skip]; // someday는 '언젠가' 항목이라 내일 대신 착수일을 직접 고름
       case 'carry':
         return [tomorrow, { label: '대기중으로 옮기기', patch: { action: 'toWaiting' } }, finished('이미 끝났어요 (완료)'), skip];
       default:
@@ -8660,7 +8661,9 @@
         };
         opt('오늘', !cur, () => { dsOverloadPick[id] = null; delete dsOverloadPick[id]; dsOverloadDateFor = null; dsRender(); });
         opt(later.label, cur === later.date, () => { dsOverloadPick[id] = later.date; dsOverloadDateFor = null; dsRender(); });
-        opt(cur && cur !== later.date ? dsShortDate(cur) : '날짜지정', !!cur && cur !== later.date, () => { dsOverloadDateFor = id; dsRender(); });
+        const picked = !!cur && cur !== later.date && cur !== DS_OVERLOAD_WAITING;
+        opt(picked ? dsShortDate(cur) : '날짜지정', picked, () => { dsOverloadDateFor = id; dsRender(); });
+        opt('대기중', cur === DS_OVERLOAD_WAITING, () => { dsOverloadPick[id] = DS_OVERLOAD_WAITING; dsOverloadDateFor = null; dsRender(); });
         line.appendChild(opts);
         li.appendChild(line);
         if (dsOverloadDateFor === id) {
@@ -9440,7 +9443,16 @@
         const later = (ds.overload.dates && ds.overload.dates[id]) || tomorrow;
         const inToday = boards.today.find(t => t.id === id && !t.done);
         const inSched = boards.scheduled.find(t => t.id === id && !t.done && t.dueDate === today);
-        if (inToday) {
+        if (later === DS_OVERLOAD_WAITING) {
+          const wt = inToday || inSched;
+          if (wt) {
+            dsDetach(inToday ? 'today' : 'scheduled', wt);
+            dsScrub(wt);
+            wt.done = false; delete wt.doneAt;
+            boards.waiting.push(wt);
+            changed = true;
+          }
+        } else if (inToday) {
           dsDetach('today', inToday);
           dsScrub(inToday);
           inToday.from = 'today';
