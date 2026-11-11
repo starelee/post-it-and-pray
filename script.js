@@ -613,7 +613,8 @@
 
   function summarizeBoards(b) {
     return 'gotta do ' + b.today.length + ' · waiting ' + b.waiting.length + ' · someday ' + b.someday.length +
-      ' · pray later ' + b.scheduled.length + ' · done ' + b.archive.length;
+      ' · pray later ' + b.scheduled.length + ' · done ' + b.archive.length +
+      ((b.memos || []).length ? ' · memo ' + b.memos.length : '');
   }
 
   async function restoreFromFile(file) {
@@ -1220,6 +1221,48 @@
     });
   }
 
+  // 메모 보드(memos) — 할 일(Task)과 별개의 작은 컬렉션. 규칙은 SCHEMA.md '메모' 참고.
+  const MEMO_MAX = 7;          // 프로젝트마다 최대 개수(새로 적을 때만 막음 — 불러올 때 데이터를 버리지 않음)
+  const MEMO_PIN_MAX = 3;      // 그중 핀으로 고정해 위에 둘 수 있는 개수
+  const MEMO_TITLE_MAX = 40;
+  const MEMO_BODY_MAX = 2000;
+
+  function normalizeMemos(list) {
+    if (!Array.isArray(list)) return [];
+    const seen = new Set();
+    const out = [];
+    list.forEach(m => {
+      if (!m || typeof m !== 'object' || typeof m.id !== 'number' || !isFinite(m.id) || seen.has(m.id)) return;
+      const body = typeof m.body === 'string' ? m.body.slice(0, MEMO_BODY_MAX) : '';
+      let title = typeof m.title === 'string' ? m.title.trim().slice(0, MEMO_TITLE_MAX) : '';
+      if (!title) title = body.trim().split('\n')[0].slice(0, MEMO_TITLE_MAX); // 제목이 비면 본문 첫 줄
+      if (!title) return; // 제목도 내용도 없는 빈 메모만 버림
+      seen.add(m.id);
+      const memo = { id: m.id, title, body };
+      if (m.pinned === true) memo.pinned = true;
+      if (typeof m.updatedAt === 'number' && isFinite(m.updatedAt)) memo.updatedAt = m.updatedAt;
+      out.push(memo);
+    });
+    // 다른 기기 병합 등으로 핀이 3개를 넘으면 가장 최근에 바꾼 3개만 남기고 나머지는 핀만 해제(메모는 그대로)
+    const pinned = out.filter(m => m.pinned);
+    if (pinned.length > MEMO_PIN_MAX) {
+      pinned.slice().sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))
+        .slice(MEMO_PIN_MAX).forEach(m => { delete m.pinned; });
+    }
+    return out;
+  }
+
+  // 같은 id는 더 나중에 바꾼 쪽(updatedAt)이 이기고, 같거나 없으면 이 기기 쪽. 양쪽에서 따로 만든 메모는 합집합.
+  function mergeMemos(serverList, localList) {
+    const byId = new Map();
+    (serverList || []).forEach(m => byId.set(m.id, m));
+    (localList || []).forEach(m => {
+      const cur = byId.get(m.id);
+      if (!cur || (m.updatedAt || 0) >= (cur.updatedAt || 0)) byId.set(m.id, m);
+    });
+    return normalizeMemos(Array.from(byId.values()).sort((a, b) => a.id - b.id));
+  }
+
   function normalizeBoards(data) {
     const result = {};
     BOARD_IDS.forEach(id => {
@@ -1230,6 +1273,7 @@
     // 별도 은닉 보드라 BOARD_IDS/migrateArchive 양쪽 모두에서 의도적으로 제외.
     result.lupin = normalizeTasks(Array.isArray(data.lupin) ? data.lupin : []);
     result.trash = normalizeTasks(Array.isArray(data.trash) ? data.trash : []);
+    result.memos = normalizeMemos(data.memos);
     migrateArchive(result);
     return result;
   }
@@ -1553,6 +1597,7 @@
     const merged = {};
     allBoardIds.forEach(id => { merged[id] = []; });
     winners.forEach(({ task, boardId }) => merged[boardId].push(task));
+    merged.memos = mergeMemos(serverBoards.memos, localBoards.memos);
     return merged;
   }
 
@@ -1561,7 +1606,8 @@
     return BOARD_IDS.concat(['archive', 'lupin', 'trash']).map(id =>
       (b[id] || []).slice().sort((x, y) => (x.id < y.id ? -1 : x.id > y.id ? 1 : 0))
         .map(t => { const { updatedAt, ...rest } = t; return JSON.stringify(rest); }).join('|')
-    ).join('||');
+    ).join('||') + '||' + (b.memos || []).slice().sort((x, y) => x.id - y.id)
+      .map(m => { const { updatedAt, ...rest } = m; return JSON.stringify(rest); }).join('|');
   }
 
   // 다른 기기의 변경을 합쳐 화면을 다시 그리면 안 되는 순간 — 항목 글자를 고치는 중, 순서를 끄는 중.
@@ -1917,6 +1963,16 @@
   let boards = null; // 지금 열어 둔 프로젝트(+ 공통 루팡) — 바로 아래 applyStore가 채움
   applyStore(normalizeStore(loadStoredData()));
 
+  // 메모도 같은 방식으로 서명을 남기고, 바뀐 메모에만 지금 시각을 찍음(stamp가 있을 때). 할 일 id와 안 겹치게 키에 접두사.
+  function memoSignatures(sigs, stamp) {
+    (boards.memos || []).forEach(m => {
+      const { updatedAt, ...rest } = m;
+      const key = 'memo:' + m.id;
+      const sig = 'memo|' + JSON.stringify(rest);
+      sigs.set(key, sig);
+      if (stamp && lastSigs.get(key) !== sig) m.updatedAt = stamp;
+    });
+  }
   // Ctrl+Z / Ctrl+Shift+Z — 저장(saveBoards)될 때마다 "저장 직전 상태"를
   // 스냅샷으로 쌓아두고, 되돌리기는 그걸 꺼내 boards를 통째로 교체함.
   // 메모리에만 두고(새로고침하면 사라짐) 최근 UNDO_LIMIT번까지만 기억.
@@ -1933,6 +1989,7 @@
         sigs.set(t.id, boardId + '|' + JSON.stringify(rest));
       });
     });
+    memoSignatures(sigs);
     return sigs;
   }
   // 항목별 마지막으로 본 마감일 — 마감일이 바뀐 날을 dueSetAt에 남기려고
@@ -1955,6 +2012,7 @@
         if (lastSigs.get(t.id) !== sig) t.updatedAt = now;
       });
     });
+    memoSignatures(sigs, now);
     lastSigs = sigs;
     // 마감일이 새로 생기거나 바뀐 항목은 그날을 기록(하루 시작하기가 '방금 정한 마감'을 다시 묻지 않게)
     const dues = taskDueDates();
@@ -2170,7 +2228,8 @@
     if (!body || !body.hasAttribute('data-collapse-body')) return;
     const setOpen = wireCollapseToggle(toggle, body, false, COLLAPSE_AUTO_CLOSE_MS);
     const listEl = body.querySelector('[data-tasklist]');
-    if (listEl) collapseSections[listEl.dataset.tasklist] = { body, setOpen };
+    const key = listEl ? listEl.dataset.tasklist : body.dataset.collapseKey; // memo 보드는 할 일 목록이 없어 data-collapse-key로 등록
+    if (key) collapseSections[key] = { body, setOpen };
   });
 
   // 글자를 입력하는 칸(제목 수정, 하위 항목 추가/수정, 새 항목 입력 등)에 포커스가 있는 동안
@@ -2200,6 +2259,7 @@
       if (collapseSections.someday) collapseSections.someday.setOpen(false);
       if (collapseSections.scheduled) collapseSections.scheduled.setOpen(false);
       if (collapseSections.waitingLater) collapseSections.waitingLater.setOpen(false);
+      if (collapseSections.memo) collapseSections.memo.setOpen(false);
       window.scrollTo({ top: 0, behavior: 'smooth' });
     });
   }
@@ -2216,9 +2276,304 @@
     return svg;
   }
 
+  // ───────── 메모 보드(memo) ─────────
+  // 프로젝트마다 따로(boards.memos), 최대 MEMO_MAX개 중 핀은 MEMO_PIN_MAX개까지. 핀은 위, 나머지는 아래로 쌓임.
+  // 제목만 보이고 누르면 내용이 펼쳐짐(한 번에 하나). 규칙은 SCHEMA.md '메모' 참고.
+  const memoListEl = document.getElementById('memoList');
+  const memoCountEl = document.getElementById('memoCount');
+  const memoAddEl = document.getElementById('memoAdd');
+  const memoAddBtn = document.getElementById('memoAddBtn');
+  const memoNewInput = document.getElementById('memoNewInput');
+  let memoOpenId = null;   // 내용이 펼쳐진 메모
+  let memoEditId = null;   // 펼친 메모를 지금 고치는 중이면 그 id
+  let memoFocusReq = null; // 다음 렌더 뒤에 포커스를 줄 { id, field: 'title' | 'body' }
+
+  function memoList() {
+    if (!Array.isArray(boards.memos)) boards.memos = [];
+    return boards.memos;
+  }
+
+  function findMemo(id) {
+    return memoList().find(m => m.id === id) || null;
+  }
+
+  function memoIsFull() {
+    return memoList().length >= MEMO_MAX;
+  }
+
+  function memoPinnedCount() {
+    return memoList().filter(m => m.pinned).length;
+  }
+
+  function addMemo(rawTitle) {
+    const title = String(rawTitle || '').trim().slice(0, MEMO_TITLE_MAX);
+    if (!title) return false;
+    if (memoIsFull()) {
+      showToast('메모는 ' + MEMO_MAX + '개까지예요 · 하나를 지우면 적을 수 있어요');
+      return false;
+    }
+    commitMemoEdit();
+    const list = memoList();
+    let id = Date.now();
+    while (list.some(m => m.id === id)) id++;
+    list.push({ id, title, body: '' });
+    memoOpenId = id;
+    memoEditId = id;
+    memoFocusReq = { id, field: 'body' }; // 제목을 적자마자 내용을 이어서 적게
+    saveBoards();
+    renderMemos();
+    return true;
+  }
+
+  // 고치는 중인 메모의 입력값을 저장. 제목이 비어 있으면 저장하지 않고 false(고치기 상태 유지).
+  function commitMemoEdit() {
+    if (memoEditId === null || !memoListEl) return true;
+    const li = memoListEl.querySelector('[data-memo-id="' + memoEditId + '"]');
+    const memo = findMemo(memoEditId);
+    if (!li || !memo) { memoEditId = null; return true; }
+    const titleEl = li.querySelector('.memo-edit-title');
+    const bodyEl = li.querySelector('.memo-edit-body');
+    if (!titleEl || !bodyEl) { memoEditId = null; return true; }
+    const title = titleEl.value.trim().slice(0, MEMO_TITLE_MAX);
+    if (!title) {
+      titleEl.focus();
+      showToast('제목은 비울 수 없어요');
+      return false;
+    }
+    const body = bodyEl.value.slice(0, MEMO_BODY_MAX);
+    memoEditId = null;
+    if (memo.title !== title || memo.body !== body) {
+      memo.title = title;
+      memo.body = body;
+      saveBoards();
+    }
+    return true;
+  }
+
+  function toggleMemoPin(memo) {
+    if (!memo.pinned && memoPinnedCount() >= MEMO_PIN_MAX) {
+      showToast('핀은 ' + MEMO_PIN_MAX + '개까지예요 · 다른 메모의 핀을 먼저 풀어주세요');
+      return;
+    }
+    if (!commitMemoEdit()) return;
+    if (memo.pinned) delete memo.pinned;
+    else memo.pinned = true;
+    saveBoards();
+    renderMemos();
+  }
+
+  async function deleteMemo(memo) {
+    const ok = await showConfirm({
+      title: '메모를 지울까요?',
+      message: memo.title + '\n\n(Ctrl+Z로 되돌릴 수 있어요)',
+      confirmLabel: '지우기',
+      cancelLabel: '취소'
+    });
+    if (!ok) return;
+    const list = memoList();
+    const i = list.findIndex(m => m.id === memo.id);
+    if (i < 0) return;
+    list.splice(i, 1);
+    if (memoOpenId === memo.id) memoOpenId = null;
+    if (memoEditId === memo.id) memoEditId = null;
+    saveBoards();
+    renderMemos();
+    showToast('메모를 지웠어요 (Ctrl+Z로 되돌릴 수 있어요)');
+  }
+
+  function copyMemo(memo) {
+    const text = memo.body || memo.title;
+    const done = () => showToast('복사했어요');
+    const fallback = () => {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.setAttribute('readonly', '');
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      let ok = false;
+      try { ok = document.execCommand('copy'); } catch (e) { /* 복사 불가 */ }
+      ta.remove();
+      showToast(ok ? '복사했어요' : '복사하지 못했어요');
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done, fallback);
+    } else {
+      fallback();
+    }
+  }
+
+  function memoActionBtn(label, onClick, opts) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = label;
+    if (opts && opts.title) b.title = opts.title;
+    b.addEventListener('click', onClick);
+    return b;
+  }
+
+  function buildMemoItem(memo) {
+    const li = document.createElement('li');
+    li.className = 'memo-item' + (memo.pinned ? ' is-pinned' : '');
+    li.dataset.memoId = String(memo.id);
+    const open = memoOpenId === memo.id;
+    if (open) li.classList.add('is-open');
+
+    const head = document.createElement('button');
+    head.type = 'button';
+    head.className = 'memo-title-btn';
+    head.setAttribute('aria-expanded', open ? 'true' : 'false');
+    if (memo.pinned) {
+      const pin = document.createElement('span');
+      pin.className = 'memo-pin-mark';
+      pin.setAttribute('aria-label', '핀 고정');
+      pin.textContent = '📌';
+      head.appendChild(pin);
+    }
+    const t = document.createElement('span');
+    t.className = 'memo-title-text';
+    t.textContent = memo.title;
+    head.appendChild(t);
+    const arrow = document.createElement('span');
+    arrow.className = 'memo-arrow';
+    arrow.setAttribute('aria-hidden', 'true');
+    arrow.textContent = '▾';
+    head.appendChild(arrow);
+    head.addEventListener('click', () => {
+      if (!commitMemoEdit()) return;
+      memoOpenId = memoOpenId === memo.id ? null : memo.id;
+      renderMemos();
+    });
+    li.appendChild(head);
+
+    if (!open) return li;
+
+    const body = document.createElement('div');
+    body.className = 'memo-body';
+    if (memoEditId === memo.id) {
+      const titleIn = document.createElement('input');
+      titleIn.type = 'text';
+      titleIn.className = 'memo-edit-title';
+      titleIn.maxLength = MEMO_TITLE_MAX;
+      titleIn.value = memo.title;
+      titleIn.setAttribute('aria-label', '메모 제목');
+      const bodyIn = document.createElement('textarea');
+      bodyIn.className = 'memo-edit-body';
+      bodyIn.maxLength = MEMO_BODY_MAX;
+      bodyIn.value = memo.body;
+      bodyIn.placeholder = '내용...';
+      bodyIn.setAttribute('aria-label', '메모 내용');
+      const finish = (save) => {
+        if (save && !commitMemoEdit()) return;
+        memoEditId = null;
+        renderMemos();
+      };
+      titleIn.addEventListener('keydown', (e) => {
+        if (e.isComposing) return; // 한글 조합 중 Enter/Esc는 조합 확정이라 제외
+        if (e.key === 'Enter') { e.preventDefault(); bodyIn.focus(); }
+        else if (e.key === 'Escape') { e.preventDefault(); finish(false); }
+      });
+      bodyIn.addEventListener('keydown', (e) => {
+        if (e.isComposing) return;
+        if (e.key === 'Escape') { e.preventDefault(); finish(false); }
+        else if (e.key === 'Enter' && (e.shiftKey || e.altKey || e.ctrlKey || e.metaKey)) { e.preventDefault(); finish(true); }
+      });
+      body.appendChild(titleIn);
+      body.appendChild(bodyIn);
+      const actions = document.createElement('div');
+      actions.className = 'memo-actions';
+      actions.appendChild(memoActionBtn('저장', () => finish(true)));
+      actions.appendChild(memoActionBtn('취소', () => finish(false)));
+      body.appendChild(actions);
+    } else {
+      const text = document.createElement('div');
+      text.className = 'memo-text' + (memo.body ? '' : ' is-empty');
+      text.textContent = memo.body || '내용이 없어요';
+      body.appendChild(text);
+      const actions = document.createElement('div');
+      actions.className = 'memo-actions';
+      actions.appendChild(memoActionBtn('복사', () => copyMemo(memo)));
+      actions.appendChild(memoActionBtn('수정', () => {
+        memoEditId = memo.id;
+        memoFocusReq = { id: memo.id, field: 'body' };
+        renderMemos();
+      }));
+      actions.appendChild(memoActionBtn(memo.pinned ? '핀 풀기' : '핀 고정', () => toggleMemoPin(memo)));
+      actions.appendChild(memoActionBtn('삭제', () => deleteMemo(memo)));
+      body.appendChild(actions);
+    }
+    li.appendChild(body);
+    return li;
+  }
+
+  function renderMemos() {
+    if (!memoListEl) return;
+    const memos = memoList();
+    if (memoOpenId !== null && !findMemo(memoOpenId)) memoOpenId = null;
+    if (memoEditId !== null && memoEditId !== memoOpenId) memoEditId = null;
+
+    memoListEl.textContent = '';
+    const pinned = memos.filter(m => m.pinned);
+    const rest = memos.filter(m => !m.pinned);
+    if (!memos.length) {
+      const empty = document.createElement('li');
+      empty.className = 'memo-empty';
+      empty.textContent = '자주 꺼내보는 것만 적어두는 곳';
+      memoListEl.appendChild(empty);
+    }
+    pinned.forEach(m => memoListEl.appendChild(buildMemoItem(m)));
+    if (pinned.length && rest.length) {
+      const hr = document.createElement('li');
+      hr.className = 'memo-divider';
+      hr.setAttribute('aria-hidden', 'true');
+      memoListEl.appendChild(hr);
+    }
+    rest.forEach(m => memoListEl.appendChild(buildMemoItem(m)));
+
+    const full = memoIsFull();
+    if (memoCountEl) {
+      memoCountEl.textContent = memos.length ? memos.length + '/' + MEMO_MAX : '';
+      memoCountEl.title = '핀 ' + pinned.length + '/' + MEMO_PIN_MAX;
+    }
+    if (memoAddEl) memoAddEl.classList.toggle('is-full', full);
+    if (memoNewInput) {
+      memoNewInput.disabled = full;
+      memoNewInput.placeholder = full ? '꽉 찼어요 · 하나 지우면 적을 수 있어요' : '자주 꺼내볼 메모...';
+    }
+
+    if (memoFocusReq) {
+      const req = memoFocusReq;
+      memoFocusReq = null;
+      const el = memoListEl.querySelector('[data-memo-id="' + req.id + '"] ' + (req.field === 'title' ? '.memo-edit-title' : '.memo-edit-body'));
+      if (el) {
+        el.focus();
+        const end = el.value.length;
+        try { el.setSelectionRange(end, end); } catch (e) { /* 무시 */ }
+      }
+    }
+  }
+
+  if (memoNewInput) {
+    const submitNewMemo = () => {
+      if (addMemo(memoNewInput.value)) memoNewInput.value = '';
+    };
+    memoNewInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); submitNewMemo(); }
+    });
+    if (memoAddBtn) {
+      memoAddBtn.addEventListener('click', () => {
+        if (memoIsFull()) { showToast('메모는 ' + MEMO_MAX + '개까지예요 · 하나를 지우면 적을 수 있어요'); return; }
+        if (memoNewInput.value.trim()) submitNewMemo();
+        else memoNewInput.focus();
+      });
+    }
+  }
+
   function renderAll() {
     BOARD_IDS.forEach(render);
     render('lupin');
+    renderMemos();
     updateCounter();
     renderProjectUI();
   }

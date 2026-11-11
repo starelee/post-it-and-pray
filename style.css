@@ -41,6 +41,8 @@
     .date-clear-btn,
     .sticky-title-toggle,
     .reply-later-toggle,
+    .memo-title-btn,
+    .memo-actions button,
     .plus
   ) {
     background: none;
@@ -92,6 +94,7 @@
     --modal-bg: #f3f3f1;
     --paper-waiting: #ffe1ac;
     --paper-someday: #dbe2f7;
+    --paper-memo: #d6ebd9;
     --paper-lupin: #d9d5c9;
     --paper-focus: #ffb9a8;
     --paper-focus-urgent: #f03a17;
@@ -137,6 +140,7 @@
       --paper: #554a26;
       --paper-waiting: #55371b;
       --paper-someday: #2c3350;
+      --paper-memo: #26382b;
       --paper-lupin: #2e2c27;
       --paper-focus: #6e3326;
       --paper-focus-urgent: #fff1dc;
@@ -168,6 +172,7 @@
     --paper: #554a26;
     --paper-waiting: #55371b;
     --paper-someday: #2c3350;
+    --paper-memo: #26382b;
     --paper-lupin: #2e2c27;
     --paper-focus: #6e3326;
     --paper-focus-urgent: #fff1dc;
@@ -1372,6 +1377,10 @@
     border-radius: 2px 8px 4px 12px / 7px 2px 6px 3px;
   }
 
+  .memo-sticky {
+    border-radius: 8px 3px 10px 2px / 3px 7px 2px 6px;
+  }
+
   /* ─────────────────────────────
      masking tape
      .tape(바깥)은 그림자 + 회전 담당, 찢긴 모양(clip-path)은 ::before/::after에만 줘서
@@ -1508,7 +1517,8 @@
   }
 
   /* Someday: 라벤더 체크 마테 */
-  .sticky[data-board="someday"] .tape {
+  .sticky[data-board="someday"] .tape,
+  .memo-sticky .tape {
     --tape-clip: polygon(
       2% 0%,
       98% 0%,
@@ -1533,7 +1543,8 @@
     );
     transform: translateX(-50%) rotate(-4deg);
   }
-  .sticky[data-board="someday"] .tape::before {
+  .sticky[data-board="someday"] .tape::before,
+  .memo-sticky .tape::before {
     background-color: var(--tape-someday);
     background-image:
       linear-gradient(90deg, var(--tape-someday-pattern) 1px, transparent 1px),
@@ -3393,6 +3404,160 @@
 
   .new-task-input::placeholder {
     color: var(--ink-soft);
+  }
+
+  /* ─────────────────────────────
+     메모 보드(memo) — 핀 최대 3개는 위에, 나머지는 아래로. 제목만 보이고 누르면 내용이 펼쳐짐.
+     ───────────────────────────── */
+  .memo-count {
+    font-family: var(--font-task);
+    font-size: 15px;
+    color: var(--ink-soft);
+  }
+
+  .memo-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .memo-empty {
+    color: var(--ink-soft);
+    font-family: var(--font-task);
+    font-size: 18px;
+    padding: 2px 0 4px;
+  }
+
+  .memo-divider {
+    border-top: 1px dashed var(--input-line);
+    margin: 6px 0;
+  }
+
+  .memo-title-btn {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    width: 100%;
+    padding: 4px 0;
+    text-align: left;
+    color: var(--ink);
+    font-family: var(--font-task);
+    font-size: 20px;
+    line-height: 1.3;
+  }
+
+  .memo-title-btn:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
+
+  .memo-title-text {
+    flex: 1;
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .memo-pin-mark {
+    font-size: 14px;
+    flex: none;
+  }
+
+  .memo-arrow {
+    flex: none;
+    font-size: 13px;
+    color: var(--ink-soft);
+    transition: transform 0.15s var(--ease-ui);
+  }
+
+  .memo-item.is-open .memo-arrow {
+    transform: rotate(180deg);
+  }
+
+  .memo-body {
+    margin: 2px 0 8px;
+    padding: 8px 10px;
+    border-radius: 4px;
+    background: color-mix(in srgb, var(--ink) 6%, transparent);
+  }
+
+  .memo-text {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    font-family: var(--font-task);
+    font-size: 18px;
+    line-height: 1.45;
+    color: var(--ink);
+    user-select: text;
+  }
+
+  .memo-text.is-empty {
+    color: var(--ink-soft);
+  }
+
+  .memo-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 12px;
+    margin-top: 8px;
+    font-family: var(--font-task);
+    font-size: 16px;
+  }
+
+  .memo-actions button {
+    padding: 0;
+    color: var(--ink-soft);
+    font: inherit;
+    transition: color 0.15s var(--ease-ui);
+  }
+
+  .memo-actions button:hover,
+  .memo-actions button:focus-visible {
+    color: var(--accent);
+  }
+
+  .memo-actions button:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+
+  .memo-edit-title,
+  .memo-edit-body {
+    width: 100%;
+    box-sizing: border-box;
+    border: 1px solid var(--input-line);
+    border-radius: 4px;
+    background: color-mix(in srgb, var(--ink) 8%, transparent);
+    font-family: var(--font-task);
+    color: var(--ink);
+    outline: none;
+    padding: 4px 6px;
+  }
+
+  .memo-edit-title {
+    font-size: 19px;
+    margin-bottom: 6px;
+  }
+
+  .memo-edit-body {
+    display: block;
+    min-height: 90px;
+    resize: vertical;
+    font-size: 18px;
+    line-height: 1.4;
+  }
+
+  .memo-edit-title:focus,
+  .memo-edit-body:focus {
+    border-color: var(--accent);
+  }
+
+  .memo-add.is-full .plus {
+    opacity: 0.4;
+  }
+
+  .memo-add.is-full .new-task-input {
+    cursor: not-allowed;
   }
 
   /* 앱 스타일 확인 모달 (브라우저 기본 confirm 대체) */
