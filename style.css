@@ -12,6 +12,16 @@
     font-display: swap;
 }
 
+  /* 사용자가 입력한 글자(항목·하위 항목·메모·노트·검색 등) 속 이모지를 컬러 이모지로 — 손글씨 폰트가 ☁ ❤ ✂ ⚠ 같은
+     기호를 자기 글리프(단색)로 먼저 그려버리는 걸 막으려고, 진짜 이모지 문자 범위에서만 시스템 이모지 폰트를 앞에 둠.
+     범위 밖 글자(한글·숫자·✿ ✓ ✕ ▾ → 같은 기호)는 영향 없음. 시스템에 이모지 폰트가 없으면 이 폰트는 무시되고 원래 순서대로 감.
+     UI 아이콘(버튼·제목의 이모지)은 --font-user를 쓰지 않아 지금 모양 그대로. */
+  @font-face {
+    font-family: 'UserEmoji';
+    src: local('Apple Color Emoji'), local('Segoe UI Emoji'), local('Noto Color Emoji'), local('Twemoji Mozilla');
+    unicode-range: U+203C,U+2049,U+2122,U+2139,U+231A-231B,U+2328,U+23CF,U+23E9-23F3,U+23F8-23FA,U+24C2,U+25AA-25AB,U+25B6,U+25C0,U+25FB-25FE,U+2600-2604,U+260E,U+2611,U+2614-2615,U+2618,U+261D,U+2620,U+2622-2623,U+2626,U+262A,U+262E-262F,U+2638-263A,U+2640,U+2642,U+2648-2653,U+265F-2660,U+2663,U+2665-2666,U+2668,U+267B,U+267E-267F,U+2692-2697,U+2699,U+269B-269C,U+26A0-26A1,U+26A7,U+26AA-26AB,U+26B0-26B1,U+26BD-26BE,U+26C4-26C5,U+26C8,U+26CE-26CF,U+26D1,U+26D3-26D4,U+26E9-26EA,U+26F0-26F5,U+26F7-26FA,U+26FD,U+2702,U+2705,U+2708-270D,U+270F,U+2712,U+2714,U+2716,U+271D,U+2721,U+2728,U+2733-2734,U+2744,U+2747,U+274C,U+274E,U+2753-2755,U+2757,U+2763-2764,U+2795-2797,U+27A1,U+27B0,U+27BF,U+2934-2935,U+2B05-2B07,U+2B1B-2B1C,U+2B50,U+2B55,U+3030,U+303D,U+3297,U+3299,U+1F004,U+1F0CF,U+1F170-1F171,U+1F17E-1F17F,U+1F18E,U+1F191-1F19A,U+1F1E6-1F1FF,U+1F201-1F202,U+1F21A,U+1F22F,U+1F232-1F23A,U+1F250-1F251,U+1F300-1F64F,U+1F680-1F6FF,U+1F7E0-1F7EB,U+1F90C-1F9FF,U+1FA70-1FAFF,U+FE0F,U+200D,U+20E3;
+  }
+
   /* 버튼 공통 초기화 — :where()라 specificity 0, 개별 버튼 스타일이 항상 덮어씀 */
   :where(
     .trash-toggle-btn,
@@ -60,6 +70,9 @@
     /* 메모 전용 — 손글씨체 대신 평범한 고딕체로 "메모 느낌"을 냄 */
     --font-note: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', sans-serif;
     --font-task: 'NostalgicMyoeunHeullim', 'OngleipKonkon', 'Gaegu', cursive, sans-serif;
+    /* 사용자가 입력한 글자가 보이는 곳 전용 — 이모지는 컬러 이모지 폰트로(위 @font-face 'UserEmoji') */
+    --font-user: 'UserEmoji', var(--font-task);
+    --font-user-note: 'UserEmoji', var(--font-note); /* 메모(노트) 본문용 */
 
     /* 호버로 펼쳐지고 접히는 것들의 공통 타이밍 — 마우스를 올리자마자 아이콘이
        우르르 뜨지 않게 아주 잠깐 기다렸다가(expand-delay) 펼치고, 뗄 땐 살짝
@@ -928,7 +941,7 @@
     height: 28px;
     margin: 0;
     padding: 0;
-    font-family: var(--font-task);
+    font-family: var(--font-user);
     font-size: 18px;
     line-height: 28px;
     color: var(--ink);
@@ -994,7 +1007,7 @@
   .search-item-text {
     flex: 0 1 auto;
     min-width: 0;
-    font-family: var(--font-task);
+    font-family: var(--font-user);
     font-size: 16px;
     line-height: 28px;
     overflow-wrap: anywhere;
@@ -1028,7 +1041,7 @@
   /* 하위/메모 미리보기도 한 줄 칸(28px)을 차지함 — 아이콘 폭만큼 들여씀 */
   .search-snippet {
     padding-left: 30px;
-    font-family: var(--font-note);
+    font-family: var(--font-user-note);
     font-size: 12px;
     line-height: 28px;
     color: var(--ink-soft);
@@ -1189,7 +1202,7 @@
 
   .revive-text-input {
     width: 100%;
-    font-family: var(--font-task);
+    font-family: var(--font-user);
     font-size: 16px;
     line-height: 1.3;
     color: var(--ink);
@@ -1220,7 +1233,7 @@
   .archive-item-text {
     flex: 1;
     min-width: 0;
-    font-family: var(--font-task);
+    font-family: var(--font-user);
     font-size: 16px;
     color: var(--ink-soft);
     text-decoration: line-through;
@@ -1661,7 +1674,7 @@
     /* 실제 할 일 텍스트를 보여주는 자리라 .task-text와 같은 폰트 스택을
        씀 — 다른 focus 버튼들(완료로 표시/분 선택 등)은 UI 액션 라벨이라
        auth-btn 등과 같은 순수 Gaegu를 그대로 씀. */
-    font-family: var(--font-task);
+    font-family: var(--font-user);
     font-size: 16px;
     color: var(--ink);
     padding: 8px 4px;
@@ -1729,7 +1742,7 @@
 
   .focus-picked-task {
     margin: 0;
-    font-family: var(--font-task);
+    font-family: var(--font-user);
     font-size: 20px;
     line-height: 1.35;
     text-align: center;
@@ -1743,7 +1756,7 @@
     display: block;
     width: 100%;
     margin: 0;
-    font-family: var(--font-task);
+    font-family: var(--font-user);
     font-size: 20px;
     line-height: 1.35;
     text-align: center;
@@ -1856,7 +1869,7 @@
   /* gotta do/waiting의 하위 항목 입력창처럼 밑줄 없이 */
   .focus-add-subtask-input {
     width: 90px;
-    font-family: var(--font-task);
+    font-family: var(--font-user);
     font-size: 14px;
     color: var(--ink);
     background: none;
@@ -1886,7 +1899,7 @@
   .focus-quick-add-input {
     flex: 1;
     min-width: 0;
-    font-family: var(--font-task);
+    font-family: var(--font-user);
     font-size: 18px;
     color: var(--ink);
     background: none;
@@ -2408,7 +2421,7 @@
 
   .task-text {
     position: relative;
-    font-family: var(--font-task);
+    font-family: var(--font-user);
     font-size: 19px;
     line-height: 1.3;
     flex: 1;
@@ -2419,7 +2432,7 @@
 
   .task-edit-input {
     flex: 1;
-    font-family: var(--font-task);
+    font-family: var(--font-user);
     font-size: 19px;
     line-height: 1.3;
     color: var(--ink);
@@ -2762,7 +2775,7 @@
   }
 
   .subtask-chip {
-    font-family: var(--font-task);
+    font-family: var(--font-user);
     font-size: 14px;
     line-height: 1.3;
     color: var(--ink-soft);
@@ -2771,7 +2784,7 @@
   }
 
   .subtask-edit-input {
-    font-family: var(--font-task);
+    font-family: var(--font-user);
     font-size: 14px;
     line-height: 1.3;
     color: var(--ink-soft);
@@ -2862,7 +2875,7 @@
     flex: 1;
     border: none;
     background: transparent;
-    font-family: var(--font-task);
+    font-family: var(--font-user);
     font-size: 14px;
     color: var(--ink-soft);
     outline: none;
@@ -2966,7 +2979,7 @@
      점선 위에 둠(자체 구분선 없음). 위 여백은 박스의 gap을 그대로 씀(상위/하위 항목 간격과 동일). 분홍 배경에서도 잘 읽히게 본문 색. */
   .focus-note {
     margin: 0;
-    font-family: var(--font-note);
+    font-family: var(--font-user-note);
     font-size: 13px;
     line-height: 1.4;
     color: var(--ink);
@@ -2979,7 +2992,7 @@
     width: 100%;
     box-sizing: border-box;
     margin: 0;
-    font-family: var(--font-note);
+    font-family: var(--font-user-note);
     font-size: 13px;
     line-height: 1.4;
     color: var(--ink);
@@ -3111,7 +3124,7 @@
   /* 메모 모달 */
   .note-view-title {
     margin: 0 0 6px;
-    font-family: var(--font-task);
+    font-family: var(--font-user);
     font-size: 19px;
     line-height: 1.3;
   }
@@ -3120,7 +3133,7 @@
     margin: 10px 0 0;
     padding-top: 8px;
     border-top: 1px dashed var(--focus-box-border);
-    font-family: var(--font-note);
+    font-family: var(--font-user-note);
     font-size: 13px;
     line-height: 1.45;
     white-space: pre-wrap;
@@ -3135,7 +3148,7 @@
     field-sizing: content;
     min-width: 3em;
     max-width: 100%;
-    font-family: var(--font-task);
+    font-family: var(--font-user);
     font-size: 14px;
     line-height: 1.3;
     color: var(--ink-soft);
@@ -3151,7 +3164,7 @@
     box-sizing: border-box;
     margin-top: 8px;
     padding: 6px 8px;
-    font-family: var(--font-note);
+    font-family: var(--font-user-note);
     font-size: 13px;
     line-height: 1.4;
     color: var(--ink);
@@ -3396,7 +3409,7 @@
     min-width: 0;
     border: none;
     background: transparent;
-    font-family: var(--font-task);
+    font-family: var(--font-user);
     font-size: 18px;
     color: var(--ink);
     outline: none;
@@ -3453,6 +3466,7 @@
   }
 
   .memo-title-text {
+    font-family: var(--font-user);
     flex: 1;
     min-width: 0;
     overflow-wrap: anywhere;
@@ -3484,7 +3498,7 @@
   .memo-text {
     white-space: pre-wrap;
     overflow-wrap: anywhere;
-    font-family: var(--font-task);
+    font-family: var(--font-user);
     font-size: 18px;
     line-height: 1.45;
     color: var(--ink);
@@ -3528,7 +3542,7 @@
     border: 1px solid var(--input-line);
     border-radius: 4px;
     background: color-mix(in srgb, var(--ink) 8%, transparent);
-    font-family: var(--font-task);
+    font-family: var(--font-user);
     color: var(--ink);
     outline: none;
     padding: 4px 6px;
@@ -4297,7 +4311,7 @@ body.reorder-mode .sticky:not(.reorder-active) {
   border: none;
   border-bottom: 1px dashed var(--ink-soft);
   background: transparent;
-  font-family: var(--font-task);
+  font-family: var(--font-user);
   font-size: 14px;
   color: var(--ink-soft);
   outline: none;
@@ -4585,7 +4599,7 @@ body.reorder-mode .sticky:not(.reorder-active) {
   list-style: none;
   margin: 0;
   padding: 0;
-  font-family: var(--font-task);
+  font-family: var(--font-user);
   font-size: 15px;
   line-height: 1.4;
   color: var(--ink);
