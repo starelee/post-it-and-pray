@@ -2118,6 +2118,25 @@
     return document.querySelector('.task-item[data-id="' + id + '"]');
   }
 
+  // 항목이 접힌 구역(someday/pray later/waiting의 나중 구역) 안에 있으면 구역부터 펼침 — Alt+G처럼 눈에 보여야 하는 동작용.
+  function openCollapseHolding(el) {
+    const body = el && el.closest('[data-collapse-body]');
+    if (!body || !body.hidden) return;
+    Object.keys(collapseSections).forEach(key => {
+      if (collapseSections[key].body === body) collapseSections[key].setOpen(true);
+    });
+  }
+
+  // 새 항목 입력창/이름 수정 중 Alt+G — 그 항목의 🔗(묶기)를 누른 것과 같음
+  function startLinkFromShortcut(id) {
+    const li = findTaskLi(id);
+    if (!li) return;
+    const btn = li.querySelector('.group-btn');
+    if (!btn) return; // 묶을 수 없는 항목(lupin, 완료)
+    openCollapseHolding(li);
+    btn.click();
+  }
+
   // 데스크탑: 수정 중(입력창 포커스)에 같은 항목의 아이콘 버튼(긴급/+/🍅/날짜/
   // 대기/휴지통 등)을 누르면 mousedown에서 입력창이 blur되고, blur 핸들러가
   // 예약한 commit()+render()가 mouseup→click보다 먼저 돌아 버튼이 DOM에서
@@ -4460,6 +4479,10 @@
       } else if (e.key === 'Escape') {
         input.value = task.text;
         input.blur();
+      } else if (e.altKey && e.code === 'KeyG') {
+        e.preventDefault();
+        commit(); // 다시 그려진 뒤의 항목에서 🔗를 누름(Alt+D/E와 같은 이유)
+        startLinkFromShortcut(id);
       } else if (e.altKey && (e.code === 'KeyD' || e.code === 'KeyE')) {
         e.preventDefault();
         // Opening the date row (or clicking urgent) re-renders the list —
@@ -6408,7 +6431,7 @@
       // D/E가 들어간 텍스트를 아예 칠 수 없어서(입력창이 비어있을 때만
       // 봐줘도 첫 글자가 D/E인 경우엔 여전히 충돌) Alt 조합으로 변경 —
       // 일반 타이핑으로는 절대 나오지 않는 조합이라 텍스트와 안 겹침.
-      if ((e.altKey && e.code === 'KeyD') || (e.altKey && e.code === 'KeyE')) {
+      if (e.altKey && (e.code === 'KeyD' || e.code === 'KeyE' || e.code === 'KeyG')) {
         // 아직 등록 안 하고 치고 있던 텍스트가 있으면 Shift+Enter처럼 먼저
         // 상위 항목으로 등록함 — 안 그러면 지금 치는 중인 게 아니라
         // 세션에서 마지막으로 등록됐던 예전 항목이 대상이 돼서 헷갈림.
@@ -6425,6 +6448,14 @@
         if (laterSection && laterSection.hidden && collapseSections.waitingLater) collapseSections.waitingLater.setOpen(true);
         const dateBtn = li && li.querySelector('.date-btn');
         if (dateBtn) dateBtn.click();
+        return;
+      }
+      if (e.altKey && e.code === 'KeyG') {
+        const target = getShortcutTargetTask(boardId);
+        if (!target) return;
+        e.preventDefault();
+        input.blur();
+        startLinkFromShortcut(target.id);
         return;
       }
       if (e.altKey && e.code === 'KeyE') {
@@ -7703,6 +7734,21 @@
     }
   }
 
+  // m: s/p와 같은 열기/포커스/닫기 3단 규칙 — 접힌 메모 보드를 열고, 방금 열린 직후면 새 메모 입력창 포커스,
+  // 한참 전에 열려 있었으면 닫음. 7개가 차서 입력창이 잠겼으면 포커스 대신 안내만 띄움.
+  function handleMemoShortcut() {
+    const section = collapseSections.memo;
+    if (!section) return;
+    if (section.body.hidden) {
+      section.setOpen(true);
+    } else if (Date.now() - section.setOpen.openedAt < REOPEN_VS_CLOSE_MS) {
+      if (memoNewInput && !memoNewInput.disabled) memoNewInput.focus();
+      else showToast('메모는 ' + MEMO_MAX + '개까지예요 · 하나를 지우면 적을 수 있어요');
+    } else {
+      section.setOpen(false);
+    }
+  }
+
   document.addEventListener('keydown', (e) => {
     if (e.metaKey || e.ctrlKey || e.altKey) return;
     const active = document.activeElement;
@@ -7762,6 +7808,12 @@
     if (e.code === 'KeyP') {
       e.preventDefault();
       handlePrayLaterShortcut();
+      return;
+    }
+
+    if (e.code === 'KeyM') {
+      e.preventDefault();
+      handleMemoShortcut();
       return;
     }
 
