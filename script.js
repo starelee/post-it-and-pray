@@ -2228,7 +2228,8 @@
     if (!body || !body.hasAttribute('data-collapse-body')) return;
     const setOpen = wireCollapseToggle(toggle, body, false, COLLAPSE_AUTO_CLOSE_MS);
     const listEl = body.querySelector('[data-tasklist]');
-    if (listEl) collapseSections[listEl.dataset.tasklist] = { body, setOpen };
+    const key = listEl ? listEl.dataset.tasklist : body.dataset.collapseKey; // memo 보드는 할 일 목록이 없어 data-collapse-key로 등록
+    if (key) collapseSections[key] = { body, setOpen };
   });
 
   // 글자를 입력하는 칸(제목 수정, 하위 항목 추가/수정, 새 항목 입력 등)에 포커스가 있는 동안
@@ -2258,6 +2259,7 @@
       if (collapseSections.someday) collapseSections.someday.setOpen(false);
       if (collapseSections.scheduled) collapseSections.scheduled.setOpen(false);
       if (collapseSections.waitingLater) collapseSections.waitingLater.setOpen(false);
+      if (collapseSections.memo) collapseSections.memo.setOpen(false);
       window.scrollTo({ top: 0, behavior: 'smooth' });
     });
   }
