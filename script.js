@@ -7703,6 +7703,21 @@
     }
   }
 
+  // m: s/p와 같은 열기/포커스/닫기 3단 규칙 — 접힌 메모 보드를 열고, 방금 열린 직후면 새 메모 입력창 포커스,
+  // 한참 전에 열려 있었으면 닫음. 7개가 차서 입력창이 잠겼으면 포커스 대신 안내만 띄움.
+  function handleMemoShortcut() {
+    const section = collapseSections.memo;
+    if (!section) return;
+    if (section.body.hidden) {
+      section.setOpen(true);
+    } else if (Date.now() - section.setOpen.openedAt < REOPEN_VS_CLOSE_MS) {
+      if (memoNewInput && !memoNewInput.disabled) memoNewInput.focus();
+      else showToast('메모는 ' + MEMO_MAX + '개까지예요 · 하나를 지우면 적을 수 있어요');
+    } else {
+      section.setOpen(false);
+    }
+  }
+
   document.addEventListener('keydown', (e) => {
     if (e.metaKey || e.ctrlKey || e.altKey) return;
     const active = document.activeElement;
@@ -7762,6 +7777,12 @@
     if (e.code === 'KeyP') {
       e.preventDefault();
       handlePrayLaterShortcut();
+      return;
+    }
+
+    if (e.code === 'KeyM') {
+      e.preventDefault();
+      handleMemoShortcut();
       return;
     }
 
