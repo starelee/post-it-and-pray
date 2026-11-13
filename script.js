@@ -242,7 +242,7 @@
     let lastPointer = '';
     el.addEventListener('pointerdown', (e) => { lastPointer = e.pointerType; });
     return (e) => {
-      const viaMouse = lastPointer === 'mouse' && e.detail > 0;
+      const viaMouse = (lastPointer === 'mouse' && e.detail > 0) || !!(e.currentTarget && e.currentTarget.dataset && e.currentTarget.dataset.retryViaMouse);
       lastPointer = '';
       return viaMouse;
     };
@@ -2261,7 +2261,13 @@
     li._activeEditCommit();
     const freshLi = findTaskLi(id);
     const freshBtn = freshLi && freshLi.querySelectorAll('button')[index];
-    if (freshBtn) freshBtn.click();
+    if (freshBtn) {
+      // 원래 클릭이 마우스였으면 재발사한 클릭도 그렇다고 알림 — 날짜 버튼이 마우스일 땐 달력을 자동으로 안 띄움(trackMouseClick)
+      const viaMouse = e.detail > 0 && e.pointerType !== 'touch' && e.pointerType !== 'pen';
+      if (viaMouse) freshBtn.dataset.retryViaMouse = '1';
+      freshBtn.click();
+      delete freshBtn.dataset.retryViaMouse;
+    }
   }, true);
 
   // 상위 항목 텍스트가 지금 편집 중(startEditTask로 만든 입력창이 살아
@@ -2274,13 +2280,18 @@
   // 맨 앞에서 먼저 이 함수로 커밋을 앞당기고, 새로 그려진 li에서 같은
   // 버튼을 다시 찾아 클릭을 재발사함(Alt+D/E 단축키가 이미 쓰던 방식과
   // 동일) — 처리했으면 true를 돌려주므로 호출 쪽은 자기 로직을 건너뜀.
-  function commitPendingEditThenRetry(li, taskId, selector) {
+  // viaMouse: 원래 클릭이 마우스였으면 다시 누를 때도 그렇게 알림(날짜 버튼이 마우스일 땐 달력을 자동으로 안 띄우므로)
+  function commitPendingEditThenRetry(li, taskId, selector, viaMouse) {
     const commit = li._activeEditCommit;
     if (!commit) return false;
     commit();
     const freshLi = findTaskLi(taskId);
     const freshEl = freshLi && freshLi.querySelector(selector);
-    if (freshEl) freshEl.click();
+    if (freshEl) {
+      if (viaMouse) freshEl.dataset.retryViaMouse = '1';
+      freshEl.click();
+      delete freshEl.dataset.retryViaMouse;
+    }
     return true;
   }
 
@@ -3687,14 +3698,14 @@
       const dateBtnMouse = trackMouseClick(dateBtn);
       dateBtn.addEventListener('click', (e) => {
         const viaMouse = dateBtnMouse(e);
-        if (commitPendingEditThenRetry(li, task.id, '.date-btn')) return;
+        if (commitPendingEditThenRetry(li, task.id, '.date-btn', viaMouse)) return;
         toggleDateRow(viaMouse);
       });
       if (badge) {
         const badgeMouse = trackMouseClick(badge);
         badge.addEventListener('click', (e) => {
           const viaMouse = badgeMouse(e);
-          if (commitPendingEditThenRetry(li, task.id, '.due-badge')) return;
+          if (commitPendingEditThenRetry(li, task.id, '.due-badge', viaMouse)) return;
           toggleDateRow(viaMouse);
         });
       }
@@ -3702,7 +3713,7 @@
         const deadlineBadgeMouse = trackMouseClick(deadlineBadge);
         deadlineBadge.addEventListener('click', (e) => {
           const viaMouse = deadlineBadgeMouse(e);
-          if (commitPendingEditThenRetry(li, task.id, '.deadline-badge')) return;
+          if (commitPendingEditThenRetry(li, task.id, '.deadline-badge', viaMouse)) return;
           toggleDateRow(viaMouse);
         });
       }
