@@ -2986,23 +2986,28 @@
     color: var(--accent);
   }
 
-  /* 날짜 행 안의 둘째 줄 — 수행일 칸 아래에 마감일 칸 */
-  .date-picker-row {
-    flex-wrap: wrap;
+  /* 날짜 행(수행일/마감일 두 줄) — 라벨 열을 맞춰 두 줄이 같은 틀로 보이게 함.
+     .date-picker-rows는 항목 날짜 행과 새 항목 초안 행에만 붙음(되살리기 모달 등 한 줄짜리는 그대로). */
+  .date-picker-row.date-picker-rows {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
   }
 
-  .deadline-field {
-    flex: 0 0 100%;
+  .date-line {
     display: flex;
     align-items: center;
+    flex-wrap: wrap;
     gap: 8px;
   }
 
-  .deadline-field[hidden] {
+  .date-line[hidden] {
     display: none;
   }
 
-  .deadline-field-label {
+  .date-line-label {
+    flex: 0 0 auto;
+    min-width: 4.2em;
     font-family: var(--font-ui);
     letter-spacing: var(--ui-letter-spacing);
     font-size: 12px;
