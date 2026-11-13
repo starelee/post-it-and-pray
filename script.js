@@ -67,7 +67,20 @@
   // 타이머 종이색이 빨갛게 변하기 시작하는 남은 시간(초).
   const FOCUS_URGENT_SEC = 60;
   const FOCUS_SHAKE_SEC = 10;
-  const SNOOZE_DAYS = 3; // '오래 묵은 것'에서 '그대로 두기'(미루기)를 누르면 이만큼 다시 안 올라옴
+  // '아니오'로 미루기 — snoozedAt에 미룬 날을 남기고, 얼마나 쉬는지는 snoozeKind가 정함:
+  //   (없음) = 3일(SNOOZE_DAYS, 예전 데이터와 같음) / 'week' = 다음 주 월요일까지 / 'rest' = 내일까지(날짜 기반 질문)
+  const SNOOZE_DAYS = 3;
+  const SNOOZE_REST_DAYS = 2; // 'rest': 오늘과 내일 쉬고 모레 다시 물음
+  function nextMondayAfter(dateStr) {
+    const d = new Date(dateStr + 'T00:00:00');
+    d.setDate(d.getDate() + (((8 - d.getDay()) % 7) || 7));
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  }
+  function isSnoozed(task) {
+    if (!task.snoozedAt) return false;
+    if (task.snoozeKind === 'week') return todayStr() < nextMondayAfter(task.snoozedAt);
+    return -daysUntilDue(task.snoozedAt) < (task.snoozeKind === 'rest' ? SNOOZE_REST_DAYS : SNOOZE_DAYS);
+  }
   // 구글 캘린더(브라우저 OAuth — Google Identity Services). 비워 두면 캘린더 기능은 통째로 숨겨짐(앱 동작에 영향 없음).
   // Google Cloud에서 만든 "웹 애플리케이션" OAuth 클라이언트 ID(공개값)를 넣으면 켜짐 — 설정 방법은 README의 '구글 캘린더' 참고.
   const GOOGLE_CLIENT_ID = '201633401717-qhkf30g8lv9h9s212425mat3gv4702i1.apps.googleusercontent.com';
@@ -1061,7 +1074,7 @@
     const considerStale = (task, boardId) => {
       if (seen.has(task.id)) return;
       if (boardId === 'waiting' && task.replyDate && task.replyDate > today) return; // 일부러 미뤄 둔 것
-      if (task.snoozedAt && -daysUntilDue(task.snoozedAt) < SNOOZE_DAYS) return; // 방금 '그대로 두기'로 미룬 것
+      if (isSnoozed(task)) return; // 방금 '그대로 두기'로 미룬 것
       const touched = task.updatedAt || (task.id > 1e12 ? task.id : 0);
       if (!touched) return;
       const days = Math.floor((Date.now() - touched) / 86400000);
@@ -1314,7 +1327,10 @@
       if (typeof t.from === 'string' && t.from) out.from = t.from;
       if (typeof t.order === 'number' && isFinite(t.order)) out.order = t.order;
       if (typeof t.group === 'number' && isFinite(t.group)) out.group = t.group;
-      if (typeof t.snoozedAt === 'string' && t.snoozedAt) out.snoozedAt = t.snoozedAt;
+      if (typeof t.snoozedAt === 'string' && t.snoozedAt) {
+        out.snoozedAt = t.snoozedAt;
+        if (t.snoozeKind === 'week' || t.snoozeKind === 'rest') out.snoozeKind = t.snoozeKind;
+      }
       if (t.todaySlot && t.todaySlot.date === todayStr() && Number.isInteger(t.todaySlot.index) && t.todaySlot.index >= 0) out.todaySlot = { date: t.todaySlot.date, index: t.todaySlot.index }; // 같은 날만 기억 — 다음 날이면 버림
       if (typeof t.deletedAt === 'string' && t.deletedAt) out.deletedAt = t.deletedAt;
       if (typeof t.updatedAt === 'number' && isFinite(t.updatedAt)) out.updatedAt = t.updatedAt;
@@ -2091,7 +2107,7 @@
     const sigs = new Map();
     BOARD_IDS.concat(['archive', 'lupin', 'trash']).forEach(boardId => {
       (boards[boardId] || []).forEach(t => {
-        const { updatedAt, snoozedAt, ...rest } = t; // 미루기는 '손댄' 것으로 치지 않음
+        const { updatedAt, snoozedAt, snoozeKind, ...rest } = t; // 미루기는 '손댄' 것으로 치지 않음
         sigs.set(t.id, boardId + '|' + JSON.stringify(rest));
       });
     });
@@ -2112,7 +2128,7 @@
     const sigs = new Map();
     BOARD_IDS.concat(['archive', 'lupin', 'trash']).forEach(boardId => {
       (boards[boardId] || []).forEach(t => {
-        const { updatedAt, snoozedAt, scheduledSetAt, ...rest } = t; // 미루기·마감일 정한 날은 '손댄' 것으로 치지 않음
+        const { updatedAt, snoozedAt, snoozeKind, scheduledSetAt, ...rest } = t; // 미루기·수행일 정한 날은 '손댄' 것으로 치지 않음
         const sig = boardId + '|' + JSON.stringify(rest);
         sigs.set(t.id, sig);
         if (lastSigs.get(t.id) !== sig) t.updatedAt = now;
@@ -5144,6 +5160,7 @@
     delete task.replyDate; // 회신 예정일은 waiting에 있을 때만 의미 있음
     delete task.from;
     delete task.snoozedAt;
+    delete task.snoozeKind;
     delete task.order;
     boards.today.push(task);
     await toggleTask('today', id, { skipConfirm: true }); // 하위 항목 완료 · done 표시 · 저장 · 취소선 연출
@@ -5290,6 +5307,7 @@
     delete task.replyDate; // 회신 예정일은 waiting에 있을 때만 의미 있음
     delete task.from;
     delete task.snoozedAt; // 미루기는 묵은 것 목록 안에서만 의미 있음
+    delete task.snoozeKind;
     delete task.order; // 수동 순서는 그 보드 안에서만 의미 있음
     const savedSlot = task.todaySlot;
     delete task.todaySlot;
@@ -8117,7 +8135,6 @@
   const DAYSTART_LEAVES_TODAY = ['toSomeday', 'drop', 'done', 'later', 'merge'];
   const DAYSTART_SCHEDULED_SOON_MAX = 3;   // '내일 예정인데, 오늘 미리 시작할래요?'는 한 번에 수행일이 빠른 순으로 이만큼까지만(금요일엔 주말·월요일 예정까지)
   const DAYSTART_SCHEDULED_SET_RECENT = 3; // 수행일을 정한 지 이만큼(일) 안이면 이미 알고 있는 일이라 안 물음
-  const DAYSTART_DATE_REST_DAYS = 2;       // 날짜가 정하는 질문에 '아니오'면 이만큼(오늘+내일) 안 물음 — 단 마감 D-1 이내·지난 마감은 쉬지 않음
   // 오늘 이미 일이 이만큼 많으면 '마감이 곧 다가와요' 질문은 안 물음(모레 마감은 BUSY, 내일 마감은 한도까지 봐줌)
   const DAYSTART_BUSY_TODAY = 5;
   const DAYSTART_BIG_OVERDUE = 7;          // 마감이 이만큼 넘게 지났으면 '다시 잡을래요?'
@@ -8491,19 +8508,15 @@
     { key: 'stale' },
     { key: 'carry' }
   ];
-  // '아니오'를 누르면 내일까지 쉬는(DAYSTART_DATE_REST_DAYS) 날짜 기반 질문. 날짜를 고치지 않으면 매일 떠서 번거로웠음.
-  // 마감 D-1 이내·지난 마감은 item.noRest라 쉬지 않음(마감 당일에 질문이 사라지면 안 되므로).
-  const DAYSTART_REST_GROUPS = ['scheduledLate', 'replyLate', 'replyToday', 'scheduledSoon', 'deadlineNear', 'deadlineLate', 'deadlineConflict'];
 
   const dsNorm = (text) => String(text || '').replace(/\s+/g, ' ').trim().toLowerCase();
   const dsTouched = (t) => t.updatedAt || (t.id > 1e12 ? t.id : 0);
   const dsAgeDays = (t) => { const x = dsTouched(t); return x ? Math.floor((Date.now() - x) / 86400000) : 0; };
-  const dsSnoozed = (t) => !!t.snoozedAt && -daysUntilDue(t.snoozedAt) < SNOOZE_DAYS;
-  // 이 질문을 지금 물어도 되는지 — 날짜 기반 질문은 짧게(내일까지), 나머지는 SNOOZE_DAYS 동안 쉼
+  const dsSnoozed = isSnoozed;
+  // 이 질문을 지금 물어도 되는지 — 쉬는 기간은 항목의 snoozeKind가 정함(3일/다음 주/내일까지). noRest는 마감 D-1 이내·지난 마감
   function dsAskable(it) {
     if (it.noRest || !it.task.snoozedAt) return true;
-    const window = DAYSTART_REST_GROUPS.includes(it.group) ? DAYSTART_DATE_REST_DAYS : SNOOZE_DAYS;
-    return !(-daysUntilDue(it.task.snoozedAt) < window);
+    return !isSnoozed(it.task);
   }
 
   // 오늘 다음에 오는 월요일(마감을 '다음 주로' 다시 잡을 때)
@@ -8645,7 +8658,7 @@
       if (byTask.has(newer.task.id)) return;
       push({ task: newer.task, boardId: newer.boardId, tags: [], group: 'dup', dupOf: older.task });
     });
-    // 방금 '아니오'로 쉬게 한 것은 잠시 건너뜀(날짜 기반 질문은 내일까지, 나머지는 SNOOZE_DAYS)
+    // 방금 '아니오'로 쉬게 한 것은 잠시 건너뜀(쉬는 기간은 항목의 snoozeKind가 정함)
     const rank = rankOf;
     return items
       .filter(dsAskable)
@@ -8659,7 +8672,7 @@
   function dsQuestionBase(item) {
     const t = item.task;
     const noop = { action: 'keep' };
-    const snooze = { action: 'keep', snooze: true }; // 아니오 = SNOOZE_DAYS일 미루기(계속 안 묻게)
+    const snooze = { action: 'keep', snooze: true }; // 아니오 = 3일 뒤에 다시 묻기(계속 안 묻게) — 대안으로 '다음 주에 다시 묻기'도 고를 수 있음
     const rest = { action: 'keep', snooze: 'rest' }; // 아니오 = 내일까지 안 묻기(날짜 기반 질문)
     // 지금 gotta do 카드에 보이는 항목인지(일반 today + 오늘 이하 수행일의 scheduled)
     const inTodayCard = item.boardId === 'today' || (item.boardId === 'scheduled' && t.scheduledDate && t.scheduledDate <= todayStr());
@@ -8732,7 +8745,7 @@
     }
   }
 
-  // '아니오'를 누르면 같은 카드에서 보여줄 대안들. 마지막에는 늘 '그대로 두기'(또는 3일 미루기)가 따로 붙음.
+  // '아니오'를 누르면 같은 카드에서 보여줄 대안들. 마지막에는 늘 '그대로 두기'(또는 3일 뒤/다음 주에 다시 묻기)가 따로 붙음.
   function dsAlternatives(item) {
     const tomorrow = { label: '내일로 미루기', patch: { action: 'later', date: tomorrowStr() } };
     const nextWeek = { label: '다음 주로 미루기', patch: { action: 'later', date: dsNextMonday() } };
@@ -8979,7 +8992,7 @@
 
   // ───── 변경 요약 ─────
   function dsSummary() {
-    const c = { today: 0, done: 0, follow: 0, someday: 0, snooze: 0, rest: 0, deadline: 0, urgent: 0, later: 0, reply: 0, merge: 0, repeat: 0, top: 0, unurgent: 0, waiting: 0, cleared: 0, drop: 0 };
+    const c = { today: 0, done: 0, follow: 0, someday: 0, snooze: 0, week: 0, rest: 0, deadline: 0, urgent: 0, later: 0, reply: 0, merge: 0, repeat: 0, top: 0, unurgent: 0, waiting: 0, cleared: 0, drop: 0 };
     const count = (d) => {
       const a = d.action;
       if (a === 'today') c.today++;
@@ -8998,6 +9011,7 @@
       else if (a === 'toWaiting') c.waiting++;
       else if (a === 'setDeadline' || a === 'clearDeadline') c.deadline++;
       else if (a === 'keep' && d.snooze === 'rest') c.rest++;
+      else if (a === 'keep' && d.snooze === 'week') c.week++;
       else if (a === 'keep' && d.snooze) c.snooze++;
     };
     Object.keys(ds.decisions).forEach(id => {
@@ -9034,6 +9048,7 @@
     if (c.top) parts.push('맨 위로 ' + c.top);
     if (postponed) parts.push('미룸 ' + postponed);
     if (c.snooze) parts.push(SNOOZE_DAYS + '일 미루기 ' + c.snooze);
+    if (c.week) parts.push('다음 주에 다시 묻기 ' + c.week);
     if (c.rest) parts.push('내일까지 안 묻기 ' + c.rest);
     if (newTask) parts.push('새 할 일 ' + newTask);
     if (orderChanged) parts.push('순서 제안');
@@ -9251,7 +9266,7 @@
       case 'toWaiting': return '대기중으로';
       case 'clearDate':
       case 'clearReply': return '날짜 지움';
-      default: return d.snooze === 'rest' ? '내일까지 안 묻기' : (d.snooze ? SNOOZE_DAYS + '일 뒤에 다시 묻기' : '그대로 둠');
+      default: return d.snooze === 'rest' ? '내일까지 안 묻기' : (d.snooze === 'week' ? '다음 주에 다시 묻기' : (d.snooze ? SNOOZE_DAYS + '일 뒤에 다시 묻기' : '그대로 둠'));
     }
   }
 
@@ -9370,6 +9385,8 @@
       btns.classList.add('has-alts');
       // 가장 많이 누르는 '그대로 두기'(또는 3일 뒤에 다시 묻기)를 맨 앞에 둠
       [{ label: q.no.snooze === 'rest' ? '내일까지 안 묻기' : (q.no.snooze ? SNOOZE_DAYS + '일 뒤에 다시 묻기' : '그대로 두기'), patch: null }]
+        // 3일 미루기 질문에는 '다음 주에 다시 묻기'도 같이 — 며칠마다 다시 묻는 게 번거로울 때
+        .concat(q.no.snooze === true ? [{ label: '다음 주에 다시 묻기', patch: { action: 'keep', snooze: 'week' } }] : [])
         .concat(q.alts.map(a => ({ label: a.label, patch: a.patch, pickDate: a.pickDate, pickAction: a.pickAction, pickLabel: a.pickLabel, pickMoved: a.pickMoved, pickAllowToday: a.pickAllowToday })))
         .forEach(o => {
           const b = dsSmallButton('confirm-btn-cancel day-start__alt', o.label, () => {});
@@ -9887,6 +9904,7 @@
 
   function dsScrub(task) {
     delete task.snoozedAt;
+    delete task.snoozeKind;
     delete task.scheduledDate;
     delete task.replyDate;
     delete task.from;
@@ -10102,7 +10120,12 @@
         members.forEach(m => {
           if (m.d.action === 'keep') {
             // 아니오(미루기) = 미룬 날짜만 남김(updatedAt은 안 건드려 '손댄 때'와 섞이지 않음)
-            if (m.d.snooze) { m.item.task.snoozedAt = today; changed = true; }
+            if (m.d.snooze) {
+              m.item.task.snoozedAt = today;
+              if (m.d.snooze === 'week' || m.d.snooze === 'rest') m.item.task.snoozeKind = m.d.snooze;
+              else delete m.item.task.snoozeKind; // true = 기본 3일
+              changed = true;
+            }
             return;
           }
           dsApplyOne(m.item, m.d, counter, newTasks);
