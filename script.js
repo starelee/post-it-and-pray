@@ -203,10 +203,12 @@
   const DEADLINE_DDAY_STYLE_DAYS = 3;
   const DEADLINE_DDAY_STYLE_DAYS_FRIDAY = 4;
   const DEADLINE_ALWAYS_VISIBLE_DAYS = 4;
+  function deadlineDdayLimit() {
+    return new Date().getDay() === 5 ? DEADLINE_DDAY_STYLE_DAYS_FRIDAY : DEADLINE_DDAY_STYLE_DAYS;
+  }
   function deadlineLabel(dateStr) {
     const n = daysUntilDue(dateStr);
-    const ddayLimit = new Date().getDay() === 5 ? DEADLINE_DDAY_STYLE_DAYS_FRIDAY : DEADLINE_DDAY_STYLE_DAYS;
-    if (n <= ddayLimit) return n === 0 ? 'D-day' : (n > 0 ? 'D-' + n : 'D+' + (-n));
+    if (n <= deadlineDdayLimit()) return n === 0 ? 'D-day' : (n > 0 ? 'D-' + n : 'D+' + (-n));
     const d = new Date(dateStr + 'T00:00:00');
     return (d.getMonth() + 1) + '/' + d.getDate() + '(' + WEEKDAY_KO[d.getDay()] + ')';
   }
@@ -1023,23 +1025,28 @@
     const watch = [];
     const consider = (task, boardId) => {
       const tags = [];
+      const reasons = []; // 하루 시작하기가 질문 그룹을 가르는 근거 — tags는 화면에 보이는 글자일 뿐 키로 쓰지 않음
       let overdue = 0;
       let isToday = false;
       const dateKey = boardId === 'waiting' ? 'replyDate' : 'scheduledDate';
       const label = boardId === 'waiting' ? '회신' : '예정';
       if (task[dateKey]) {
         const past = -daysUntilDue(task[dateKey]);
-        if (past > 0) { tags.push(label + ' ' + past + '일 지남'); overdue = past; }
-        else if (past === 0) { tags.push('오늘 ' + label); isToday = true; }
+        if (past > 0) { tags.push(label + ' ' + past + '일 지남'); reasons.push({ kind: boardId === 'waiting' ? 'replyLate' : 'scheduledLate', days: past }); overdue = past; }
+        else if (past === 0) { tags.push('오늘 ' + label); reasons.push({ kind: boardId === 'waiting' ? 'replyToday' : 'scheduledToday' }); isToday = true; }
       }
       // 하루 시작하기에서만: 하위 항목 마무리는 지금 신경 쓸 때만 묻기(someday는 안 묻고, pray later는 마감이 내일 이내일 때만). 검색 제안은 그대로
       const checklistDue = !all ? true
         : boardId === 'someday' ? false
         : boardId === 'scheduled' ? !!task.scheduledDate && daysUntilDue(task.scheduledDate) <= 1
         : true;
-      if (checklistDue) suggestChecklistTags(task).forEach(t => tags.push(t));
+      if (checklistDue) {
+        const ct = suggestChecklistTags(task);
+        ct.forEach(t => tags.push(t));
+        if (ct.length) reasons.push({ kind: 'checklist' });
+      }
       if (!tags.length) return;
-      watch.push({ task, boardId, tags, rank: overdue ? 0 : (isToday ? 1 : 2), overdue });
+      watch.push({ task, boardId, tags, reasons, rank: overdue ? 0 : (isToday ? 1 : 2), overdue });
     };
     boards.today.filter(t => !t.done).forEach(t => consider(t, 'today'));
     boards.waiting.forEach(t => consider(t, 'waiting'));
@@ -8108,10 +8115,9 @@
   const DAYSTART_FOLLOW_DAYS = 3;          // 후속 연락을 고르면 원본의 다음 확인 날짜를 이만큼 뒤로
   // 이 처리를 고르면 gotta do 목록에서 빠짐
   const DAYSTART_LEAVES_TODAY = ['toSomeday', 'drop', 'done', 'later', 'merge'];
-  const DAYSTART_DUE_SOON_DAYS = 2;        // 마감이 이만큼 안으로 다가오면 '오늘 미리 시작할래요?'(모레는 금요일에 일요일 마감일 때만)
-  const DAYSTART_DUE_SOON_MAX = 3;         // 그 질문은 한 번에 마감이 빠른 순으로 이만큼까지만
-  const DAYSTART_DUE_TODAY_MAX = 3;        // '오늘 마감인데, 긴급건으로 처리할래요?'는 한 번에 이만큼까지만
-  const DAYSTART_DUE_SET_RECENT = 3;       // 마감일을 정한 지 이만큼(일) 안이면 이미 알고 있는 일이라 안 물음
+  const DAYSTART_SCHEDULED_SOON_MAX = 3;   // '내일 예정인데, 오늘 미리 시작할래요?'는 한 번에 수행일이 빠른 순으로 이만큼까지만(금요일엔 주말·월요일 예정까지)
+  const DAYSTART_SCHEDULED_SET_RECENT = 3; // 수행일을 정한 지 이만큼(일) 안이면 이미 알고 있는 일이라 안 물음
+  const DAYSTART_DATE_REST_DAYS = 2;       // 날짜가 정하는 질문에 '아니오'면 이만큼(오늘+내일) 안 물음 — 단 마감 D-1 이내·지난 마감은 쉬지 않음
   // 오늘 이미 일이 이만큼 많으면 '마감이 곧 다가와요' 질문은 안 물음(모레 마감은 BUSY, 내일 마감은 한도까지 봐줌)
   const DAYSTART_BUSY_TODAY = 5;
   const DAYSTART_BIG_OVERDUE = 7;          // 마감이 이만큼 넘게 지났으면 '다시 잡을래요?'
@@ -8464,14 +8470,20 @@
   // 정비 대상 — 검색 제안과 같은 선정 규칙(개수 제한·무작위 없이 전부) + 오늘 목록에 오래 남은 것.
   // 왜 올라왔는지를 group으로 나눠 두고, group마다 질문 규칙이 하나씩 있음(아래 dsQuestionFor).
   // 한 항목이 여러 이유에 걸리면 더 급한 쪽 group에 한 번만 들어감.
+  // 순서 = 급한 순(질문 목록 순서이자 한 항목이 여러 이유에 걸릴 때 들어갈 group). reason이 있는 것은
+  // collectSuggestions가 만든 reasons[].kind로 가르고(화면 문구와 무관), 없는 것은 dsTidyItems가 직접 정함.
+  //  - scheduled* = 수행 예정일("그날 하겠다"), deadline* = 마감일("그날까지 해야 한다")
+  //  - '오늘 예정'(scheduledToday)만으로는 묻지 않음 — 수행일이 오늘인 건 이미 오늘 할 일이라 물을 게 없음
   const DAYSTART_GROUPS = [
-    { key: 'dueLate', test: t => /^예정 \d+일 지남$/.test(t) },
-    { key: 'replyLate', test: t => /^회신 \d+일 지남$/.test(t) },
+    { key: 'deadlineLate' },
+    { key: 'scheduledLate', reason: 'scheduledLate' },
+    { key: 'replyLate', reason: 'replyLate' },
+    { key: 'deadlineNear' },
     { key: 'urgentOld' },
-    { key: 'dueToday', test: t => t === '오늘 예정' },
-    { key: 'replyToday', test: t => t === '오늘 회신' },
-    { key: 'dueSoon' },
-    { key: 'finish', test: t => /^하위 /.test(t) },
+    { key: 'replyToday', reason: 'replyToday' },
+    { key: 'deadlineConflict' },
+    { key: 'scheduledSoon' },
+    { key: 'finish', reason: 'checklist' },
     { key: 'noReply' },
     { key: 'waitIdle' },
     { key: 'dup' },
@@ -8479,12 +8491,20 @@
     { key: 'stale' },
     { key: 'carry' }
   ];
-  const DAYSTART_DATE_DRIVEN = ['dueToday', 'replyToday', 'replyLate']; // 날짜가 정하는 것 — 미루기(snooze)와 무관하게 늘 물음
+  // '아니오'를 누르면 내일까지 쉬는(DAYSTART_DATE_REST_DAYS) 날짜 기반 질문. 날짜를 고치지 않으면 매일 떠서 번거로웠음.
+  // 마감 D-1 이내·지난 마감은 item.noRest라 쉬지 않음(마감 당일에 질문이 사라지면 안 되므로).
+  const DAYSTART_REST_GROUPS = ['scheduledLate', 'replyLate', 'replyToday', 'scheduledSoon', 'deadlineNear', 'deadlineLate', 'deadlineConflict'];
 
   const dsNorm = (text) => String(text || '').replace(/\s+/g, ' ').trim().toLowerCase();
   const dsTouched = (t) => t.updatedAt || (t.id > 1e12 ? t.id : 0);
   const dsAgeDays = (t) => { const x = dsTouched(t); return x ? Math.floor((Date.now() - x) / 86400000) : 0; };
   const dsSnoozed = (t) => !!t.snoozedAt && -daysUntilDue(t.snoozedAt) < SNOOZE_DAYS;
+  // 이 질문을 지금 물어도 되는지 — 날짜 기반 질문은 짧게(내일까지), 나머지는 SNOOZE_DAYS 동안 쉼
+  function dsAskable(it) {
+    if (it.noRest || !it.task.snoozedAt) return true;
+    const window = DAYSTART_REST_GROUPS.includes(it.group) ? DAYSTART_DATE_REST_DAYS : SNOOZE_DAYS;
+    return !(-daysUntilDue(it.task.snoozedAt) < window);
+  }
 
   // 오늘 다음에 오는 월요일(마감을 '다음 주로' 다시 잡을 때)
   function dsNextMonday() {
@@ -8505,24 +8525,61 @@
     collectSuggestions({ all: true }).forEach(sec => {
       sec.items.forEach(it => {
         let group = null;
+        let days = null;
         if (sec.label === '오래 묵은 것') {
           group = 'stale';
         } else {
-          const g = DAYSTART_GROUPS.find(gr => gr.test && it.tags.some(gr.test));
-          group = g ? g.key : 'finish';
+          const reasons = it.reasons || [];
+          const g = DAYSTART_GROUPS.find(gr => gr.reason && reasons.some(r => r.kind === gr.reason));
+          if (!g) return; // '오늘 예정'만 있는 항목 — 물을 게 없음
+          group = g.key;
+          const r = reasons.find(x => x.kind === g.reason);
+          if (r && r.days != null) days = r.days;
         }
-        push({ task: it.task, boardId: it.boardId, tags: it.tags, group });
+        push({ task: it.task, boardId: it.boardId, tags: it.tags, group, days });
       });
     });
+    // 마감일(deadline) — 수행일과 별개. 접힌 someday·waiting 항목도 마감이 다가오면 여기서만 올라옴(평소 보드는 조용히).
+    const rankOf = k => DAYSTART_GROUPS.findIndex(g => g.key === k);
+    const deadlineLimit = deadlineDdayLimit();
+    const inTodayCard = (boardId, t) => boardId === 'today' || (boardId === 'scheduled' && t.scheduledDate && t.scheduledDate <= today);
+    DEADLINE_BOARD_IDS.forEach(boardId => boards[boardId].forEach(t => {
+      if (t.done || !t.deadline) return;
+      const n = daysUntilDue(t.deadline);
+      const inToday = inTodayCard(boardId, t);
+      let group = null;
+      let noRest = false;
+      let tags = [];
+      if (n < 0) {
+        if (!inToday) { group = 'deadlineLate'; noRest = true; tags = ['마감 ' + (-n) + '일 지남']; } // 오늘 목록에 있으면 D+n 라벨이 이미 보임
+      } else if (n <= deadlineLimit) {
+        if (inToday) {
+          if (n === 0 && !t.urgent) { group = 'deadlineNear'; noRest = true; tags = ['오늘 마감']; } // 오늘 마감인데 긴급이 아니면 '긴급으로?'
+        } else {
+          group = 'deadlineNear'; noRest = n <= 1; tags = [n === 0 ? '오늘 마감' : '마감 D-' + n];
+        }
+      }
+      if (!group && boardId === 'scheduled' && t.scheduledDate && t.scheduledDate > t.deadline) {
+        group = 'deadlineConflict'; tags = ['수행일이 마감보다 늦음'];
+      }
+      if (!group) return;
+      const ex = byTask.get(t.id);
+      if (ex) {
+        // 이미 다른 이유로 올라와 있으면 더 급한 쪽(마감)으로 옮김
+        if (rankOf(group) < rankOf(ex.group)) { ex.group = group; ex.tags = tags.concat(ex.tags); ex.noRest = noRest; }
+        return;
+      }
+      push({ task: t, boardId, tags, group, noRest });
+    }));
     // gotta do에 며칠째 그대로 남아 있는 것
     boards.today.forEach(t => {
       if (t.done || byTask.has(t.id)) return;
       const days = dsAgeDays(t);
       if (days >= DAYSTART_CARRY_DAYS) push({ task: t, boardId: 'today', tags: [days + '일째'], group: 'carry' });
     });
-    // 마감이 곧 다가옴(내일·모레) — 아직 오늘 목록에 없는 것
+    // 수행일이 곧 다가옴(내일, 금요일엔 주말·월요일까지) — 아직 오늘 목록에 없는 것
     // 오늘 이미 할 일이 많으면 미리 시작하자는 질문은 건너뜀(질문 도중 사라지지 않게 답과 무관한 현재 개수 기준)
-    // 지금 gotta do 카드에 보이는 미완료 개수: 일반 항목 + 오늘 마감 + oops(마감 지난 것)
+    // 지금 gotta do 카드에 보이는 미완료 개수: 일반 항목 + 오늘 예정 + oops(예정일 지난 것)
     const busyCount = boards.today.filter(t => !t.done).length
       + boards.scheduled.filter(t => !t.done && t.scheduledDate && t.scheduledDate <= today).length;
     const isFriday = new Date().getDay() === 5;
@@ -8532,13 +8589,16 @@
       .filter(t => {
         const dd = daysUntilDue(t.scheduledDate);
         if (busyCount >= (dd >= 2 ? DAYSTART_BUSY_TODAY : DAYSTART_TODAY_LIMIT)) return false;
-        // 마감일을 방금 정한 일은 이미 알고 있으므로 묻지 않음
-        if (t.scheduledSetAt && -daysUntilDue(t.scheduledSetAt) < DAYSTART_DUE_SET_RECENT) return false;
-        // 모레 마감은 금요일에 일요일 마감일 때만(주말 전에 챙기기)
-        return dd === 1 || (dd === 2 && isFriday);
+        // 수행일을 방금 정한 일은 이미 알고 있으므로 묻지 않음
+        if (t.scheduledSetAt && -daysUntilDue(t.scheduledSetAt) < DAYSTART_SCHEDULED_SET_RECENT) return false;
+        // 금요일엔 주말(토·일)과 다음 영업일(월요일) 예정까지 미리 챙김
+        return dd === 1 || (isFriday && (dd === 2 || dd === 3));
       })
-      .slice(0, DAYSTART_DUE_SOON_MAX)
-      .forEach(t => push({ task: t, boardId: 'scheduled', tags: [daysUntilDue(t.scheduledDate) === 1 ? '내일 예정' : '모레 예정'], group: 'dueSoon' }));
+      .slice(0, DAYSTART_SCHEDULED_SOON_MAX)
+      .forEach(t => {
+        const dd = daysUntilDue(t.scheduledDate);
+        push({ task: t, boardId: 'scheduled', tags: [dd === 1 ? '내일 예정' : (dd === 2 ? '모레 예정' : '월요일 예정')], group: 'scheduledSoon' });
+      });
     // 확인 날짜 없이 오래 기다리는 waiting
     boards.waiting.forEach(t => {
       if (t.replyDate || byTask.has(t.id)) return;
@@ -8565,7 +8625,7 @@
         if (days < DAYSTART_URGENT_DAYS) return;
         const ex = byTask.get(task.id);
         if (ex) {
-          if (['dueToday', 'finish', 'carry'].includes(ex.group)) { ex.group = 'urgentOld'; ex.days = days; }
+          if (['finish', 'carry'].includes(ex.group)) { ex.group = 'urgentOld'; ex.days = days; }
           return;
         }
         push({ task, boardId, tags: [days + '일째'], group: 'urgentOld', days });
@@ -8585,19 +8645,10 @@
       if (byTask.has(newer.task.id)) return;
       push({ task: newer.task, boardId: newer.boardId, tags: [], group: 'dup', dupOf: older.task });
     });
-    // '오늘 마감인데, 긴급건으로?'는 너무 자주 떠서: 마감일을 방금 정한 건 이미 아는 일이라 빼고, 한 번에 N개까지만(나머지는 gotta do에 그대로 보임)
-    let dueTodayAsked = 0;
-    for (let i = 0; i < items.length; i++) {
-      const it = items[i];
-      if (it.group !== 'dueToday' || it.task.urgent) continue;
-      const recent = it.task.scheduledSetAt && -daysUntilDue(it.task.scheduledSetAt) < DAYSTART_DUE_SET_RECENT;
-      if (recent || dueTodayAsked >= DAYSTART_DUE_TODAY_MAX) { items.splice(i--, 1); continue; }
-      dueTodayAsked++;
-    }
-    // 방금 미룬 것은 날짜가 정하는 항목이 아니면 잠시 건너뜀
-    const rank = k => DAYSTART_GROUPS.findIndex(g => g.key === k);
+    // 방금 '아니오'로 쉬게 한 것은 잠시 건너뜀(날짜 기반 질문은 내일까지, 나머지는 SNOOZE_DAYS)
+    const rank = rankOf;
     return items
-      .filter(it => DAYSTART_DATE_DRIVEN.includes(it.group) || !dsSnoozed(it.task))
+      .filter(dsAskable)
       .map((it, i) => ({ it, i }))
       .sort((a, b) => rank(a.it.group) - rank(b.it.group) || a.i - b.i)
       .map(e => e.it);
@@ -8607,35 +8658,52 @@
   // 물어볼 게 없으면(이미 오늘 목록에 있는데 '오늘 하기'를 묻는 식) null.
   function dsQuestionBase(item) {
     const t = item.task;
-    const num = (re) => {
-      for (const tag of item.tags) { const m = tag.match(re); if (m) return Number(m[1]); }
-      return null;
-    };
     const noop = { action: 'keep' };
-    const snooze = { action: 'keep', snooze: true }; // 아니오 = 3일 미루기(계속 안 묻게)
+    const snooze = { action: 'keep', snooze: true }; // 아니오 = SNOOZE_DAYS일 미루기(계속 안 묻게)
+    const rest = { action: 'keep', snooze: 'rest' }; // 아니오 = 내일까지 안 묻기(날짜 기반 질문)
+    // 지금 gotta do 카드에 보이는 항목인지(일반 today + 오늘 이하 수행일의 scheduled)
+    const inTodayCard = item.boardId === 'today' || (item.boardId === 'scheduled' && t.scheduledDate && t.scheduledDate <= todayStr());
     const follow = { action: 'follow', date: dsDateAfter(DAYSTART_FOLLOW_DAYS), text: t.text + ' 후속 연락' };
     switch (item.group) {
-      case 'dueLate': {
-        const n = num(/^예정 (\d+)일 지남$/);
+      case 'scheduledLate': {
+        const n = item.days;
         if (n >= DAYSTART_BIG_OVERDUE) {
           return { text: '예정일이 ' + n + '일 넘게 지났는데, 다음 주로 다시 잡을래요?', yes: { action: 'later', date: dsNextMonday() }, no: snooze };
         }
-        return { text: '예정일이 ' + n + '일 지났는데, 오늘 처리할래요?', yes: { action: 'today' }, no: noop };
+        return { text: '예정일이 ' + n + '일 지났는데, 오늘 처리할래요?', yes: { action: 'today' }, no: rest };
       }
       case 'replyLate':
-        return { text: '회신 기한이 ' + num(/^회신 (\d+)일 지남$/) + '일 지났는데, 후속 연락을 하실래요?', yes: follow, no: noop };
+        return { text: '회신 기한이 ' + item.days + '일 지났는데, 후속 연락을 하실래요?', yes: follow, no: rest };
       case 'urgentOld':
-        return { text: '긴급인데 ' + (item.days || num(/^(\d+)일째$/)) + '일째 그대로예요. 오늘 첫 번째로 할래요?', yes: { action: 'top' }, no: snooze };
-      case 'dueToday':
-        if (t.urgent) return null;
-        return { text: '오늘 예정인데, 긴급건으로 처리할래요?', yes: { action: 'urgent' }, no: noop };
+        return { text: '긴급인데 ' + item.days + '일째 그대로예요. 오늘 첫 번째로 할래요?', yes: { action: 'top' }, no: snooze };
       case 'replyToday':
-        return { text: '오늘 회신 예정인데, 확인 연락을 하실래요?', yes: follow, no: noop };
-      case 'dueSoon': {
+        return { text: '오늘 회신 예정인데, 확인 연락을 하실래요?', yes: follow, no: rest };
+      case 'scheduledSoon': {
         const dd = daysUntilDue(t.scheduledDate);
         const day = new Date(t.scheduledDate + 'T00:00:00').getDay();
         const weekend = new Date().getDay() === 5 && (day === 6 || day === 0);
-        return { text: (weekend ? '이번 주말' : (dd === 1 ? '내일' : '모레')) + ' 예정인데, 오늘 미리 ' + (weekend ? '처리할래요?' : '시작할래요?'), yes: { action: 'today' }, no: noop };
+        const when = weekend ? '이번 주말' : (dd === 1 ? '내일' : (dd === 2 ? '모레' : '월요일'));
+        return { text: when + ' 예정인데, 오늘 미리 ' + (weekend ? '처리할래요?' : '시작할래요?'), yes: { action: 'today' }, no: rest };
+      }
+      // 마감일(deadline) 질문 — 수행일과 별개. 마감 D-1 이내·지난 마감은 '아니오'여도 쉬지 않음(noop)
+      case 'deadlineLate': {
+        const n = -daysUntilDue(t.deadline);
+        return { text: '마감이 ' + n + '일 지났는데, 오늘 ' + (item.boardId === 'waiting' ? '직접 챙길래요?' : '처리할래요?'), yes: { action: 'today' }, no: noop };
+      }
+      case 'deadlineNear': {
+        const n = daysUntilDue(t.deadline);
+        if (inTodayCard) {
+          // 이미 오늘 목록에 있으면 오늘이 마감일 때만, 긴급이 아니면 '긴급으로?'
+          if (n !== 0 || t.urgent) return null;
+          return { text: '오늘이 마감인데, 긴급건으로 처리할래요?', yes: { action: 'urgent' }, no: noop };
+        }
+        const doing = item.boardId === 'waiting' ? '직접 챙길래요?' : (n === 0 ? '처리할래요?' : '시작할래요?');
+        return { text: (n === 0 ? '오늘이 마감인데, 오늘 ' : '마감이 ' + n + '일 남았는데, 오늘 ') + doing, yes: { action: 'today' }, no: n <= 1 ? noop : rest };
+      }
+      case 'deadlineConflict': {
+        // 수행일이 마감보다 늦음 — 수행일을 마감일로 당김(마감이 오늘이면 오늘 할 일로)
+        const toToday = t.deadline <= todayStr();
+        return { text: '수행일이 마감보다 늦은데, 수행일을 당길래요?', yes: toToday ? { action: 'today' } : { action: 'later', date: t.deadline }, no: rest };
       }
       case 'finish': {
         // waiting 항목은 하위 항목이 끝나도 '완료'를 묻지 않음(기다리는 일은 상대가 답해야 끝나므로)
@@ -8675,22 +8743,30 @@
     const checkTomorrow = { label: '내일 확인하기', patch: { action: 'setReply', date: dsDateAfter(1) } };
     const checkLater = { label: '다음에 확인하기 (날짜 지정)', pickDate: true };
     const pickStart = { label: '날짜 정하기', pickDate: true, pickAction: 'later', pickLabel: '시작할 날짜' };
-    const clearDate = { label: '날짜 지우기', patch: { action: 'clearDate' } };   // 마감을 없애 일반 항목으로
+    const clearDate = { label: '날짜 지우기', patch: { action: 'clearDate' } };   // 수행일을 없애 일반 항목으로
+    const pickDeadline = { label: '마감일 다시 정하기', pickDate: true, pickAction: 'setDeadline', pickLabel: '새 마감일', pickAllowToday: true };
+    const clearDeadline = { label: '마감일 지우기', patch: { action: 'clearDeadline' } };
     const clearReply = { label: '날짜 지우기', patch: { action: 'clearReply' } }; // waiting의 확인 날짜를 없앰
-    const days = (re) => { for (const tag of item.tags) { const m = tag.match(re); if (m) return Number(m[1]); } return 0; };
     switch (item.group) {
-      case 'dueLate':
-        return days(/^예정 (\d+)일 지남$/) >= DAYSTART_BIG_OVERDUE
+      case 'scheduledLate':
+        return item.days >= DAYSTART_BIG_OVERDUE
           ? [tomorrow, clearDate, someday, finished('이미 끝났어요 (완료)')]
           : [tomorrow, nextWeek, clearDate, someday, finished('이미 끝났어요 (완료)')];
       case 'replyLate':
         return [checkTomorrow, checkLater, clearReply, { label: '제가 직접 처리할게요 (오늘 할 일로)', patch: { action: 'today' } }, finished('해결됐어요')];
       case 'replyToday':
         return [checkTomorrow, checkLater, clearReply, { label: '제가 직접 처리할게요 (오늘 할 일로)', patch: { action: 'today' } }, finished('해결됐어요')];
-      case 'dueToday':
-        return [tomorrow, { label: '날짜 정하기', pickDate: true, pickAction: 'later', pickLabel: '미룰 날짜', pickMoved: true }, clearDate, { label: '대기중으로 옮기기', patch: { action: 'toWaiting' } }, finished('이미 끝났어요 (완료)')];
-      case 'dueSoon':
+      case 'scheduledSoon':
         return [clearDate];
+      case 'deadlineLate':
+        return [tomorrow, pickDeadline, clearDeadline, finished('이미 끝났어요 (완료)')];
+      case 'deadlineNear':
+        // 오늘 목록에 있는 항목(오늘이 마감)은 수행일을 미루는 대안이 의미 없음
+        return (item.boardId === 'today' || (item.boardId === 'scheduled' && item.task.scheduledDate && item.task.scheduledDate <= todayStr()))
+          ? [pickDeadline, clearDeadline, finished('이미 끝났어요 (완료)')]
+          : [{ label: '수행일 정하기', pickDate: true, pickAction: 'later', pickLabel: '할 날짜' }, pickDeadline, finished('이미 끝났어요 (완료)')];
+      case 'deadlineConflict':
+        return [pickDeadline, clearDeadline, clearDate];
       case 'urgentOld':
         return [{ label: '긴급 해제', patch: { action: 'unurgent' } }, tomorrow, skip];
       case 'noReply':
@@ -8767,6 +8843,7 @@
   function dsComplete(d) {
     if (!d || !d.action) return false;
     if (d.action === 'follow') return !!d.date && d.date > todayStr() && !!(d.text && d.text.trim());
+    if (d.action === 'setDeadline') return !!d.date && d.date >= todayStr();
     return true;
   }
 
@@ -8819,7 +8896,7 @@
         entries.push({ key: item.key, text: item.task.text, origin: '', urgent: false, rank: 7, board: 'today' });
       } else if (d.action === 'today' && !dsAlreadyInToday(item)) {
         // 마감이 지났던 것은 오늘 급한 쪽, 마무리 한 개 남은 것은 앞쪽, 나머지는 기존 항목 뒤
-        const rank = item.task.urgent ? 0 : (item.group === 'dueLate' ? 2 : (item.group === 'finish' ? 4 : 6));
+        const rank = item.task.urgent ? 0 : (['scheduledLate', 'deadlineLate', 'deadlineNear'].includes(item.group) ? 2 : (item.group === 'finish' ? 4 : 6));
         entries.push({ key: String(item.task.id), text: item.task.text, origin: '', urgent: !!item.task.urgent, rank, board: 'today' });
       } else if (d.action === 'clearDate' && !dsAlreadyInToday(item) && (item.task.scheduledDate && item.task.scheduledDate <= todayStr() ? 'today' : (item.task.from || 'today')) === 'today') {
         entries.push({ key: String(item.task.id), text: item.task.text, origin: '', rank: 6, board: 'today' });
@@ -8902,7 +8979,7 @@
 
   // ───── 변경 요약 ─────
   function dsSummary() {
-    const c = { today: 0, done: 0, follow: 0, someday: 0, snooze: 0, urgent: 0, later: 0, reply: 0, merge: 0, repeat: 0, top: 0, unurgent: 0, waiting: 0, cleared: 0, drop: 0 };
+    const c = { today: 0, done: 0, follow: 0, someday: 0, snooze: 0, rest: 0, deadline: 0, urgent: 0, later: 0, reply: 0, merge: 0, repeat: 0, top: 0, unurgent: 0, waiting: 0, cleared: 0, drop: 0 };
     const count = (d) => {
       const a = d.action;
       if (a === 'today') c.today++;
@@ -8919,6 +8996,8 @@
       else if (a === 'unurgent') c.unurgent++;
       else if (a === 'clearDate' || a === 'clearReply') c.cleared++;
       else if (a === 'toWaiting') c.waiting++;
+      else if (a === 'setDeadline' || a === 'clearDeadline') c.deadline++;
+      else if (a === 'keep' && d.snooze === 'rest') c.rest++;
       else if (a === 'keep' && d.snooze) c.snooze++;
     };
     Object.keys(ds.decisions).forEach(id => {
@@ -8949,11 +9028,13 @@
     if (c.unurgent) parts.push('긴급 해제 ' + c.unurgent);
     if (c.cleared) parts.push('날짜 지움 ' + c.cleared);
     if (c.later) parts.push('날짜 변경 ' + c.later);
+    if (c.deadline) parts.push('마감일 변경 ' + c.deadline);
     if (c.reply) parts.push('확인일 지정 ' + c.reply);
     if (c.merge) parts.push('합치기 ' + c.merge);
     if (c.top) parts.push('맨 위로 ' + c.top);
     if (postponed) parts.push('미룸 ' + postponed);
     if (c.snooze) parts.push(SNOOZE_DAYS + '일 미루기 ' + c.snooze);
+    if (c.rest) parts.push('내일까지 안 묻기 ' + c.rest);
     if (newTask) parts.push('새 할 일 ' + newTask);
     if (orderChanged) parts.push('순서 제안');
     return parts.length ? parts.join(' · ') : '아직 바뀐 게 없어요';
@@ -9160,6 +9241,8 @@
       case 'unurgent': return '긴급 해제';
       case 'later': return d.picked && !d.moved ? date + '에 시작' : date + '로 미룸';
       case 'setReply': return date + '에 확인';
+      case 'setDeadline': return '마감일 ' + date;
+      case 'clearDeadline': return '마감일 지움';
       case 'top': return '오늘 첫 번째로';
       case 'merge': return '하나로 합침';
       case 'repeat': return '오늘 할 일로 복제';
@@ -9168,7 +9251,7 @@
       case 'toWaiting': return '대기중으로';
       case 'clearDate':
       case 'clearReply': return '날짜 지움';
-      default: return d.snooze ? SNOOZE_DAYS + '일 뒤에 다시 묻기' : '그대로 둠';
+      default: return d.snooze === 'rest' ? '내일까지 안 묻기' : (d.snooze ? SNOOZE_DAYS + '일 뒤에 다시 묻기' : '그대로 둠');
     }
   }
 
@@ -9286,8 +9369,8 @@
       li.classList.add('has-alts');
       btns.classList.add('has-alts');
       // 가장 많이 누르는 '그대로 두기'(또는 3일 뒤에 다시 묻기)를 맨 앞에 둠
-      [{ label: q.no.snooze ? SNOOZE_DAYS + '일 뒤에 다시 묻기' : '그대로 두기', patch: null }]
-        .concat(q.alts.map(a => ({ label: a.label, patch: a.patch, pickDate: a.pickDate, pickAction: a.pickAction, pickLabel: a.pickLabel, pickMoved: a.pickMoved })))
+      [{ label: q.no.snooze === 'rest' ? '내일까지 안 묻기' : (q.no.snooze ? SNOOZE_DAYS + '일 뒤에 다시 묻기' : '그대로 두기'), patch: null }]
+        .concat(q.alts.map(a => ({ label: a.label, patch: a.patch, pickDate: a.pickDate, pickAction: a.pickAction, pickLabel: a.pickLabel, pickMoved: a.pickMoved, pickAllowToday: a.pickAllowToday })))
         .forEach(o => {
           const b = dsSmallButton('confirm-btn-cancel day-start__alt', o.label, () => {});
           if (o.pickDate) {
@@ -9307,10 +9390,11 @@
         const input = document.createElement('input');
         input.type = 'date';
         input.className = 'date-picker-input';
-        input.min = dsDateAfter(1);
+        const minDate = pickOpt.pickAllowToday ? todayStr() : dsDateAfter(1); // 마감일은 오늘로도 정할 수 있음
+        input.min = minDate;
         input.setAttribute('aria-label', pickLabel);
         input.addEventListener('change', () => {
-          if (input.value && input.value > todayStr()) dsAnswerAlt(q, { action: pickAction, date: input.value, picked: true, moved: !!pickOpt.pickMoved });
+          if (input.value && input.value >= minDate) dsAnswerAlt(q, { action: pickAction, date: input.value, picked: true, moved: !!pickOpt.pickMoved });
         });
         row.appendChild(wrapDateInputWithHint(input));
         li.appendChild(row);
@@ -9901,6 +9985,12 @@
         break;
       case 'unurgent':
         task.urgent = false;
+        break;
+      case 'setDeadline':
+        task.deadline = d.date; // 마감일만 바꿈 — 보드는 그대로
+        break;
+      case 'clearDeadline':
+        delete task.deadline;
         break;
       case 'clearDate': {
         // 마감 날짜를 지움 — 오늘 마감/지난 마감은 gotta do에 그대로 남고, 아직 안 온 마감은 원래 보드로(보드의 '날짜 지우기'와 같은 규칙)
