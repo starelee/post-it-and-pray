@@ -225,18 +225,37 @@
     return el;
   }
 
-  // 날짜 행 안에 들어가는 "마감" 입력 칸 — 기존 항목(디바운스 후 저장)과 새 항목 초안(즉시 반영)이 같이 씀.
+  // 날짜 행의 한 줄 — "수행일 [날짜칸] 버튼…" / "마감일 [날짜칸] …"을 같은 틀로 맞춤
+  function createDateLine(labelText) {
+    const line = document.createElement('div');
+    line.className = 'date-line';
+    const label = document.createElement('span');
+    label.className = 'date-line-label';
+    label.textContent = labelText;
+    line.appendChild(label);
+    return line;
+  }
+
+  // 날짜 버튼/알약을 마우스로 눌렀는지 — 마우스 클릭이면 날짜 칸만 열고 달력은 자동으로 띄우지 않음.
+  // 키보드(Enter/Space, Alt+D 같은 단축키의 .click())와 터치는 기존처럼 달력까지 띄움.
+  function trackMouseClick(el) {
+    let lastPointer = '';
+    el.addEventListener('pointerdown', (e) => { lastPointer = e.pointerType; });
+    return (e) => {
+      const viaMouse = lastPointer === 'mouse' && e.detail > 0;
+      lastPointer = '';
+      return viaMouse;
+    };
+  }
+
+  // 날짜 행 안에 들어가는 "마감일" 입력 칸 — 기존 항목(디바운스 후 저장)과 새 항목 초안(즉시 반영)이 같이 씀.
   // opts.debounceMs > 0이면 년/월/일 중 한 칸씩 고치는 입력 도중에 바로 저장되지 않게 기다렸다 커밋.
   // 빈 값(change)은 모바일의 가짜 이벤트와 구분하기 어려워 무시하고, 지우기는 "마감 지우기" 버튼으로만 함.
   function createDeadlineField(initial, onChange, opts) {
     const debounceMs = (opts && opts.debounceMs) || 0;
     let current = initial || '';
     let timer = null;
-    const wrap = document.createElement('div');
-    wrap.className = 'deadline-field';
-    const label = document.createElement('span');
-    label.className = 'deadline-field-label';
-    label.textContent = '마감';
+    const wrap = createDateLine('마감일');
     const input = document.createElement('input');
     input.className = 'date-picker-input deadline-picker-input';
     input.type = 'date';
@@ -261,7 +280,6 @@
       else commit(input.value);
     });
     clearBtn.addEventListener('click', () => { input.value = ''; commit(''); });
-    wrap.appendChild(label);
     wrap.appendChild(wrapDateInputWithHint(input));
     wrap.appendChild(clearBtn);
     return { el: wrap, input, clear: () => { clearTimeout(timer); current = ''; input.value = ''; clearBtn.hidden = true; } };
@@ -3521,7 +3539,7 @@
 
     if (canDate) {
       const dateRow = document.createElement('div');
-      dateRow.className = 'date-picker-row';
+      dateRow.className = 'date-picker-row date-picker-rows';
       dateRow.hidden = true;
 
       const dateInput = document.createElement('input');
@@ -3632,11 +3650,13 @@
         li.classList.remove('row-pinned');
       });
 
-      dateRow.appendChild(wrapDateInputWithHint(dateInput));
-      dateRow.appendChild(todayBtn);
-      dateRow.appendChild(tomorrowBtn);
-      dateRow.appendChild(clearBtn);
-      dateRow.appendChild(cancelBtn);
+      const schedLine = createDateLine(boardId === 'waiting' ? '회신 예정일' : '수행일');
+      schedLine.appendChild(wrapDateInputWithHint(dateInput));
+      schedLine.appendChild(todayBtn);
+      schedLine.appendChild(tomorrowBtn);
+      schedLine.appendChild(clearBtn);
+      schedLine.appendChild(cancelBtn);
+      dateRow.appendChild(schedLine);
       // 마감일 칸 — 수행일(위)과 별개. 같은 날짜 행 안의 둘째 줄.
       const deadlineField = createDeadlineField(task.deadline, (value) => {
         clearTimeout(commitTimer);
@@ -3645,7 +3665,7 @@
       dateRow.appendChild(deadlineField.el);
       li.appendChild(dateRow);
 
-      const toggleDateRow = () => {
+      const toggleDateRow = (viaMouse) => {
         dateRow.hidden = !dateRow.hidden;
         // .task-controls는 평소 hover/focus-within으로만 펼쳐지는데,
         // 모바일에서 dateInput.focus()가 네이티브 날짜 피커를 띄우면 iOS가
@@ -3661,21 +3681,31 @@
           // 상태를 못 보고 다시 접어버리는 것으로 보임 — 한 프레임 뒤로
           // 미뤄서 레이아웃이 자리잡은 다음에 포커스를 줌.
           pickerOpenedAt = Date.now();
-          requestAnimationFrame(() => focusAndShowPicker(dateInput));
+          if (!viaMouse) requestAnimationFrame(() => focusAndShowPicker(dateInput));
         }
       };
-      dateBtn.addEventListener('click', () => {
+      const dateBtnMouse = trackMouseClick(dateBtn);
+      dateBtn.addEventListener('click', (e) => {
+        const viaMouse = dateBtnMouse(e);
         if (commitPendingEditThenRetry(li, task.id, '.date-btn')) return;
-        toggleDateRow();
+        toggleDateRow(viaMouse);
       });
-      if (badge) badge.addEventListener('click', () => {
-        if (commitPendingEditThenRetry(li, task.id, '.due-badge')) return;
-        toggleDateRow();
-      });
-      if (deadlineBadge) deadlineBadge.addEventListener('click', () => {
-        if (commitPendingEditThenRetry(li, task.id, '.deadline-badge')) return;
-        toggleDateRow();
-      });
+      if (badge) {
+        const badgeMouse = trackMouseClick(badge);
+        badge.addEventListener('click', (e) => {
+          const viaMouse = badgeMouse(e);
+          if (commitPendingEditThenRetry(li, task.id, '.due-badge')) return;
+          toggleDateRow(viaMouse);
+        });
+      }
+      if (deadlineBadge) {
+        const deadlineBadgeMouse = trackMouseClick(deadlineBadge);
+        deadlineBadge.addEventListener('click', (e) => {
+          const viaMouse = deadlineBadgeMouse(e);
+          if (commitPendingEditThenRetry(li, task.id, '.deadline-badge')) return;
+          toggleDateRow(viaMouse);
+        });
+      }
     }
 
     const addSubRow = document.createElement('div');
@@ -6345,16 +6375,18 @@
       dateBadge = document.createElement('span');
       dateBadge.className = 'due-badge';
       dateBadge.hidden = true;
-      dateBadge.addEventListener('click', () => {
+      const draftBadgeMouse = trackMouseClick(dateBadge);
+      dateBadge.addEventListener('click', (e) => {
+        const viaMouse = draftBadgeMouse(e);
         dateRow.hidden = !dateRow.hidden;
-        if (!dateRow.hidden) focusAndShowPicker(dateInput);
+        if (!dateRow.hidden && !viaMouse) focusAndShowPicker(dateInput);
       });
       // draftControls(호버해야 보임)가 아니라 add-row 안에 둬서 날짜를
       // 지정해두면 호버 여부와 상관없이 항상 보이게 함.
       addRow.appendChild(dateBadge);
 
       dateRow = document.createElement('div');
-      dateRow.className = 'date-picker-row';
+      dateRow.className = 'date-picker-row date-picker-rows';
       dateRow.hidden = true;
 
       dateInput = document.createElement('input');
@@ -6409,16 +6441,20 @@
         }
       });
 
-      dateRow.appendChild(wrapDateInputWithHint(dateInput));
-      dateRow.appendChild(tomorrowBtn);
-      dateRow.appendChild(dateClearBtn);
+      const draftSchedLine = createDateLine(boardId === 'waiting' ? '회신 예정일' : '수행일');
+      draftSchedLine.appendChild(wrapDateInputWithHint(dateInput));
+      draftSchedLine.appendChild(tomorrowBtn);
+      draftSchedLine.appendChild(dateClearBtn);
+      dateRow.appendChild(draftSchedLine);
       // 마감일 초안 — 등록 후에도 항상 보이도록 add-row 안에 알약을 둠(호버 여부와 무관)
       deadlineDraftBadge = document.createElement('span');
       deadlineDraftBadge.hidden = true;
       deadlineDraftBadge.className = 'deadline-badge deadline-soon';
-      deadlineDraftBadge.addEventListener('click', () => {
+      const draftDeadlineMouse = trackMouseClick(deadlineDraftBadge);
+      deadlineDraftBadge.addEventListener('click', (e) => {
+        const viaMouse = draftDeadlineMouse(e);
         dateRow.hidden = !dateRow.hidden;
-        if (!dateRow.hidden) deadlineDraftField.input.focus();
+        if (!dateRow.hidden && !viaMouse) deadlineDraftField.input.focus();
       });
       addRow.appendChild(deadlineDraftBadge);
       deadlineDraftField = createDeadlineField('', (value) => {
@@ -6431,9 +6467,11 @@
         }
       });
       dateRow.appendChild(deadlineDraftField.el);
-      dateBtn.addEventListener('click', () => {
+      const draftDateBtnMouse = trackMouseClick(dateBtn);
+      dateBtn.addEventListener('click', (e) => {
+        const viaMouse = draftDateBtnMouse(e);
         dateRow.hidden = !dateRow.hidden;
-        if (!dateRow.hidden) focusAndShowPicker(dateInput);
+        if (!dateRow.hidden && !viaMouse) focusAndShowPicker(dateInput);
       });
       insertAfterAddRow(dateRow);
 
