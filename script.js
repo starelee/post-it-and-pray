@@ -81,10 +81,10 @@
   // a date moves the task into `scheduled`; on `waiting` it only sets the
   // separate `replyDate` field and the task stays in waiting.
   const DATE_ENABLED_IDS = ['today', 'someday', 'waiting'];
-  // waiting의 "회신 예정일"은 scheduled 전용 dueDate와 분리된 별도 필드 —
-  // dueDate를 재사용하면 migrateArchive/today 렌더가 waiting 항목을 건드림.
+  // waiting의 "회신 예정일"은 scheduled 전용 scheduledDate와 분리된 별도 필드 —
+  // scheduledDate를 재사용하면 migrateArchive/today 렌더가 waiting 항목을 건드림.
   function dateFieldOf(boardId) {
-    return boardId === 'waiting' ? 'replyDate' : 'dueDate';
+    return boardId === 'waiting' ? 'replyDate' : 'scheduledDate';
   }
   const EMPTY_HINTS = {
     today: '오늘은 뭘 해볼까?',
@@ -933,7 +933,7 @@
       const tags = [];
       let overdue = 0;
       let isToday = false;
-      const dateKey = boardId === 'waiting' ? 'replyDate' : 'dueDate';
+      const dateKey = boardId === 'waiting' ? 'replyDate' : 'scheduledDate';
       const label = boardId === 'waiting' ? '회신' : '마감';
       if (task[dateKey]) {
         const past = -daysUntilDue(task[dateKey]);
@@ -943,7 +943,7 @@
       // 하루 시작하기에서만: 하위 항목 마무리는 지금 신경 쓸 때만 묻기(someday는 안 묻고, pray later는 마감이 내일 이내일 때만). 검색 제안은 그대로
       const checklistDue = !all ? true
         : boardId === 'someday' ? false
-        : boardId === 'scheduled' ? !!task.dueDate && daysUntilDue(task.dueDate) <= 1
+        : boardId === 'scheduled' ? !!task.scheduledDate && daysUntilDue(task.scheduledDate) <= 1
         : true;
       if (checklistDue) suggestChecklistTags(task).forEach(t => tags.push(t));
       if (!tags.length) return;
@@ -1133,7 +1133,7 @@
     updateReorderUI();
     const today = todayStr();
     const tasks = boards.today.concat(
-      boards.scheduled.filter(t => t.dueDate <= today)
+      boards.scheduled.filter(t => t.scheduledDate <= today)
     );
     let done = 0;
     let praying = 0;
@@ -1201,14 +1201,21 @@
           ? t.subtasks.map(s => ({ id: s.id, text: s.text, done: !!s.done }))
           : []
       };
-      if (typeof t.dueDate === 'string' && t.dueDate) out.dueDate = t.dueDate;
+      // 옛 이름(dueDate/dueSetAt)은 읽을 때 새 이름으로 바꿔 읽음 — 새 이름이 있으면 그쪽이 우선.
+      // 이름만 바뀌었고 의미는 같음: 수행 예정일("그날 하겠다"). 마감일은 deadline.
+      const legacyDate = typeof t.dueDate === 'string' ? t.dueDate : '';
+      const legacySetAt = typeof t.dueSetAt === 'string' ? t.dueSetAt : '';
+      const schedDate = (typeof t.scheduledDate === 'string' && t.scheduledDate) ? t.scheduledDate : legacyDate;
+      if (schedDate) out.scheduledDate = schedDate;
+      const schedSetAt = (typeof t.scheduledSetAt === 'string' && t.scheduledSetAt) ? t.scheduledSetAt : legacySetAt;
+      if (schedSetAt) out.scheduledSetAt = schedSetAt;
+      if (typeof t.deadline === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(t.deadline)) out.deadline = t.deadline;
       if (typeof t.replyDate === 'string' && t.replyDate) out.replyDate = t.replyDate;
       if (typeof t.note === 'string' && t.note.trim()) out.note = t.note.slice(0, NOTE_MAX);
       if (typeof t.from === 'string' && t.from) out.from = t.from;
       if (typeof t.order === 'number' && isFinite(t.order)) out.order = t.order;
       if (typeof t.group === 'number' && isFinite(t.group)) out.group = t.group;
       if (typeof t.snoozedAt === 'string' && t.snoozedAt) out.snoozedAt = t.snoozedAt;
-      if (typeof t.dueSetAt === 'string' && t.dueSetAt) out.dueSetAt = t.dueSetAt;
       if (t.todaySlot && t.todaySlot.date === todayStr() && Number.isInteger(t.todaySlot.index) && t.todaySlot.index >= 0) out.todaySlot = { date: t.todaySlot.date, index: t.todaySlot.index }; // 같은 날만 기억 — 다음 날이면 버림
       if (typeof t.deletedAt === 'string' && t.deletedAt) out.deletedAt = t.deletedAt;
       if (typeof t.updatedAt === 'number' && isFinite(t.updatedAt)) out.updatedAt = t.updatedAt;
@@ -1298,7 +1305,7 @@
       b[boardId] = keep;
     }
     archiveOut('today', t => t.doneAt !== today);
-    archiveOut('scheduled', t => t.dueDate !== today || t.doneAt !== today);
+    archiveOut('scheduled', t => t.scheduledDate !== today || t.doneAt !== today);
     archiveOut('someday', () => true);
     b.waiting.forEach(t => {
       t.done = false;
@@ -1992,10 +1999,10 @@
     memoSignatures(sigs);
     return sigs;
   }
-  // 항목별 마지막으로 본 마감일 — 마감일이 바뀐 날을 dueSetAt에 남기려고
+  // 항목별 마지막으로 본 마감일 — 마감일이 바뀐 날을 scheduledSetAt에 남기려고
   function taskDueDates() {
     const m = new Map();
-    BOARD_IDS.forEach(boardId => (boards[boardId] || []).forEach(t => m.set(t.id, t.dueDate || '')));
+    BOARD_IDS.forEach(boardId => (boards[boardId] || []).forEach(t => m.set(t.id, t.scheduledDate || '')));
     return m;
   }
   let lastSigs = taskSignatures();
@@ -2006,7 +2013,7 @@
     const sigs = new Map();
     BOARD_IDS.concat(['archive', 'lupin', 'trash']).forEach(boardId => {
       (boards[boardId] || []).forEach(t => {
-        const { updatedAt, snoozedAt, dueSetAt, ...rest } = t; // 미루기·마감일 정한 날은 '손댄' 것으로 치지 않음
+        const { updatedAt, snoozedAt, scheduledSetAt, ...rest } = t; // 미루기·마감일 정한 날은 '손댄' 것으로 치지 않음
         const sig = boardId + '|' + JSON.stringify(rest);
         sigs.set(t.id, sig);
         if (lastSigs.get(t.id) !== sig) t.updatedAt = now;
@@ -2017,8 +2024,8 @@
     // 마감일이 새로 생기거나 바뀐 항목은 그날을 기록(하루 시작하기가 '방금 정한 마감'을 다시 묻지 않게)
     const dues = taskDueDates();
     BOARD_IDS.forEach(boardId => (boards[boardId] || []).forEach(t => {
-      if (t.dueDate && dues.get(t.id) !== lastDues.get(t.id)) t.dueSetAt = todayStr();
-      else if (!t.dueDate) delete t.dueSetAt;
+      if (t.scheduledDate && dues.get(t.id) !== lastDues.get(t.id)) t.scheduledSetAt = todayStr();
+      else if (!t.scheduledDate) delete t.scheduledSetAt;
     }));
     lastDues = dues;
   }
@@ -2611,7 +2618,7 @@
   }
 
   function byDueDate(a, b) {
-    return (a.dueDate || '').localeCompare(b.dueDate || '');
+    return (a.scheduledDate || '').localeCompare(b.scheduledDate || '');
   }
 
   // ───────── 묶음(group) ─────────
@@ -2945,12 +2952,12 @@
     const today = todayStr();
     // Tasks due today live entirely inside today's list (active or done) —
     // never here, checked or not.
-    const tasks = boards.scheduled.filter(t => t.dueDate !== today).sort(byDueDate);
+    const tasks = boards.scheduled.filter(t => t.scheduledDate !== today).sort(byDueDate);
     // Unchecked tasks overdue from before today already show under today's
     // "oops, still here" — don't duplicate them. Anything more than 7 days
     // out moves to the legal pad's "다가오는 일" section instead (see
     // renderUpcoming) so this card doesn't pile up with far-future items.
-    const active = tasks.filter(t => !t.done && t.dueDate > today && daysUntilDue(t.dueDate) <= PRAY_LATER_DAYS);
+    const active = tasks.filter(t => !t.done && t.scheduledDate > today && daysUntilDue(t.scheduledDate) <= PRAY_LATER_DAYS);
     const done = tasks.filter(t => t.done);
 
     if (active.length === 0 && done.length === 0) {
@@ -2962,13 +2969,13 @@
 
     // 날짜별 머리글(🙏 내일 / 모레 / 수요일…) 아래에 항목을 모음 — 항목마다 날짜 알약을 붙이지 않음.
     // 묶음은 같은 날짜 안에서만 붙임(날짜가 다른 짝은 각자 머리글 아래에 있음).
-    const dates = Array.from(new Set(active.map(t => t.dueDate))).sort();
+    const dates = Array.from(new Set(active.map(t => t.scheduledDate))).sort();
     dates.forEach(date => {
       const head = document.createElement('li');
       head.className = 'date-heading';
       head.textContent = '🙏 ' + prayDayLabel(date);
       listEl.appendChild(head);
-      clusterGroups(active.filter(t => t.dueDate === date))
+      clusterGroups(active.filter(t => t.scheduledDate === date))
         .forEach(t => listEl.appendChild(renderItem('scheduled', t, { hideDate: true })));
     });
 
@@ -2987,7 +2994,7 @@
   // "oops, still here"(지난 마감) 아래 미완료 항목들의 마감일을 오늘로 — 확인창을 거침.
   async function moveOopsToToday(anchorEl) {
     const today = todayStr();
-    const overdue = boards.scheduled.filter(t => !t.done && t.dueDate && t.dueDate < today);
+    const overdue = boards.scheduled.filter(t => !t.done && t.scheduledDate && t.scheduledDate < today);
     if (!overdue.length) return;
     // 어떤 항목이 바뀌는지 제목과 원래 마감일(○일 지남)을 보여줌
     const list = document.createElement('ul');
@@ -2997,7 +3004,7 @@
       const name = document.createElement('span');
       name.textContent = t.text;
       const when = document.createElement('small');
-      when.textContent = -daysUntilDue(t.dueDate) + '일 지남';
+      when.textContent = -daysUntilDue(t.scheduledDate) + '일 지남';
       li.appendChild(name);
       li.appendChild(when);
       list.appendChild(li);
@@ -3014,7 +3021,7 @@
     // 확인창이 떠 있던 사이 상태가 바뀌었을 수 있어 다시 골라 반영
     let changed = 0;
     boards.scheduled.forEach(t => {
-      if (!t.done && t.dueDate && t.dueDate < today) { t.dueDate = today; changed++; }
+      if (!t.done && t.scheduledDate && t.scheduledDate < today) { t.scheduledDate = today; changed++; }
     });
     if (!changed) return;
     saveBoards();
@@ -3031,9 +3038,9 @@
 
     const today = todayStr();
     const plain = boards.today;
-    const dueToday = boards.scheduled.filter(t => !t.done && t.dueDate === today).sort(byDueDate);
-    const doneToday = boards.scheduled.filter(t => t.done && t.dueDate === today).sort(byDueDate);
-    const oops = boards.scheduled.filter(t => !t.done && t.dueDate < today).sort(byDueDate);
+    const dueToday = boards.scheduled.filter(t => !t.done && t.scheduledDate === today).sort(byDueDate);
+    const doneToday = boards.scheduled.filter(t => t.done && t.scheduledDate === today).sort(byDueDate);
+    const oops = boards.scheduled.filter(t => !t.done && t.scheduledDate < today).sort(byDueDate);
 
     const active = plain.filter(t => !t.done);
     const done = plain.filter(t => t.done);
@@ -3228,7 +3235,7 @@
     const dateKey = dateFieldOf(boardId);
     let badge = null;
     // gotta do 카드 안의 오늘 마감 항목은 "오늘"이 뻔하니 라벨만 숨김(날짜 값은 그대로 — 📅로 수정 가능)
-    if (task[dateKey] && !opts.hideDate && !(boardId === 'scheduled' && task.dueDate === todayStr())) {
+    if (task[dateKey] && !opts.hideDate && !(boardId === 'scheduled' && task.scheduledDate === todayStr())) {
       badge = document.createElement('span');
       badge.className = 'due-badge';
       badge.textContent = formatDueDateRelative(task[dateKey]);
@@ -3362,7 +3369,7 @@
       // 이미 있는 곳으로 또 옮기라는 것처럼 보임 — 날짜 지우기와 결과가
       // 같으니 중복. 아직 안 온(미래 날짜) scheduled 항목은 pray later
       // 카드에만 있으니 그대로 둠.
-      .filter(id => !(boardId === 'scheduled' && id === 'today' && task.dueDate <= todayStr()))
+      .filter(id => !(boardId === 'scheduled' && id === 'today' && task.scheduledDate <= todayStr()))
       .forEach(otherId => {
       const moveBtn = document.createElement('button');
       moveBtn.className = 'move-btn';
@@ -3467,7 +3474,7 @@
         // 있었음 — 저장 데이터는 이미 무시하도록 막아뒀지만, 이 입력창
         // 자체의 표시값(dateInput.value)도 그 순간 진짜로 빈 문자열이 되어
         // 있어서, 화면에는 "날짜가 잠깐 보였다가 사라지는" 것처럼 보였음
-        // — 저장된 task.dueDate로 표시값도 같이 되돌려놓음(진짜 지우기는
+        // — 저장된 task.scheduledDate로 표시값도 같이 되돌려놓음(진짜 지우기는
         // "날짜 지우기" 버튼이 따로 처리).
         if (!dateInput.value) {
           // 달력의 "삭제"(크롬)처럼 칸 전체를 진짜로 비웠으면 "날짜 지우기"와
@@ -3649,7 +3656,7 @@
     const archived = boards.archive.map(t => ({ task: t, source: 'archive' }));
     const liveToday = boards.today.filter(t => t.done).map(t => ({ task: t, source: 'today' }));
     const liveScheduledToday = boards.scheduled
-      .filter(t => t.done && t.dueDate === today)
+      .filter(t => t.done && t.scheduledDate === today)
       .map(t => ({ task: t, source: 'scheduled' }));
     return archived.concat(liveToday, liveScheduledToday);
   }
@@ -3880,7 +3887,7 @@
       if (ok) {
         // 지정한 날짜가 있으면 그 날짜로 예정(scheduled), 없으면 today로
         // 바로 되살림 — 날짜는 선택 사항.
-        reviveTask(task, { text: reviveTextInput.value.trim(), subtasks: draftSubtasks.slice(), dueDate: draftDueDate });
+        reviveTask(task, { text: reviveTextInput.value.trim(), subtasks: draftSubtasks.slice(), scheduledDate: draftDueDate });
       }
       reviveCard.hidden = true;
       resetReviveDraft();
@@ -3910,7 +3917,7 @@
   }
 
   // "다가오는 일" — pray later 카드에 안 보이는(7일째부터인) scheduled
-  // 항목들. 저장 시점 플래그가 아니라 dueDate로 매번 다시 걸러내므로,
+  // 항목들. 저장 시점 플래그가 아니라 scheduledDate로 매번 다시 걸러내므로,
   // 하루 지나 6일 이내로 들어오면 다음 렌더링에서 자연스럽게 사라지고
   // pray later 쪽에 나타남.
   function renderUpcoming() {
@@ -3918,8 +3925,8 @@
     archiveUpcomingEl.innerHTML = '';
 
     const items = boards.scheduled
-      .filter(t => !t.done && daysUntilDue(t.dueDate) > PRAY_LATER_DAYS)
-      .sort((a, b) => a.dueDate.localeCompare(b.dueDate));
+      .filter(t => !t.done && daysUntilDue(t.scheduledDate) > PRAY_LATER_DAYS)
+      .sort((a, b) => a.scheduledDate.localeCompare(b.scheduledDate));
 
     if (items.length === 0) {
       const hint = document.createElement('li');
@@ -3987,7 +3994,7 @@
 
     const badge = document.createElement('span');
     badge.className = 'due-badge';
-    badge.textContent = formatDueDateRelative(task.dueDate);
+    badge.textContent = formatDueDateRelative(task.scheduledDate);
     // 📅 버튼 대신 날짜 배지를 눌러서 수정
     badge.tabIndex = 0;
     badge.setAttribute('role', 'button');
@@ -4014,7 +4021,7 @@
     const dateInput = document.createElement('input');
     dateInput.className = 'date-picker-input';
     dateInput.type = 'date';
-    dateInput.value = task.dueDate;
+    dateInput.value = task.scheduledDate;
 
     // renderItem의 날짜 피커와 같은 이유로 디바운스 — 이미 날짜가 채워진
     // 채로 열려서, 키패드로 두 자리 숫자를 치는 도중 첫 자리만으로 change가
@@ -4254,8 +4261,8 @@
     if (archivedTask.note) clone.note = archivedTask.note;
     // 날짜를 지정했으면 그 날짜로 예정(scheduled), 안 지정했으면 today로
     // 바로 되살림 — 되살리기 카드의 날짜는 선택 사항.
-    if (opts.dueDate) {
-      clone.dueDate = opts.dueDate;
+    if (opts.scheduledDate) {
+      clone.scheduledDate = opts.scheduledDate;
       boards.scheduled.push(clone);
     } else {
       boards.today.push(clone);
@@ -4954,7 +4961,7 @@
     // `today` tasks (plain, or a scheduled task due today rendered inside
     // today's list) get a same-day grace period before archiving; anything
     // else archives immediately once the strikethrough animation finishes.
-    const gracedToday = boardId === 'today' || (boardId === 'scheduled' && task.dueDate === today);
+    const gracedToday = boardId === 'today' || (boardId === 'scheduled' && task.scheduledDate === today);
 
     setTimeout(() => {
       // Ctrl+Z로 boards가 통째로 교체됐을 수 있어 옛 task 객체 대신 지금
@@ -4994,7 +5001,7 @@
       if (!task) return;
     }
     boards.waiting.splice(boards.waiting.indexOf(task), 1);
-    delete task.dueDate;
+    delete task.scheduledDate;
     delete task.replyDate; // 회신 예정일은 waiting에 있을 때만 의미 있음
     delete task.from;
     delete task.snoozedAt;
@@ -5008,7 +5015,7 @@
     const idx = boards[boardId].findIndex(t => t.id === id);
     if (idx === -1) return;
     const [task] = boards[boardId].splice(idx, 1);
-    delete task.dueDate;
+    delete task.scheduledDate;
     task.from = boardId;
     const gid = task.group;
     delete task.group; // done으로 가면 묶음에서 빠짐
@@ -5065,7 +5072,7 @@
   // 도착 자리가 지금 사용자 눈에 보이나 — 목록이 펼쳐져 있고(접힌 구역/lupin 뒷면/focus 화면이
   // 아님) 화면 안에 있어야 함. 새 항목은 목록 맨 아래에 붙으므로 목록 아래쪽이 보이는지로 판단.
   function isMoveDestinationVisible(toBoardId, task) {
-    if (toBoardId === 'scheduled' && task.dueDate && daysUntilDue(task.dueDate) > PRAY_LATER_DAYS) return false; // done 패널에만 있음
+    if (toBoardId === 'scheduled' && task.scheduledDate && daysUntilDue(task.scheduledDate) > PRAY_LATER_DAYS) return false; // done 패널에만 있음
     if (toBoardId === 'waiting' && isLupinOpen()) return false;
     const listEl = getListEl(toBoardId);
     if (!listEl || listEl.offsetParent === null) return false;
@@ -5109,7 +5116,7 @@
     const today = todayStr();
     return clusterGroups(sortByOrder(
       boards.today.filter(t => !t.done).map(t => ({ task: t }))
-        .concat(boards.scheduled.filter(t => !t.done && t.dueDate === today).sort(byDueDate).map(t => ({ task: t }))),
+        .concat(boards.scheduled.filter(t => !t.done && t.scheduledDate === today).sort(byDueDate).map(t => ({ task: t }))),
       e => e.task
     ), e => e.task).map(e => e.task);
   }
@@ -5140,7 +5147,7 @@
     const slot = fromBoardId === 'today' && !boards.today[idx].done
       ? todayActiveTasks().findIndex(t => t.id === id) : -1;
     const [task] = boards[fromBoardId].splice(idx, 1);
-    delete task.dueDate;
+    delete task.scheduledDate;
     delete task.replyDate; // 회신 예정일은 waiting에 있을 때만 의미 있음
     delete task.from;
     delete task.snoozedAt; // 미루기는 묵은 것 목록 안에서만 의미 있음
@@ -5221,7 +5228,7 @@
 
     if (boardId === 'scheduled') {
       if (dateValue) {
-        task.dueDate = dateValue;
+        task.scheduledDate = dateValue;
         saveBoards();
         render('today');
         render('scheduled');
@@ -5232,9 +5239,9 @@
         // 날짜를 지우면 원래 왔던 someday 등으로 돌아가는 대신 지금 보고
         // 있던 그대로 today에 남아야 자연스러움. 아직 pray later...에만
         // 있던(미래 날짜) 항목만 기존처럼 원래 보드로 돌려보냄.
-        const wasInTodayCard = task.dueDate <= todayStr();
+        const wasInTodayCard = task.scheduledDate <= todayStr();
         const backTo = wasInTodayCard ? 'today' : (task.from || 'today');
-        delete task.dueDate;
+        delete task.scheduledDate;
         delete task.from;
         boards[backTo].push(task);
         saveBoards();
@@ -5252,7 +5259,7 @@
       if (archivePanelEl.classList.contains('open')) renderUpcoming();
     } else if (dateValue) {
       boards[boardId].splice(idx, 1);
-      task.dueDate = dateValue;
+      task.scheduledDate = dateValue;
       task.from = boardId;
       boards.scheduled.push(task);
       saveBoards();
@@ -5976,7 +5983,7 @@
   let moveHighlight = null;
 
   // draft: 등록 전 입력창에서 마우스로 미리 정해둔 긴급/날짜/하위 항목
-  // ({ urgent, dueDate, subtasks: string[] }) — 새 항목 입력창의 draft
+  // ({ urgent, scheduledDate, subtasks: string[] }) — 새 항목 입력창의 draft
   // 컨트롤(아래 [data-newtask] 와이어링)에서 넘어옴.
   const ADD_TO_LABEL = { today: 'gotta do에', waiting: 'waiting에', someday: 'someday에', scheduled: 'pray later에' };
 
@@ -5993,7 +6000,7 @@
     lastAddedTaskId[boardId] = task.id;
     // 등록한 자리가 지금 안 보이면(접힌 구역, 날짜로 다른 보드행, focus 화면) 등록됐다고 알림.
     // 날짜 없이 입력창이 있는 보드에 그대로 등록한 경우는 눈에 보이니 생략.
-    const destBoard = draft && draft.dueDate ? (boardId === 'waiting' ? 'waiting' : 'scheduled') : boardId;
+    const destBoard = draft && draft.scheduledDate ? (boardId === 'waiting' ? 'waiting' : 'scheduled') : boardId;
     let hidden;
     if (forceToast) {
       hidden = true;
@@ -6001,18 +6008,18 @@
       const listEl = getListEl(boardId);
       hidden = !listEl || listEl.offsetParent === null;
     } else {
-      hidden = !isMoveDestinationVisible(destBoard, { dueDate: draft.dueDate });
+      hidden = !isMoveDestinationVisible(destBoard, { scheduledDate: draft.scheduledDate });
     }
     if (hidden) showToast(ADD_TO_LABEL[destBoard] + ' 등록했어요');
-    if (boardId === 'waiting' && draft && draft.dueDate) {
-      task.replyDate = draft.dueDate;
+    if (boardId === 'waiting' && draft && draft.scheduledDate) {
+      task.replyDate = draft.scheduledDate;
       boards.waiting.push(task);
       saveBoards();
       render('waiting');
-    } else if (draft && draft.dueDate) {
+    } else if (draft && draft.scheduledDate) {
       // setDueDate가 today/someday 항목을 scheduled로 옮길 때와 동일한
       // 모양 — 처음부터 날짜가 있는 채로 바로 scheduled에 생성함.
-      task.dueDate = draft.dueDate;
+      task.scheduledDate = draft.scheduledDate;
       task.from = boardId;
       boards.scheduled.push(task);
       saveBoards();
@@ -6383,7 +6390,7 @@
     function commitDraft() {
       const trimmed = input.value.trim();
       if (!trimmed) return false;
-      addTask(boardId, input.value, { urgent: draftUrgent, dueDate: draftDueDate, subtasks: draftSubtasks });
+      addTask(boardId, input.value, { urgent: draftUrgent, scheduledDate: draftDueDate, subtasks: draftSubtasks });
       input.value = '';
       draftUrgent = false;
       draftDueDate = '';
@@ -6692,11 +6699,11 @@
       .filter(t => !t.done)
       .map(t => ({ boardId: 'today', id: t.id, text: t.text, order: t.order }));
     const dueToday = boards.scheduled
-      .filter(t => !t.done && t.dueDate === today)
+      .filter(t => !t.done && t.scheduledDate === today)
       .sort(byDueDate)
       .map(t => ({ boardId: 'scheduled', id: t.id, text: t.text, order: t.order }));
     const oops = boards.scheduled
-      .filter(t => !t.done && t.dueDate < today)
+      .filter(t => !t.done && t.scheduledDate < today)
       .sort(byDueDate)
       .map(t => ({ boardId: 'scheduled', id: t.id, text: t.text }));
     return sortByOrder(active.concat(dueToday)).concat(oops);
@@ -8265,13 +8272,13 @@
   }
 
   function dsAlreadyInToday(item) {
-    return item.boardId === 'today' || (item.boardId === 'scheduled' && item.task.dueDate === todayStr());
+    return item.boardId === 'today' || (item.boardId === 'scheduled' && item.task.scheduledDate === todayStr());
   }
 
   // 지금 어느 카드에 보이는지에 맞는 아이콘 — 오늘 마감/지난 마감인 pray later 항목은 실제로는
   // gotta do 카드 안에 그려지므로 📅가 아니라 ✿
   function dsIconKey(boardId, task) {
-    if (boardId === 'scheduled' && task.dueDate && task.dueDate <= todayStr()) return 'today';
+    if (boardId === 'scheduled' && task.scheduledDate && task.scheduledDate <= todayStr()) return 'today';
     return boardId;
   }
 
@@ -8338,21 +8345,21 @@
     // 오늘 이미 할 일이 많으면 미리 시작하자는 질문은 건너뜀(질문 도중 사라지지 않게 답과 무관한 현재 개수 기준)
     // 지금 gotta do 카드에 보이는 미완료 개수: 일반 항목 + 오늘 마감 + oops(마감 지난 것)
     const busyCount = boards.today.filter(t => !t.done).length
-      + boards.scheduled.filter(t => !t.done && t.dueDate && t.dueDate <= today).length;
+      + boards.scheduled.filter(t => !t.done && t.scheduledDate && t.scheduledDate <= today).length;
     const isFriday = new Date().getDay() === 5;
     boards.scheduled
-      .filter(t => !t.done && !byTask.has(t.id) && t.dueDate)
+      .filter(t => !t.done && !byTask.has(t.id) && t.scheduledDate)
       .sort(byDueDate)
       .filter(t => {
-        const dd = daysUntilDue(t.dueDate);
+        const dd = daysUntilDue(t.scheduledDate);
         if (busyCount >= (dd >= 2 ? DAYSTART_BUSY_TODAY : DAYSTART_TODAY_LIMIT)) return false;
         // 마감일을 방금 정한 일은 이미 알고 있으므로 묻지 않음
-        if (t.dueSetAt && -daysUntilDue(t.dueSetAt) < DAYSTART_DUE_SET_RECENT) return false;
+        if (t.scheduledSetAt && -daysUntilDue(t.scheduledSetAt) < DAYSTART_DUE_SET_RECENT) return false;
         // 모레 마감은 금요일에 일요일 마감일 때만(주말 전에 챙기기)
         return dd === 1 || (dd === 2 && isFriday);
       })
       .slice(0, DAYSTART_DUE_SOON_MAX)
-      .forEach(t => push({ task: t, boardId: 'scheduled', tags: [daysUntilDue(t.dueDate) === 1 ? '내일 마감' : '모레 마감'], group: 'dueSoon' }));
+      .forEach(t => push({ task: t, boardId: 'scheduled', tags: [daysUntilDue(t.scheduledDate) === 1 ? '내일 마감' : '모레 마감'], group: 'dueSoon' }));
     // 확인 날짜 없이 오래 기다리는 waiting
     boards.waiting.forEach(t => {
       if (t.replyDate || byTask.has(t.id)) return;
@@ -8373,7 +8380,7 @@
       .forEach(({ t, days }) => push({ task: t, boardId: 'waiting', tags: [days + '일째'], group: 'waitIdle' }));
     // 긴급(❗)인데 며칠째 그대로 — 오늘 목록에 있는 것만
     boards.today.filter(t => !t.done && t.urgent).map(t => ({ task: t, boardId: 'today' }))
-      .concat(boards.scheduled.filter(t => !t.done && t.urgent && t.dueDate && t.dueDate <= today).map(t => ({ task: t, boardId: 'scheduled' })))
+      .concat(boards.scheduled.filter(t => !t.done && t.urgent && t.scheduledDate && t.scheduledDate <= today).map(t => ({ task: t, boardId: 'scheduled' })))
       .forEach(({ task, boardId }) => {
         const days = dsAgeDays(task);
         if (days < DAYSTART_URGENT_DAYS) return;
@@ -8404,7 +8411,7 @@
     for (let i = 0; i < items.length; i++) {
       const it = items[i];
       if (it.group !== 'dueToday' || it.task.urgent) continue;
-      const recent = it.task.dueSetAt && -daysUntilDue(it.task.dueSetAt) < DAYSTART_DUE_SET_RECENT;
+      const recent = it.task.scheduledSetAt && -daysUntilDue(it.task.scheduledSetAt) < DAYSTART_DUE_SET_RECENT;
       if (recent || dueTodayAsked >= DAYSTART_DUE_TODAY_MAX) { items.splice(i--, 1); continue; }
       dueTodayAsked++;
     }
@@ -8446,8 +8453,8 @@
       case 'replyToday':
         return { text: '오늘 회신 예정인데, 확인 연락을 하실래요?', yes: follow, no: noop };
       case 'dueSoon': {
-        const dd = daysUntilDue(t.dueDate);
-        const day = new Date(t.dueDate + 'T00:00:00').getDay();
+        const dd = daysUntilDue(t.scheduledDate);
+        const day = new Date(t.scheduledDate + 'T00:00:00').getDay();
         const weekend = new Date().getDay() === 5 && (day === 6 || day === 0);
         return { text: (weekend ? '이번 주말' : (dd === 1 ? '내일' : '모레')) + ' 마감인데, 오늘 미리 ' + (weekend ? '처리할래요?' : '시작할래요?'), yes: { action: 'today' }, no: noop };
       }
@@ -8606,7 +8613,7 @@
     const entries = [];
     const current = sortByOrder(
       boards.today.filter(t => !t.done).map(t => ({ boardId: 'today', task: t }))
-        .concat(boards.scheduled.filter(t => !t.done && t.dueDate === today).map(t => ({ boardId: 'scheduled', task: t }))),
+        .concat(boards.scheduled.filter(t => !t.done && t.scheduledDate === today).map(t => ({ boardId: 'scheduled', task: t }))),
       e => e.task
     );
     const postponed = new Set((ds.overload && ds.overload.ids) || []);
@@ -8635,7 +8642,7 @@
         // 마감이 지났던 것은 오늘 급한 쪽, 마무리 한 개 남은 것은 앞쪽, 나머지는 기존 항목 뒤
         const rank = item.task.urgent ? 0 : (item.group === 'dueLate' ? 2 : (item.group === 'finish' ? 4 : 6));
         entries.push({ key: String(item.task.id), text: item.task.text, origin: '', urgent: !!item.task.urgent, rank, board: 'today' });
-      } else if (d.action === 'clearDate' && !dsAlreadyInToday(item) && (item.task.dueDate && item.task.dueDate <= todayStr() ? 'today' : (item.task.from || 'today')) === 'today') {
+      } else if (d.action === 'clearDate' && !dsAlreadyInToday(item) && (item.task.scheduledDate && item.task.scheduledDate <= todayStr() ? 'today' : (item.task.from || 'today')) === 'today') {
         entries.push({ key: String(item.task.id), text: item.task.text, origin: '', rank: 6, board: 'today' });
       } else if (d.action === 'self') {
         entries.push({ key: String(item.task.id), text: item.task.text, origin: '', urgent: !!item.task.urgent, rank: 3, board: 'today' });
@@ -8833,7 +8840,7 @@
     const need = keys.length - DAYSTART_TODAY_LIMIT;
     const live = new Map();
     boards.today.filter(t => !t.done).forEach(t => live.set(String(t.id), { task: t, boardId: 'today' }));
-    boards.scheduled.filter(t => !t.done && t.dueDate === todayStr()).forEach(t => live.set(String(t.id), { task: t, boardId: 'scheduled' }));
+    boards.scheduled.filter(t => !t.done && t.scheduledDate === todayStr()).forEach(t => live.set(String(t.id), { task: t, boardId: 'scheduled' }));
     // 순서가 뒤쪽인 것부터, 긴급이 아닌 기존 항목만(새로 만들 것은 제외)
     const picks = [];
     for (let i = keys.length - 1; i >= 0 && picks.length < need; i--) {
@@ -9020,7 +9027,7 @@
       if (item.task.urgent) row.appendChild(makeSearchChip('긴급'));
       if (q.others && q.others.length) row.appendChild(makeSearchChip('🔗 묶음 ' + (q.others.length + 1) + '개'));
       // 언제 하기로 한 일인지: 날짜가 있는데 태그에 이미 마감/회신이 없으면 날짜 칩을 덧붙임
-      const dateKey = item.boardId === 'waiting' ? 'replyDate' : 'dueDate';
+      const dateKey = item.boardId === 'waiting' ? 'replyDate' : 'scheduledDate';
       if (item.task[dateKey] && !item.tags.some(tag => /마감|회신/.test(tag))) {
         row.appendChild(makeSearchChip((dateKey === 'replyDate' ? '회신 ' : '마감 ') + formatDueDateRelative(item.task[dateKey])));
       }
@@ -9617,7 +9624,7 @@
 
   function dsScrub(task) {
     delete task.snoozedAt;
-    delete task.dueDate;
+    delete task.scheduledDate;
     delete task.replyDate;
     delete task.from;
     delete task.order;
@@ -9636,10 +9643,10 @@
     task.urgent = false;
     delete task.order;
     // 오늘 할 일은 당일 취소선으로 남고 다음날 스윕됨. 그 밖에는 바로 done 아카이브로.
-    const graced = boardId === 'today' || (boardId === 'scheduled' && task.dueDate === today);
+    const graced = boardId === 'today' || (boardId === 'scheduled' && task.scheduledDate === today);
     if (!graced) {
       dsDetach(boardId, task);
-      delete task.dueDate;
+      delete task.scheduledDate;
       task.from = boardId;
       delete task.group; // done으로 가면 묶음에서 빠짐
       boards.archive.push(task);
@@ -9660,12 +9667,12 @@
         break;
       case 'later':
         if (boardId === 'scheduled') {
-          task.dueDate = d.date;
+          task.scheduledDate = d.date;
         } else {
           dsDetach(boardId, task);
           dsScrub(task);
           task.from = boardId === 'someday' ? 'someday' : 'today';
-          task.dueDate = d.date;
+          task.scheduledDate = d.date;
           boards.scheduled.push(task);
         }
         break;
@@ -9704,12 +9711,12 @@
       case 'later':
         // 날짜를 다시 잡기 — pray later 항목은 날짜만, 다른 보드 항목은 그 날짜로 pray later에 보냄
         if (boardId === 'scheduled') {
-          task.dueDate = d.date;
+          task.scheduledDate = d.date;
         } else {
           dsDetach(boardId, task);
           dsScrub(task);
           task.from = boardId === 'someday' ? 'someday' : 'today';
-          task.dueDate = d.date;
+          task.scheduledDate = d.date;
           boards.scheduled.push(task);
         }
         break;
@@ -9719,9 +9726,9 @@
       case 'clearDate': {
         // 마감 날짜를 지움 — 오늘 마감/지난 마감은 gotta do에 그대로 남고, 아직 안 온 마감은 원래 보드로(보드의 '날짜 지우기'와 같은 규칙)
         if (boardId === 'scheduled') {
-          const backTo = (task.dueDate && task.dueDate <= todayStr()) ? 'today' : (task.from || 'today');
+          const backTo = (task.scheduledDate && task.scheduledDate <= todayStr()) ? 'today' : (task.from || 'today');
           dsDetach('scheduled', task);
-          delete task.dueDate;
+          delete task.scheduledDate;
           delete task.from;
           boards[backTo].push(task);
         }
@@ -9849,7 +9856,7 @@
       ((ds.overload && ds.overload.ids) || []).forEach(id => {
         const later = (ds.overload.dates && ds.overload.dates[id]) || tomorrow;
         const inToday = boards.today.find(t => t.id === id && !t.done);
-        const inSched = boards.scheduled.find(t => t.id === id && !t.done && t.dueDate === today);
+        const inSched = boards.scheduled.find(t => t.id === id && !t.done && t.scheduledDate === today);
         if (later === DS_OVERLOAD_WAITING) {
           const wt = inToday || inSched;
           if (wt) {
@@ -9863,11 +9870,11 @@
           dsDetach('today', inToday);
           dsScrub(inToday);
           inToday.from = 'today';
-          inToday.dueDate = later;
+          inToday.scheduledDate = later;
           boards.scheduled.push(inToday);
           changed = true;
         } else if (inSched) {
-          inSched.dueDate = later;
+          inSched.scheduledDate = later;
           changed = true;
         }
       });
@@ -9880,7 +9887,7 @@
           boards.today.push(t);
           newTasks.set(p.key, t);
         } else {
-          t.dueDate = date;
+          t.scheduledDate = date;
           t.from = 'today';
           boards.scheduled.push(t);
         }
@@ -9890,7 +9897,7 @@
       // 순서 화면에서 ✓로 완료 표시한 것 — 방금 만든/옮겨온 것까지 포함해 오늘 목록에서 찾아 완료 처리
       dsDoneKeys(entries).forEach(k => {
         const t = newTasks.get(k) || boards.today.find(x => String(x.id) === k && !x.done)
-          || boards.scheduled.find(x => String(x.id) === k && !x.done && x.dueDate === today);
+          || boards.scheduled.find(x => String(x.id) === k && !x.done && x.scheduledDate === today);
         if (!t) return;
         dsCompleteTask(boards.today.includes(t) ? 'today' : 'scheduled', t);
         changed = true;
@@ -9898,7 +9905,7 @@
 
       // 오늘 목록(일반 + 오늘 마감)에 남은 할 일에 확정한 순서를 그대로 기록
       const live = boards.today.filter(t => !t.done)
-        .concat(boards.scheduled.filter(t => !t.done && t.dueDate === today));
+        .concat(boards.scheduled.filter(t => !t.done && t.scheduledDate === today));
       const byKey = new Map(newTasks);
       live.forEach(t => { if (!byKey.has(String(t.id))) byKey.set(String(t.id), t); });
       const liveSet = new Set(live);

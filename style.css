@@ -836,7 +836,7 @@
   }
 
   /* "완료 기록"/"다가오는 일" 구간을 라벨 텍스트 없이 점선 하나로만
-     구분 — 정렬 기준이 서로 달라서(doneAt 최신순 vs dueDate 임박순)
+     구분 — 정렬 기준이 서로 달라서(doneAt 최신순 vs scheduledDate 임박순)
      한 리스트에 섞지는 않되, 글자 없이 선만 그어둠. */
   .archive-section-divider {
     border-bottom: 1px dashed var(--focus-box-border);
