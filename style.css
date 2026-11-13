@@ -2949,6 +2949,66 @@
     color: var(--accent);
   }
 
+  /* 마감일 알약 — "그날까지 해야 한다"(수행일 .due-badge와 다른 개념). 평소엔 안 보이다가
+     호버/포커스/탭으로 연 항목에서만 나타나고, D-3 이내(지난 것 포함)는 .deadline-soon으로 항상 보임.
+     opacity만 바꿔서 나타날 때 항목 높이/배치가 출렁이지 않게 함. */
+  .deadline-badge {
+    flex: 0 0 auto;
+    font-family: var(--font-ui);
+    letter-spacing: var(--ui-letter-spacing);
+    font-size: 12px;
+    color: var(--ink-soft);
+    background: var(--tape-edge);
+    border-radius: 10px;
+    padding: 2px 7px 1px;
+    white-space: nowrap;
+    cursor: pointer;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.15s var(--ease-ui), color 0.15s var(--ease-ui);
+  }
+
+  .deadline-badge.deadline-soon,
+  .task-item:is(:hover, :focus-within, .row-pinned, .controls-open) .deadline-badge {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .deadline-badge.deadline-soon {
+    color: var(--accent);
+  }
+
+  .deadline-badge.deadline-over {
+    font-weight: 600;
+  }
+
+  .deadline-badge:hover {
+    color: var(--accent);
+  }
+
+  /* 날짜 행 안의 둘째 줄 — 수행일 칸 아래에 마감일 칸 */
+  .date-picker-row {
+    flex-wrap: wrap;
+  }
+
+  .deadline-field {
+    flex: 0 0 100%;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .deadline-field[hidden] {
+    display: none;
+  }
+
+  .deadline-field-label {
+    font-family: var(--font-ui);
+    letter-spacing: var(--ui-letter-spacing);
+    font-size: 12px;
+    color: var(--ink-soft);
+  }
+
   /* 메모 알약 — 날짜 칩(.due-badge)과 같은 모양 */
   .note-badge {
     flex: 0 0 auto;

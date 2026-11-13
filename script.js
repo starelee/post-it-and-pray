@@ -81,6 +81,8 @@
   // a date moves the task into `scheduled`; on `waiting` it only sets the
   // separate `replyDate` field and the task stays in waiting.
   const DATE_ENABLED_IDS = ['today', 'someday', 'waiting'];
+  // 마감일(deadline)을 붙일 수 있는 보드 — 날짜 행이 있는 곳(수행일과 별개 필드라 보드를 옮기지 않음)
+  const DEADLINE_BOARD_IDS = ['today', 'someday', 'waiting', 'scheduled'];
   // waiting의 "회신 예정일"은 scheduled 전용 scheduledDate와 분리된 별도 필드 —
   // scheduledDate를 재사용하면 migrateArchive/today 렌더가 waiting 항목을 건드림.
   function dateFieldOf(boardId) {
@@ -191,6 +193,75 @@
     } catch (e) {
       return dateStr;
     }
+  }
+
+  // 마감일(deadline) — "그날까지 해야 한다". 수행 예정일(scheduledDate, "그날 하겠다")과 별개라
+  // 보드를 옮기지 않고 어느 보드의 항목에나 붙음. 라벨은 평소엔 숨겨 두고(호버/포커스/탭으로 연 항목에서만 보임)
+  // D-4 이내(지난 것 포함)부터만 항상 보임 — 지금 신경 쓸 필요 없는 마감은 시야 밖에 둠.
+  // D-3 ~ D-day(지난 것 포함)는 디데이 방식, D-4는 마감일(날짜)을 보여주며 평소에도 보임, D-5 이상은 날짜만(호버 때만).
+  const DEADLINE_DDAY_STYLE_DAYS = 3;
+  const DEADLINE_ALWAYS_VISIBLE_DAYS = 4;
+  function deadlineLabel(dateStr) {
+    const n = daysUntilDue(dateStr);
+    if (n <= DEADLINE_DDAY_STYLE_DAYS) return n === 0 ? 'D-day' : (n > 0 ? 'D-' + n : 'D+' + (-n));
+    const d = new Date(dateStr + 'T00:00:00');
+    return (d.getMonth() + 1) + '/' + d.getDate() + '(' + WEEKDAY_KO[d.getDay()] + ')';
+  }
+  function deadlineTitle(dateStr) {
+    const d = new Date(dateStr + 'T00:00:00');
+    return '마감 ' + (d.getMonth() + 1) + '/' + d.getDate() + '(' + WEEKDAY_KO[d.getDay()] + ')';
+  }
+  function createDeadlineBadge(dateStr, opts) {
+    const el = document.createElement('span');
+    el.className = 'deadline-badge';
+    el.textContent = deadlineLabel(dateStr);
+    el.title = deadlineTitle(dateStr);
+    const n = daysUntilDue(dateStr);
+    if (n <= DEADLINE_ALWAYS_VISIBLE_DAYS || (opts && opts.alwaysVisible)) el.classList.add('deadline-soon');
+    if (n < 0) el.classList.add('deadline-over');
+    return el;
+  }
+
+  // 날짜 행 안에 들어가는 "마감" 입력 칸 — 기존 항목(디바운스 후 저장)과 새 항목 초안(즉시 반영)이 같이 씀.
+  // opts.debounceMs > 0이면 년/월/일 중 한 칸씩 고치는 입력 도중에 바로 저장되지 않게 기다렸다 커밋.
+  // 빈 값(change)은 모바일의 가짜 이벤트와 구분하기 어려워 무시하고, 지우기는 "마감 지우기" 버튼으로만 함.
+  function createDeadlineField(initial, onChange, opts) {
+    const debounceMs = (opts && opts.debounceMs) || 0;
+    let current = initial || '';
+    let timer = null;
+    const wrap = document.createElement('div');
+    wrap.className = 'deadline-field';
+    const label = document.createElement('span');
+    label.className = 'deadline-field-label';
+    label.textContent = '마감';
+    const input = document.createElement('input');
+    input.className = 'date-picker-input deadline-picker-input';
+    input.type = 'date';
+    input.setAttribute('aria-label', '마감일');
+    input.value = current;
+    const clearBtn = document.createElement('button');
+    clearBtn.type = 'button';
+    clearBtn.className = 'date-clear-btn';
+    clearBtn.textContent = '마감 지우기';
+    clearBtn.hidden = !current;
+    const commit = (value) => {
+      clearTimeout(timer);
+      timer = null;
+      current = value;
+      clearBtn.hidden = !value;
+      onChange(value);
+    };
+    input.addEventListener('change', () => {
+      if (!input.value) { input.value = current; return; }
+      clearTimeout(timer);
+      if (debounceMs > 0) timer = setTimeout(() => commit(input.value), debounceMs);
+      else commit(input.value);
+    });
+    clearBtn.addEventListener('click', () => { input.value = ''; commit(''); });
+    wrap.appendChild(label);
+    wrap.appendChild(wrapDateInputWithHint(input));
+    wrap.appendChild(clearBtn);
+    return { el: wrap, input, clear: () => { clearTimeout(timer); current = ''; input.value = ''; clearBtn.hidden = true; } };
   }
 
   const dateEl = document.getElementById('dateText');
@@ -934,7 +1005,7 @@
       let overdue = 0;
       let isToday = false;
       const dateKey = boardId === 'waiting' ? 'replyDate' : 'scheduledDate';
-      const label = boardId === 'waiting' ? '회신' : '마감';
+      const label = boardId === 'waiting' ? '회신' : '예정';
       if (task[dateKey]) {
         const past = -daysUntilDue(task[dateKey]);
         if (past > 0) { tags.push(label + ' ' + past + '일 지남'); overdue = past; }
@@ -3011,7 +3082,7 @@
     });
     const ok = await showConfirm({
       title: '오늘 할 일로 바꿀까요?',
-      message: '마감이 지난 항목 ' + overdue.length + '개의 날짜를 오늘로 바꿔서, 오늘 할 일로 옮겨요.',
+      message: '날짜가 지난 항목 ' + overdue.length + '개의 날짜를 오늘로 바꿔서, 오늘 할 일로 옮겨요.',
       content: list,
       confirmLabel: '오늘로 변경',
       cancelLabel: '취소',
@@ -3240,6 +3311,13 @@
       badge.className = 'due-badge';
       badge.textContent = formatDueDateRelative(task[dateKey]);
       row.appendChild(badge);
+    }
+
+    // 마감일 라벨 — 평소엔 숨김(CSS), 호버 시 또는 D-3 이내부터 항상 보임
+    let deadlineBadge = null;
+    if (task.deadline && !task.done && DEADLINE_BOARD_IDS.includes(boardId)) {
+      deadlineBadge = createDeadlineBadge(task.deadline);
+      row.appendChild(deadlineBadge);
     }
 
     // 메모가 붙어 있으면 날짜/진행도 알약과 같은 모양의 "메모" 알약 —
@@ -3556,6 +3634,12 @@
       dateRow.appendChild(tomorrowBtn);
       dateRow.appendChild(clearBtn);
       dateRow.appendChild(cancelBtn);
+      // 마감일 칸 — 수행일(위)과 별개. 같은 날짜 행 안의 둘째 줄.
+      const deadlineField = createDeadlineField(task.deadline, (value) => {
+        clearTimeout(commitTimer);
+        setDeadline(boardId, task.id, value);
+      }, { debounceMs: DATE_COMMIT_WAIT_MS });
+      dateRow.appendChild(deadlineField.el);
       li.appendChild(dateRow);
 
       const toggleDateRow = () => {
@@ -3583,6 +3667,10 @@
       });
       if (badge) badge.addEventListener('click', () => {
         if (commitPendingEditThenRetry(li, task.id, '.due-badge')) return;
+        toggleDateRow();
+      });
+      if (deadlineBadge) deadlineBadge.addEventListener('click', () => {
+        if (commitPendingEditThenRetry(li, task.id, '.deadline-badge')) return;
         toggleDateRow();
       });
     }
@@ -5205,6 +5293,19 @@
     });
   }
 
+  // 마감일 지정/해제 — 수행일과 달리 보드를 옮기지 않고 필드만 바꿈(묶음 항목도 그 항목만).
+  function setDeadline(boardId, id, value) {
+    const task = (boards[boardId] || []).find(t => t.id === id);
+    if (!task) return;
+    if ((task.deadline || '') === (value || '')) return;
+    if (value) task.deadline = value;
+    else delete task.deadline;
+    saveBoards();
+    render(boardId);
+    if (boardId === 'scheduled') render('today'); // 오늘 날짜인 scheduled 항목은 today 카드 안에 그려짐
+    if (archivePanelEl.classList.contains('open')) renderUpcoming();
+  }
+
   function setDueDateCore(boardId, id, dateValue) {
     const idx = boards[boardId].findIndex(t => t.id === id);
     if (idx === -1) return;
@@ -5997,6 +6098,7 @@
       urgent: !!(draft && draft.urgent),
       subtasks: (draft && draft.subtasks || []).map((t, i) => ({ id: Date.now() + i, text: t, done: false }))
     };
+    if (draft && draft.deadline) task.deadline = draft.deadline;
     lastAddedTaskId[boardId] = task.id;
     // 등록한 자리가 지금 안 보이면(접힌 구역, 날짜로 다른 보드행, focus 화면) 등록됐다고 알림.
     // 날짜 없이 입력창이 있는 보드에 그대로 등록한 경우는 눈에 보이니 생략.
@@ -6176,6 +6278,7 @@
     // 그대로 넘어가고, 등록 후엔 다음 입력을 위해 리셋됨.
     let draftUrgent = false;
     let draftDueDate = '';
+    let draftDeadline = '';
     let draftSubtasks = [];
 
     // draftControls를 add-row 안에 같이 두면 opacity로 숨겨도 flex 공간은
@@ -6233,6 +6336,8 @@
     let dateRow = null;
     let dateInput = null;
     let dateBadge = null;
+    let deadlineDraftBadge = null;
+    let deadlineDraftField = null;
     if (dateBtn) {
       dateBadge = document.createElement('span');
       dateBadge.className = 'due-badge';
@@ -6304,6 +6409,25 @@
       dateRow.appendChild(wrapDateInputWithHint(dateInput));
       dateRow.appendChild(tomorrowBtn);
       dateRow.appendChild(dateClearBtn);
+      // 마감일 초안 — 등록 후에도 항상 보이도록 add-row 안에 알약을 둠(호버 여부와 무관)
+      deadlineDraftBadge = document.createElement('span');
+      deadlineDraftBadge.hidden = true;
+      deadlineDraftBadge.className = 'deadline-badge deadline-soon';
+      deadlineDraftBadge.addEventListener('click', () => {
+        dateRow.hidden = !dateRow.hidden;
+        if (!dateRow.hidden) deadlineDraftField.input.focus();
+      });
+      addRow.appendChild(deadlineDraftBadge);
+      deadlineDraftField = createDeadlineField('', (value) => {
+        draftDeadline = value;
+        deadlineDraftBadge.hidden = !value;
+        if (value) {
+          deadlineDraftBadge.textContent = deadlineLabel(value);
+          deadlineDraftBadge.title = deadlineTitle(value);
+          dateRow.hidden = true;
+        }
+      });
+      dateRow.appendChild(deadlineDraftField.el);
       dateBtn.addEventListener('click', () => {
         dateRow.hidden = !dateRow.hidden;
         if (!dateRow.hidden) focusAndShowPicker(dateInput);
@@ -6390,10 +6514,13 @@
     function commitDraft() {
       const trimmed = input.value.trim();
       if (!trimmed) return false;
-      addTask(boardId, input.value, { urgent: draftUrgent, scheduledDate: draftDueDate, subtasks: draftSubtasks });
+      addTask(boardId, input.value, { urgent: draftUrgent, scheduledDate: draftDueDate, deadline: draftDeadline, subtasks: draftSubtasks });
       input.value = '';
       draftUrgent = false;
       draftDueDate = '';
+      draftDeadline = '';
+      if (deadlineDraftBadge) deadlineDraftBadge.hidden = true;
+      if (deadlineDraftField) deadlineDraftField.clear();
       draftSubtasks = [];
       urgentBtn.classList.remove('draft-active');
       addRow.classList.remove('draft-urgent');
@@ -8286,10 +8413,10 @@
   // 왜 올라왔는지를 group으로 나눠 두고, group마다 질문 규칙이 하나씩 있음(아래 dsQuestionFor).
   // 한 항목이 여러 이유에 걸리면 더 급한 쪽 group에 한 번만 들어감.
   const DAYSTART_GROUPS = [
-    { key: 'dueLate', test: t => /^마감 \d+일 지남$/.test(t) },
+    { key: 'dueLate', test: t => /^예정 \d+일 지남$/.test(t) },
     { key: 'replyLate', test: t => /^회신 \d+일 지남$/.test(t) },
     { key: 'urgentOld' },
-    { key: 'dueToday', test: t => t === '오늘 마감' },
+    { key: 'dueToday', test: t => t === '오늘 예정' },
     { key: 'replyToday', test: t => t === '오늘 회신' },
     { key: 'dueSoon' },
     { key: 'finish', test: t => /^하위 /.test(t) },
@@ -8359,7 +8486,7 @@
         return dd === 1 || (dd === 2 && isFriday);
       })
       .slice(0, DAYSTART_DUE_SOON_MAX)
-      .forEach(t => push({ task: t, boardId: 'scheduled', tags: [daysUntilDue(t.scheduledDate) === 1 ? '내일 마감' : '모레 마감'], group: 'dueSoon' }));
+      .forEach(t => push({ task: t, boardId: 'scheduled', tags: [daysUntilDue(t.scheduledDate) === 1 ? '내일 예정' : '모레 예정'], group: 'dueSoon' }));
     // 확인 날짜 없이 오래 기다리는 waiting
     boards.waiting.forEach(t => {
       if (t.replyDate || byTask.has(t.id)) return;
@@ -8437,11 +8564,11 @@
     const follow = { action: 'follow', date: dsDateAfter(DAYSTART_FOLLOW_DAYS), text: t.text + ' 후속 연락' };
     switch (item.group) {
       case 'dueLate': {
-        const n = num(/^마감 (\d+)일 지남$/);
+        const n = num(/^예정 (\d+)일 지남$/);
         if (n >= DAYSTART_BIG_OVERDUE) {
-          return { text: '마감이 ' + n + '일 넘게 지났는데, 다음 주로 다시 잡을래요?', yes: { action: 'later', date: dsNextMonday() }, no: snooze };
+          return { text: '예정일이 ' + n + '일 넘게 지났는데, 다음 주로 다시 잡을래요?', yes: { action: 'later', date: dsNextMonday() }, no: snooze };
         }
-        return { text: '마감이 ' + n + '일 지났는데, 오늘 처리할래요?', yes: { action: 'today' }, no: noop };
+        return { text: '예정일이 ' + n + '일 지났는데, 오늘 처리할래요?', yes: { action: 'today' }, no: noop };
       }
       case 'replyLate':
         return { text: '회신 기한이 ' + num(/^회신 (\d+)일 지남$/) + '일 지났는데, 후속 연락을 하실래요?', yes: follow, no: noop };
@@ -8449,14 +8576,14 @@
         return { text: '긴급인데 ' + (item.days || num(/^(\d+)일째$/)) + '일째 그대로예요. 오늘 첫 번째로 할래요?', yes: { action: 'top' }, no: snooze };
       case 'dueToday':
         if (t.urgent) return null;
-        return { text: '오늘 마감인데, 긴급건으로 처리할래요?', yes: { action: 'urgent' }, no: noop };
+        return { text: '오늘 예정인데, 긴급건으로 처리할래요?', yes: { action: 'urgent' }, no: noop };
       case 'replyToday':
         return { text: '오늘 회신 예정인데, 확인 연락을 하실래요?', yes: follow, no: noop };
       case 'dueSoon': {
         const dd = daysUntilDue(t.scheduledDate);
         const day = new Date(t.scheduledDate + 'T00:00:00').getDay();
         const weekend = new Date().getDay() === 5 && (day === 6 || day === 0);
-        return { text: (weekend ? '이번 주말' : (dd === 1 ? '내일' : '모레')) + ' 마감인데, 오늘 미리 ' + (weekend ? '처리할래요?' : '시작할래요?'), yes: { action: 'today' }, no: noop };
+        return { text: (weekend ? '이번 주말' : (dd === 1 ? '내일' : '모레')) + ' 예정인데, 오늘 미리 ' + (weekend ? '처리할래요?' : '시작할래요?'), yes: { action: 'today' }, no: noop };
       }
       case 'finish': {
         // waiting 항목은 하위 항목이 끝나도 '완료'를 묻지 않음(기다리는 일은 상대가 답해야 끝나므로)
@@ -8501,7 +8628,7 @@
     const days = (re) => { for (const tag of item.tags) { const m = tag.match(re); if (m) return Number(m[1]); } return 0; };
     switch (item.group) {
       case 'dueLate':
-        return days(/^마감 (\d+)일 지남$/) >= DAYSTART_BIG_OVERDUE
+        return days(/^예정 (\d+)일 지남$/) >= DAYSTART_BIG_OVERDUE
           ? [tomorrow, clearDate, someday, finished('이미 끝났어요 (완료)')]
           : [tomorrow, nextWeek, clearDate, someday, finished('이미 끝났어요 (완료)')];
       case 'replyLate':
@@ -9028,8 +9155,8 @@
       if (q.others && q.others.length) row.appendChild(makeSearchChip('🔗 묶음 ' + (q.others.length + 1) + '개'));
       // 언제 하기로 한 일인지: 날짜가 있는데 태그에 이미 마감/회신이 없으면 날짜 칩을 덧붙임
       const dateKey = item.boardId === 'waiting' ? 'replyDate' : 'scheduledDate';
-      if (item.task[dateKey] && !item.tags.some(tag => /마감|회신/.test(tag))) {
-        row.appendChild(makeSearchChip((dateKey === 'replyDate' ? '회신 ' : '마감 ') + formatDueDateRelative(item.task[dateKey])));
+      if (item.task[dateKey] && !item.tags.some(tag => /예정|회신/.test(tag))) {
+        row.appendChild(makeSearchChip((dateKey === 'replyDate' ? '회신 ' : '예정 ') + formatDueDateRelative(item.task[dateKey])));
       }
     }
     li.appendChild(row);
