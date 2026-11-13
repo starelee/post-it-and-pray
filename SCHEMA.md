@@ -69,7 +69,8 @@ type Task = {
   subtasks: Subtask[];
   scheduledDate?: string;      // "YYYY-MM-DD" — 수행 예정일("그날 하겠다"). scheduled 항목에만 존재. 옛 이름 dueDate
   deadline?: string;     // "YYYY-MM-DD" — 마감일("그날까지 해야 한다"). 수행일과 별개로 어느 보드의 항목에나 붙고 보드를 옮기지 않음
-  snoozedAt?: string;    // "YYYY-MM-DD" — 하루 시작하기에서 '아니오(미루기)'를 누른 날(오래 묵은 것 등은 3일, 날짜 기반 질문은 내일까지 — 아래 `snoozedAt` 참고). updatedAt은 올리지 않음
+  snoozedAt?: string;    // "YYYY-MM-DD" — 하루 시작하기에서 '아니오(미루기)'를 누른 날(쉬는 기간은 `snoozeKind`가 정함). updatedAt은 올리지 않음
+  snoozeKind?: 'week' | 'rest'; // snoozedAt이 있을 때만 — 없음 = 3일(예전 데이터와 같음), 'week' = 다음 주 월요일까지, 'rest' = 내일까지(날짜 기반 질문). 미루기와 함께 생기고 지워짐
   note?: string;         // 메모(최대 2000자, 줄바꿈 허용) — 없거나 빈 문자열이면 필드 자체가 없음. 항목이 보드를 옮겨 다니거나 아카이브로 가도 그대로 따라감
   group?: number;        // 묶음 id(처음 묶인 항목의 id) — 같은 값을 가진 항목끼리 한 묶음. 묶음 이름/별도 객체 없음. 아래 "묶음" 참고
   from?: string;         // 보드 id 문자열 — 아래 "from 필드의 두 가지 의미" 참고
@@ -112,7 +113,7 @@ type Memo = {
 
 ## 필드별 의미
 
-- **`snoozedAt`**: 하루 시작하기에서 `아니오`로 미룬 날짜. 질문 종류에 따라 쉬는 기간이 다름 — `오래 묵은 것`·같은 제목·긴급 묵음 등은 3일(`SNOOZE_DAYS`) 동안 안 올라오고(검색 제안의 `오래 묵은 것` 포함), 날짜 기반 질문(예정일·회신·마감일, `DAYSTART_DATE_REST_DAYS`)은 오늘과 내일(2일)만 쉬고 모레 다시 물음. 단 마감이 D-1 이내이거나 지난 마감 질문은 `snoozedAt`과 무관하게 계속 물음. 어느 쪽이든 같은 필드 하나에 날짜만 남기고 기간은 질문 종류가 정함. '마지막으로 손댄 때'(`updatedAt`)와 '미룬 때'를 따로 관리하려고 별도 필드로 두었고, 변경 감지 서명(`stampChangedTasks`)에서 빼서 미루기만으로는 `updatedAt`이 올라가지 않음(올라가면 묵은 시계가 리셋돼 미루기가 곧 2주가 됨). 클라우드 병합에서 `updatedAt`이 같을 때는 더 나중에 미룬 쪽이 이김(`mergeBoards`). 보드를 옮기면 지워짐.
+- **`snoozedAt`**: 하루 시작하기에서 `아니오`로 미룬 날짜. 쉬는 기간은 **`snoozeKind`**가 정함: 없음 = 3일(`SNOOZE_DAYS`, `오래 묵은 것`·같은 제목·긴급 묵음 등의 `아니오`, 검색 제안의 `오래 묵은 것`도 같음), `'week'` = 미룬 날 **다음 주 월요일 전까지**(`nextMondayAfter` — 대안 버튼 `다음 주에 다시 묻기`), `'rest'` = 오늘과 내일(`SNOOZE_REST_DAYS` 2일)만 쉬고 모레 다시 물음(날짜 기반 질문 — 예정일·회신·마감일 — 의 `아니오`). 단 마감이 D-1 이내이거나 지난 마감 질문은 `snoozedAt`과 무관하게 계속 물음. `snoozeKind`는 `snoozedAt`과 함께 생기고(`updatedAt` 서명에서도 같이 뺌), 보드를 옮기면 같이 지워짐. '마지막으로 손댄 때'(`updatedAt`)와 '미룬 때'를 따로 관리하려고 별도 필드로 두었고, 변경 감지 서명(`stampChangedTasks`)에서 빼서 미루기만으로는 `updatedAt`이 올라가지 않음(올라가면 묵은 시계가 리셋돼 미루기가 곧 2주가 됨). 클라우드 병합에서 `updatedAt`이 같을 때는 더 나중에 미룬 쪽이 이김(`mergeBoards`). 보드를 옮기면 지워짐.
 
 - **`scheduledDate`**: **"그날 하겠다"고 정한 날(수행 예정일)이지 마감일이 아님.** 그날이 되면 today에 나타나고, 지났는데 안 했으면 "기한 초과"가 아니라 "그날 못 한 일이 오늘로 이월된 것"(`oops, still here`)이다. 옛 이름은 `dueDate`(마감으로 오독되어 바꿈) — 불러올 때 `normalizeTasks`가 옛 이름(`dueDate`/`dueSetAt`)을 새 이름으로 읽어 주고, 저장하면 새 이름으로만 기록됨(옛 앱 버전은 새 이름을 못 읽음). `scheduled` 배열에 들어있는 항목만 가짐. `today`/`someday`/`waiting`/`archive`에 있는 동안엔 존재하지 않음(today/someday에서 날짜를 지정하는 순간 그 항목 자체가 `scheduled` 배열로 옮겨감).
 - **`deadline`** (`YYYY-MM-DD`, 선택): **마감일 — "그날까지 해야 한다".** 수행일과 완전히 별개라 한 항목이 둘 다 가질 수 있고(예: 11/20에 하고 마감은 11/25), 값을 붙이거나 지워도 항목이 보드를 옮기지 않음(`today`/`someday`/`waiting`/`scheduled` 어디서나, 날짜 행의 둘째 줄 "마감" 칸 또는 새 항목 입력창의 미리 정하기). 어떤 스윕·이동·정렬도 이 필드를 근거로 자동 처리하지 않음(표시 전용). 라벨은 평소엔 숨겨 두고 호버/포커스/탭으로 연 항목에서만 보이며, D-4 이내(지난 것 포함)부터 평소에도 보임: D-4는 날짜(`11/20(금)`, 단 금요일에는 D-4도 `D-4`), D-3~D-day와 지난 것은 `D-3`·`D-day`·`D+2`. 완료한 항목에는 표시하지 않음. 없으면 필드 자체가 없음.
@@ -197,7 +198,7 @@ type DayStartDraft = {
     date?: string;                    // follow/setReply: 다음 확인 날짜, later: 다시 잡은 날짜(그날 하기로), setDeadline: 새 마감일(오늘도 가능)
     text?: string;                    // follow: 후속 작업 제목
     picked?: boolean;                 // later: 날짜를 직접 골랐음(someday '날짜 정하기' — 결과 문구만 '미룸' 대신 '시작'으로)
-    snooze?: boolean | 'rest';        // keep: 아니오 = 미루기(확정 때 snoozedAt 기록). true = 3일, 'rest' = 내일까지(날짜 기반 질문)
+    snooze?: boolean | 'week' | 'rest'; // keep: 아니오 = 미루기(확정 때 snoozedAt/snoozeKind 기록). true = 3일, 'week' = 다음 주 월요일까지, 'rest' = 내일까지(날짜 기반 질문)
     intoId?: number;                  // merge: 합쳐질(먼저 만든) 항목 id
     prevOrder?: string[];             // top: 되돌릴 때 복원할 이전 순서
     sig: string;                      // "보드|updatedAt" — 답한 뒤 항목이 바뀌었는지 확인용
