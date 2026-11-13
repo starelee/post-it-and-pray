@@ -199,11 +199,14 @@
   // 보드를 옮기지 않고 어느 보드의 항목에나 붙음. 라벨은 평소엔 숨겨 두고(호버/포커스/탭으로 연 항목에서만 보임)
   // D-4 이내(지난 것 포함)부터만 항상 보임 — 지금 신경 쓸 필요 없는 마감은 시야 밖에 둠.
   // D-3 ~ D-day(지난 것 포함)는 디데이 방식, D-4는 마감일(날짜)을 보여주며 평소에도 보임, D-5 이상은 날짜만(호버 때만).
+  // 금요일에는 주말이 끼어 월·화 마감이 코앞이라, 화요일 마감(D-4)까지 디데이로 보임.
   const DEADLINE_DDAY_STYLE_DAYS = 3;
+  const DEADLINE_DDAY_STYLE_DAYS_FRIDAY = 4;
   const DEADLINE_ALWAYS_VISIBLE_DAYS = 4;
   function deadlineLabel(dateStr) {
     const n = daysUntilDue(dateStr);
-    if (n <= DEADLINE_DDAY_STYLE_DAYS) return n === 0 ? 'D-day' : (n > 0 ? 'D-' + n : 'D+' + (-n));
+    const ddayLimit = new Date().getDay() === 5 ? DEADLINE_DDAY_STYLE_DAYS_FRIDAY : DEADLINE_DDAY_STYLE_DAYS;
+    if (n <= ddayLimit) return n === 0 ? 'D-day' : (n > 0 ? 'D-' + n : 'D+' + (-n));
     const d = new Date(dateStr + 'T00:00:00');
     return (d.getMonth() + 1) + '/' + d.getDate() + '(' + WEEKDAY_KO[d.getDay()] + ')';
   }
