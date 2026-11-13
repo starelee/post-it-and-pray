@@ -67,14 +67,15 @@ type Task = {
   done: boolean;
   urgent: boolean;       // 완료(done=true)로 바뀌는 순간 false로 내려감 — 완료를 취소해도 복구하지 않음
   subtasks: Subtask[];
-  dueDate?: string;      // "YYYY-MM-DD" — scheduled 항목에만 존재
+  scheduledDate?: string;      // "YYYY-MM-DD" — 수행 예정일("그날 하겠다"). scheduled 항목에만 존재. 옛 이름 dueDate
+  deadline?: string;     // "YYYY-MM-DD" — 마감일("그날까지 해야 한다"). 수행일과 별개로 어느 보드의 항목에나 붙고 보드를 옮기지 않음
   snoozedAt?: string;    // "YYYY-MM-DD" — 하루 시작하기의 '오래 묵은 것'에서 '그대로 두기(3일 미루기)'를 누른 날. updatedAt은 올리지 않음
   note?: string;         // 메모(최대 2000자, 줄바꿈 허용) — 없거나 빈 문자열이면 필드 자체가 없음. 항목이 보드를 옮겨 다니거나 아카이브로 가도 그대로 따라감
   group?: number;        // 묶음 id(처음 묶인 항목의 id) — 같은 값을 가진 항목끼리 한 묶음. 묶음 이름/별도 객체 없음. 아래 "묶음" 참고
   from?: string;         // 보드 id 문자열 — 아래 "from 필드의 두 가지 의미" 참고
   doneAt?: string;       // "YYYY-MM-DD" — done === true인 항목에만 존재
   todaySlot?: { date: string; index: number }; // gotta do를 떠난 날(YYYY-MM-DD)과 그때의 자리(0부터). 같은 날 gotta do로 돌아오면 그 자리로 복원하고 지움. 날짜가 오늘이 아니면 읽을 때 버림
-  dueSetAt?: string;     // "YYYY-MM-DD" — dueDate가 생기거나 바뀐 날(saveBoards가 찍음). 하루 시작하기가 방금 정한 마감을 다시 묻지 않는 근거. updatedAt은 올리지 않음
+  scheduledSetAt?: string;     // "YYYY-MM-DD" — scheduledDate가 생기거나 바뀐 날(saveBoards가 찍음). 하루 시작하기가 방금 정한 날짜를 다시 묻지 않는 근거. updatedAt은 올리지 않음
   updatedAt?: number;    // 마지막으로 바뀐 시각(ms, Date.now()) — saveBoards가 바뀐 항목에만 찍음. 클라우드 병합에서 "더 나중에 바꾼 쪽이 이김"의 근거
 };
 ```
@@ -113,8 +114,9 @@ type Memo = {
 
 - **`snoozedAt`**: 하루 시작하기의 `오래 묵은 것`에서 `그대로 두기`(= 3일 미루기)를 누른 날짜. 이 날짜로부터 3일이 지나기 전에는 `오래 묵은 것`(검색 제안 포함)에 안 올라옴. '마지막으로 손댄 때'(`updatedAt`)와 '미룬 때'를 따로 관리하려고 별도 필드로 두었고, 변경 감지 서명(`stampChangedTasks`)에서 빼서 미루기만으로는 `updatedAt`이 올라가지 않음(올라가면 묵은 시계가 리셋돼 미루기가 곧 2주가 됨). 클라우드 병합에서 `updatedAt`이 같을 때는 더 나중에 미룬 쪽이 이김(`mergeBoards`). 보드를 옮기면 지워짐.
 
-- **`dueDate`**: `scheduled` 배열에 들어있는 항목만 가짐. `today`/`someday`/`waiting`/`archive`에 있는 동안엔 존재하지 않음(today/someday에서 날짜를 지정하는 순간 그 항목 자체가 `scheduled` 배열로 옮겨감).
-- **`replyDate`** (`YYYY-MM-DD`, 선택): `waiting` 전용 "회신 예정일". `dueDate`와 완전히 별개 필드라 날짜를 붙여도 항목이 `waiting`에 그대로 남고, today로 옮기는 스윕(`migrateArchive`)도 건드리지 않음. 오늘보다 뒤(내일 이후)면 waiting 카드의 접힘 구역에 표시되고, 오늘이거나 지났으면 일반 항목처럼 표시됨(렌더 시점에 매번 다시 계산, 저장된 플래그 없음). waiting에서 다른 보드로 이동하면(`moveTask`) 제거됨. 필드가 없으면 기존과 완전히 동일하게 동작.
+- **`scheduledDate`**: **"그날 하겠다"고 정한 날(수행 예정일)이지 마감일이 아님.** 그날이 되면 today에 나타나고, 지났는데 안 했으면 "기한 초과"가 아니라 "그날 못 한 일이 오늘로 이월된 것"(`oops, still here`)이다. 옛 이름은 `dueDate`(마감으로 오독되어 바꿈) — 불러올 때 `normalizeTasks`가 옛 이름(`dueDate`/`dueSetAt`)을 새 이름으로 읽어 주고, 저장하면 새 이름으로만 기록됨(옛 앱 버전은 새 이름을 못 읽음). `scheduled` 배열에 들어있는 항목만 가짐. `today`/`someday`/`waiting`/`archive`에 있는 동안엔 존재하지 않음(today/someday에서 날짜를 지정하는 순간 그 항목 자체가 `scheduled` 배열로 옮겨감).
+- **`deadline`** (`YYYY-MM-DD`, 선택): **마감일 — "그날까지 해야 한다".** 수행일과 완전히 별개라 한 항목이 둘 다 가질 수 있고(예: 11/20에 하고 마감은 11/25), 값을 붙이거나 지워도 항목이 보드를 옮기지 않음(`today`/`someday`/`waiting`/`scheduled` 어디서나, 날짜 행의 둘째 줄 "마감" 칸 또는 새 항목 입력창의 미리 정하기). 어떤 스윕·이동·정렬도 이 필드를 근거로 자동 처리하지 않음(표시 전용). 라벨은 평소엔 숨겨 두고 호버/포커스/탭으로 연 항목에서만 보이며, D-4 이내(지난 것 포함)부터 평소에도 보임: D-4는 날짜(`11/20(금)`, 단 금요일에는 D-4도 `D-4`), D-3~D-day와 지난 것은 `D-3`·`D-day`·`D+2`. 완료한 항목에는 표시하지 않음. 없으면 필드 자체가 없음.
+- **`replyDate`** (`YYYY-MM-DD`, 선택): `waiting` 전용 "회신 예정일". `scheduledDate`와 완전히 별개 필드라 날짜를 붙여도 항목이 `waiting`에 그대로 남고, today로 옮기는 스윕(`migrateArchive`)도 건드리지 않음. 오늘보다 뒤(내일 이후)면 waiting 카드의 접힘 구역에 표시되고, 오늘이거나 지났으면 일반 항목처럼 표시됨(렌더 시점에 매번 다시 계산, 저장된 플래그 없음). waiting에서 다른 보드로 이동하면(`moveTask`) 제거됨. 필드가 없으면 기존과 완전히 동일하게 동작.
 - **`note`**: 항목에 붙은 메모. 비어 있으면 저장하지 않고(필드 삭제), 로드 시 `normalizeTasks`가 2000자로 자름. `updatedAt` 기반 클라우드 병합은 다른 필드와 똑같이 항목 단위로 적용됨.
 - **`doneAt`**: 체크(`done = true`)한 날짜. 체크 해제하면 삭제됨. 완료 아카이브 스윕(다음날 정리) 및 아카이브 패널의 월/날짜 그룹핑 기준으로 쓰임. 이 필드가 생기기 전의 예전 데이터는 로드 시 오늘 날짜로 자동 백필됨(영구히 스윕 대상에서 빠지지 않도록).
 - **`from`(두 가지 의미, 시점에 따라 다름)**:
@@ -130,7 +132,7 @@ type Memo = {
 | `today` | 직접 입력, waiting에서 `←`로 복귀, archive에서 revive는 안 됨(항상 scheduled로 감) | 체크 후 다음날 스윕 → `archive` |
 | `waiting` | 직접 입력, 다른 보드에서 이동 | `←`(→ today), 이동(→ someday), 삭제 |
 | `someday` | 직접 입력 | 날짜 지정(→ `scheduled`), 체크(→ 즉시 `archive`, 유예 없음) |
-| `scheduled` | today/someday 항목에 날짜 지정, 아카이브 항목 "다시 쓰기" | 날짜 지움(→ 원래 보드), 오늘 마감분은 체크 후 다음날 스윕(→ `archive`), 오늘 마감 아닌 항목은 체크 즉시(→ `archive`) |
+| `scheduled` | today/someday 항목에 날짜 지정, 아카이브 항목 "다시 쓰기" | 날짜 지움(→ 원래 보드), 오늘 할 날짜인 항목은 체크 후 다음날 스윕(→ `archive`), 오늘이 아닌 항목은 체크 즉시(→ `archive`) |
 | `archive` | 위 스윕/즉시 아카이브 경로 | 🗑️ 삭제만 가능(원본 삭제, 복구 없음). "다시 쓰기"는 원본은 그대로 두고 `scheduled`에 완전히 새로운 독립 항목을 생성 |
 | `lupin` | 직접 입력만(waiting 스티키를 뒤집었을 때 나오는 개인용 숨김 메모장 UI에서) | 🗑️ 삭제, 또는 체크한 날 자정이 지나면 다음 `migrateArchive` 때 완전히 삭제(archive로 넘어가지 않고 그냥 사라짐). 체크한 당일에는 취소선만 그어진 채 그대로 남음 — `today`/`waiting`/`someday` 등 다른 보드로도 옮겨지지 않음(이동 버튼 자체가 없음), `BOARD_IDS`/`collectArchiveEntries`에서 의도적으로 제외되어 있어 done 아카이브 패널에도 절대 노출되지 않음 |
 
@@ -138,9 +140,9 @@ type Memo = {
 
 `today` 카드(포스트잇)에 화면상 보이는 항목 중 일부는 실제로는 `boards.scheduled` 배열에 저장되어 있음 — 별도로 복제하지 않고 매 렌더링마다 조건에 맞는 걸 끌어와서 보여주는 방식(`renderToday()`):
 
-- `dueDate === 오늘` && `!done` → today의 일반 활성 항목처럼 표시
-- `dueDate === 오늘` && `done` → today의 완료(취소선) 구간에 표시
-- `dueDate < 오늘` && `!done` → "oops, still here" 구분선 아래 표시
+- `scheduledDate === 오늘` && `!done` → today의 일반 활성 항목처럼 표시
+- `scheduledDate === 오늘` && `done` → today의 완료(취소선) 구간에 표시
+- `scheduledDate < 오늘` && `!done` → "oops, still here" 구분선 아래 표시
 
 이 항목들을 체크/삭제/수정하면 실제로는 `boards.scheduled` 배열의 그 객체가 바뀜 — `boards.today` 자체엔 아무 영향 없음.
 
@@ -191,7 +193,7 @@ type DayStartDraft = {
   decisions: Record<string, {         // key = 항목 id(문자열, 반복되는 일은 'r:<완료 기록 id>'). 질문에 '네/아니오'로 답한 결과
     action: 'today' | 'toSomeday' | 'done' | 'resolved' | 'urgent' | 'follow' | 'keep'
           | 'later' | 'setReply' | 'top' | 'merge' | 'repeat' | 'unurgent';
-    date?: string;                    // follow/setReply: 다음 확인 날짜, later: 다시 잡은 마감일
+    date?: string;                    // follow/setReply: 다음 확인 날짜, later: 다시 잡은 날짜(그날 하기로)
     text?: string;                    // follow: 후속 작업 제목
     picked?: boolean;                 // later: 날짜를 직접 골랐음(someday '날짜 정하기' — 결과 문구만 '미룸' 대신 '시작'으로)
     snooze?: boolean;                 // keep: 아니오 = 3일 미루기(확정 때 snoozedAt 기록)
@@ -209,6 +211,6 @@ type DayStartDraft = {
 };
 ```
 
-확정하면 답을 `boards`에 한 번에 적용하고, 오늘 목록(일반 + 오늘 마감)의 미완료 항목에 `order`를 0부터 차례로 기록함. 후속 연락/추가한 할 일은 일반 `Task`로 생성되며 원본과의 연결 필드는 없음.
+확정하면 답을 `boards`에 한 번에 적용하고, 오늘 목록(일반 + 오늘 날짜인 항목)의 미완료 항목에 `order`를 0부터 차례로 기록함. 후속 연락/추가한 할 일은 일반 `Task`로 생성되며 원본과의 연결 필드는 없음.
 
 구글 캘린더 연결 상태는 이 기기의 `localStorage`에만 둠(`boards`/백업/클라우드에는 안 들어감): `postit-gcal-token`(`{ token, exp }` — 1시간짜리 읽기 전용 액세스 토큰), `postit-gcal-granted`(한 번 동의했는지), `postit-gcal-cals`(읽을 캘린더 id 목록 JSON, 없으면 기본), `postit-gcal-account`(로그인 계정과 다른 계정을 직접 골랐을 때 그 이메일), `postit-gcal-declined`(연결 없이 넘어가서 일정 단계를 숨기는지). 로그인 직후 받은 구글 토큰은 `postit-gcal-seen`(이미 본 `provider_token`)으로 중복 반영을 막음.
