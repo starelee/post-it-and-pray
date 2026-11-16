@@ -8777,7 +8777,7 @@
         // 오늘 목록에 있는 항목(오늘이 마감)은 수행일을 미루는 대안이 의미 없음
         return (item.boardId === 'today' || (item.boardId === 'scheduled' && item.task.scheduledDate && item.task.scheduledDate <= todayStr()))
           ? [pickDeadline, clearDeadline, finished('이미 끝났어요 (완료)')]
-          : [{ label: '수행일 정하기', pickDate: true, pickAction: 'later', pickLabel: '할 날짜' }, pickDeadline, finished('이미 끝났어요 (완료)')];
+          : [{ label: '수행일 정하기', pickDate: true, pickAction: 'later', pickLabel: '할 날짜' }, pickDeadline, clearDeadline, finished('이미 끝났어요 (완료)')];
       case 'deadlineConflict':
         return [pickDeadline, clearDeadline, clearDate];
       case 'urgentOld':
