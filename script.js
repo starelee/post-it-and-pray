@@ -103,7 +103,7 @@
   }
   const EMPTY_HINTS = {
     today: '오늘은 뭘 해볼까?',
-    waiting: '기다리는 거 없음',
+    waiting: '지금 당장은 자유',
     someday: '언젠가 해볼까',
     scheduled: '예정된 일 없음',
     lupin: '아무것도 없음... 진짜로 🤫'
