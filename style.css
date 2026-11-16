@@ -3224,6 +3224,13 @@
     padding: 1px 2px;
   }
 
+  /* 완료한 하위 항목은 수정 화면에서도 읽기 화면(.subtask-chip)과 같이 취소선 */
+  .subtask-item.done .note-sub-input {
+    text-decoration: line-through;
+    text-decoration-color: var(--ink-soft);
+    opacity: 0.6;
+  }
+
   .note-textarea {
     width: 100%;
     box-sizing: border-box;
