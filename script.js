@@ -8790,6 +8790,9 @@
         return item.boardId === 'waiting'
           ? [checkTomorrow, checkLater, finished('해결됐어요'), skip]
           : [{ label: '오늘 할 일로', patch: { action: 'today' } }, pickStart,finished('이미 끝났어요 (완료)'), skip]; // someday는 '언젠가' 항목이라 내일 대신 착수일을 직접 고름
+      case 'finish':
+        // 하위 항목을 다 끝냈지만 완료가 아니라 상대 답을 기다리는 일일 수 있음 → 대기중으로 내려놓기
+        return (item.task.subtasks || []).some(x => !x.done) ? [] : [{ label: '대기중으로 옮기기', patch: { action: 'toWaiting' } }];
       case 'carry':
         return [tomorrow, { label: '대기중으로 옮기기', patch: { action: 'toWaiting' } }, finished('이미 끝났어요 (완료)'), skip];
       default:
