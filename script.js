@@ -123,6 +123,18 @@
     return y + '-' + m + '-' + day;
   }
 
+  // 하위 항목 완료 시각 — ISO 8601, 기기 시간대와 무관하게 KST(+09:00) 기준 "YYYY-MM-DDTHH:mm:ss+09:00"
+  function nowKstIso() {
+    return new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 19) + '+09:00';
+  }
+
+  // 하위 항목의 done이 바뀐 뒤 불러서 doneAt을 맞춤: 체크 → 지금 시각, 해제 → 삭제.
+  // (이미 done인 채로 doneAt이 없는 옛 항목은 이 함수를 거치지 않는 한 그대로 비워 둠 — 추정·백필 안 함)
+  function syncSubDoneAt(sub) {
+    if (sub.done) sub.doneAt = nowKstIso();
+    else delete sub.doneAt;
+  }
+
   function tomorrowStr() {
     const d = new Date();
     d.setDate(d.getDate() + 1);
@@ -1310,7 +1322,12 @@
         done: !!t.done,
         urgent: !!t.urgent,
         subtasks: Array.isArray(t.subtasks)
-          ? t.subtasks.map(s => ({ id: s.id, text: s.text, done: !!s.done }))
+          ? t.subtasks.map(s => {
+              const sub = { id: s.id, text: s.text, done: !!s.done };
+              // doneAt은 완료한 하위 항목의 문자열일 때만 유지(그 외는 버림). 옛 데이터는 비어 있는 채로 둠
+              if (sub.done && typeof s.doneAt === 'string' && s.doneAt) sub.doneAt = s.doneAt;
+              return sub;
+            })
           : []
       };
       // 옛 이름(dueDate/dueSetAt)은 읽을 때 새 이름으로 바꿔 읽음 — 새 이름이 있으면 그쪽이 우선.
@@ -4261,6 +4278,7 @@
           clearTimeout(chipClickTimer);
           chipClickTimer = setTimeout(() => {
             sub.done = !sub.done;
+            syncSubDoneAt(sub);
             saveBoards();
             subLi.classList.toggle('done', sub.done);
             syncUpcomingProgress();
@@ -4479,7 +4497,7 @@
     const task = boards[boardId] && boards[boardId].find(t => t.id === taskId);
     if (!task) return;
     let changed = false;
-    (task.subtasks || []).forEach(s => { if (!s.done) { s.done = true; changed = true; } });
+    (task.subtasks || []).forEach(s => { if (!s.done) { s.done = true; syncSubDoneAt(s); changed = true; } });
     if (!changed) return;
     saveBoards();
     render(boardId);
@@ -4819,7 +4837,7 @@
 
     const startDraft = () => {
       draftTitle = task.text;
-      draftSubs = (task.subtasks || []).map(s => ({ id: s.id, text: s.text, done: !!s.done }));
+      draftSubs = (task.subtasks || []).map(s => s.doneAt ? { id: s.id, text: s.text, done: !!s.done, doneAt: s.doneAt } : { id: s.id, text: s.text, done: !!s.done });
       draftNote = task.note || '';
     };
 
@@ -4953,7 +4971,7 @@
       if (!cur) return false;
       cur.text = draftTitle.trim();
       cur.subtasks = draftSubs
-        .map(s => ({ id: s.id, text: s.text.trim(), done: s.done }))
+        .map(s => s.doneAt ? { id: s.id, text: s.text.trim(), done: s.done, doneAt: s.doneAt } : { id: s.id, text: s.text.trim(), done: s.done })
         .filter(s => s.text);
       const note = draftNote.trim().slice(0, NOTE_MAX);
       if (note) cur.note = note;
@@ -5083,6 +5101,7 @@
         task.subtasks.forEach(s => {
           if (s.done) return;
           s.done = true;
+          syncSubDoneAt(s);
           const subLi = taskLi && taskLi.querySelector('.subtask-list [data-id="' + s.id + '"]');
           if (subLi) subLi.classList.add('done');
         });
@@ -6299,6 +6318,7 @@
     const sub = task.subtasks.find(s => s.id === subId);
     if (!sub) return;
     sub.done = !sub.done;
+    syncSubDoneAt(sub);
 
     const taskLi = findTaskLi(taskId);
     const subLi = taskLi && taskLi.querySelector('.subtask-list [data-id="' + subId + '"]');
@@ -9921,7 +9941,7 @@
 
   function dsCompleteTask(boardId, task) {
     const today = todayStr();
-    task.subtasks.forEach(s => { s.done = true; });
+    task.subtasks.forEach(s => { if (!s.done) { s.done = true; syncSubDoneAt(s); } });
     task.done = true;
     task.doneAt = today;
     task.urgent = false;
@@ -10039,7 +10059,9 @@
           const have = new Set(found.task.subtasks.map(x => dsNorm(x.text)));
           task.subtasks.forEach(x => {
             if (have.has(dsNorm(x.text))) return;
-            found.task.subtasks.push({ id: dsNewId(counter), text: x.text, done: x.done });
+            const moved = { id: dsNewId(counter), text: x.text, done: x.done };
+            if (x.done && x.doneAt) moved.doneAt = x.doneAt;
+            found.task.subtasks.push(moved);
           });
         }
         dsDetach(boardId, task);
