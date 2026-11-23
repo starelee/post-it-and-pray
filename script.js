@@ -1340,6 +1340,7 @@
       if (schedSetAt) out.scheduledSetAt = schedSetAt;
       if (typeof t.deadline === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(t.deadline)) out.deadline = t.deadline;
       if (typeof t.replyDate === 'string' && t.replyDate) out.replyDate = t.replyDate;
+      if (typeof t.waitingAt === 'string' && t.waitingAt) out.waitingAt = t.waitingAt;
       if (typeof t.note === 'string' && t.note.trim()) out.note = t.note.slice(0, NOTE_MAX);
       if (typeof t.from === 'string' && t.from) out.from = t.from;
       if (typeof t.order === 'number' && isFinite(t.order)) out.order = t.order;
@@ -1447,7 +1448,7 @@
     // (waiting 배열 자체는 날짜가 지나도 옮기지 않음: 아래 sweep은 today/
     // scheduled/someday의 done 항목만 다룸.)
     ['today', 'scheduled', 'someday'].forEach(id => {
-      b[id].forEach(t => { delete t.replyDate; });
+      b[id].forEach(t => { delete t.replyDate; delete t.waitingAt; });
     });
     // 휴지통은 3일이 지나면 완전히 사라짐 — 매 normalizeBoards마다
     // (초기 로드/클라우드 동기화 모두) 다시 걸러내므로 하루 지나 기한을
@@ -5177,6 +5178,7 @@
     boards.waiting.splice(boards.waiting.indexOf(task), 1);
     delete task.scheduledDate;
     delete task.replyDate; // 회신 예정일은 waiting에 있을 때만 의미 있음
+    delete task.waitingAt;
     delete task.from;
     delete task.snoozedAt;
     delete task.snoozeKind;
@@ -5324,6 +5326,7 @@
     const [task] = boards[fromBoardId].splice(idx, 1);
     delete task.scheduledDate;
     delete task.replyDate; // 회신 예정일은 waiting에 있을 때만 의미 있음
+    delete task.waitingAt; // 대기중으로 넘긴 시각도 waiting에 있을 때만 의미 있음(다시 넘기면 아래에서 새로 찍음)
     delete task.from;
     delete task.snoozedAt; // 미루기는 묵은 것 목록 안에서만 의미 있음
     delete task.snoozeKind;
@@ -5336,6 +5339,7 @@
       // there via a hover move-button from another board.
       task.done = false;
       delete task.doneAt;
+      task.waitingAt = nowKstIso();
     }
     boards[toBoardId].push(task);
     if (toBoardId === 'today') {
@@ -9930,6 +9934,7 @@
     delete task.snoozeKind;
     delete task.scheduledDate;
     delete task.replyDate;
+    delete task.waitingAt;
     delete task.from;
     delete task.order;
   }
@@ -9992,7 +9997,7 @@
         const to = d.action === 'toWaiting' ? 'waiting' : 'someday';
         dsDetach(boardId, task);
         dsScrub(task);
-        if (to === 'waiting') { task.done = false; delete task.doneAt; }
+        if (to === 'waiting') { task.done = false; delete task.doneAt; task.waitingAt = nowKstIso(); }
         boards[to].push(task);
         break;
       }
@@ -10180,6 +10185,7 @@
             dsDetach(inToday ? 'today' : 'scheduled', wt);
             dsScrub(wt);
             wt.done = false; delete wt.doneAt;
+            wt.waitingAt = nowKstIso();
             boards.waiting.push(wt);
             changed = true;
           }
