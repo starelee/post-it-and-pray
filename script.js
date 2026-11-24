@@ -4540,7 +4540,7 @@
   }
 
   // 하위 항목 줄 끝의 [✎ 편집] 칩 — 눌러서 하위 항목 편집 모드로(수정/삭제/순서/모두 완료를 한 번에).
-  function makeEditSubtasksItem(boardId, task) {
+  function makeEditSubtasksItem(boardId, task, onOpen) {
     if (!(task.subtasks || []).length) return null;
     const li = document.createElement('li');
     li.className = 'subtask-item complete-all-item'; // 보이는 방식(hover 때 지연 후 나타남)은 [✓ 모두 완료] 칩과 같음
@@ -4554,7 +4554,7 @@
     btn.tabIndex = 0;
     btn.setAttribute('aria-label', '하위 항목 편집');
     btn.innerHTML = '[<span class="chip-ico">✎</span> 편집]'; // 연필 글리프만 작게(글자는 다른 칩과 같은 크기)
-    const open = () => enterSubReorder(boardId, task.id);
+    const open = onOpen || (() => enterSubReorder(boardId, task.id));
     btn.addEventListener('click', open);
     btn.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); }
@@ -5802,8 +5802,9 @@
   }
 
   // 칩은 가로로 줄바꿈되며 흐르므로 포인터가 올라간 다른 칩 자리로 옮김(2차원), 밀려난 칩은 짧게 미끄러짐.
-  function startSubDrag(e, sli) {
-    if (!reorderSubId || (e.button != null && e.button !== 0)) return;
+  // ctx가 있으면(포커스 패널) 보드의 편집 모드 상태(reorderSubId) 대신 ctx.commit(ids)로 순서를 반영
+  function startSubDrag(e, sli, ctx) {
+    if (!(ctx || reorderSubId) || (e.button != null && e.button !== 0)) return;
     e.preventDefault();
     try { sli.setPointerCapture(e.pointerId); } catch (err) { /* 이미 끝난 포인터 */ }
     const list = sli.parentElement;
@@ -5881,6 +5882,7 @@
       document.removeEventListener('pointercancel', finish, true);
       sli.classList.remove('sub-dragging');
       sli.style.transform = '';
+      if (ctx) { ctx.commit(chips().map(c => Number(c.dataset.id))); return; }
       commitSubEditInputs();
       commitSubReorder(chips().map(c => Number(c.dataset.id)));
     };
@@ -6941,17 +6943,165 @@
   // toggleSubtask를 그대로 재사용하되, 그쪽은 원본 task-item(지금은 숨겨진
   // gotta do 리스트 쪽)의 DOM만 직접 건드리고 focus 패널은 모르기 때문에
   // 토글 후 renderFocusPanel을 우리가 직접 다시 불러줌.
+  // 포커스 패널의 하위 항목 편집 모드 — gotta do 보드의 [✎ 편집]과 같은 방식(칩마다 입력창 · × · ⇄, [+추가], [✓ 수정 완료]).
+  // 칩 하나만 고치는 건 더블클릭, 여러 개를 고치고 지우고 순서를 바꾸는 건 [✎ 편집]. (칩 옆 호버 ✎ 버튼은 없음 —
+  // 호버로 폭이 펼쳐지며 칩이 밀려 더블클릭이 빗나가던 원인이라 보드와 똑같이 뺌)
+  let focusSubEditId = null;    // 편집 모드인 상위 항목 id(아니면 null)
+  let focusSubEditStep = null;  // 편집 모드를 연 포커스 단계 — 단계가 바뀌면 편집 모드 해제
+
+  function focusSubEditTask(boardId, taskId) {
+    return boards[boardId] && boards[boardId].find(t => t.id === taskId);
+  }
+
+  function exitFocusSubEdit(boardId, taskId) {
+    commitFocusSubInputs(boardId, taskId);
+    focusSubEditId = null;
+    focusSubEditStep = null;
+    renderFocusPanel();
+  }
+
+  // 편집 입력창의 글자를 항목에 반영(비우면 원래 글자 유지 — 지우기는 ×로)
+  function commitFocusSubInputs(boardId, taskId) {
+    if (focusSubEditId !== taskId || !focusBodyEl) return;
+    const task = focusSubEditTask(boardId, taskId);
+    if (!task) return;
+    let changed = false;
+    focusBodyEl.querySelectorAll('.focus-subtask-list .sub-edit-input').forEach(input => {
+      const sub = task.subtasks.find(x => String(x.id) === input.dataset.subId);
+      if (!sub) return;
+      const text = input.value.trim();
+      if (!text) { input.value = sub.text; return; }
+      if (text !== sub.text) { sub.text = text; changed = true; }
+    });
+    if (changed) saveBoards();
+  }
+
+  function refreshAfterFocusSubChange(boardId) {
+    saveBoards();
+    render(boardId);
+    if (boardId === 'scheduled') render('today');
+    renderFocusPanel();
+  }
+
+  function commitFocusSubReorder(boardId, taskId, ids) {
+    commitFocusSubInputs(boardId, taskId);
+    const task = focusSubEditTask(boardId, taskId);
+    if (!task) return;
+    const byId = new Map(task.subtasks.map(sub => [sub.id, sub]));
+    const next = ids.map(id => byId.get(id)).filter(Boolean);
+    if (next.length !== task.subtasks.length) return;
+    if (next.every((sub, i) => sub === task.subtasks[i])) { renderFocusPanel(); return; }
+    task.subtasks = next;
+    refreshAfterFocusSubChange(boardId);
+    haptic(HAPTIC_TAP);
+  }
+
+  function buildFocusSubEditList(list, boardId, task) {
+    const taskId = task.id;
+    task.subtasks.forEach(sub => {
+      const sli = document.createElement('li');
+      sli.className = 'subtask-item sub-draggable' + (sub.done ? ' done' : '');
+      sli.dataset.id = sub.id;
+      const line = document.createElement('div');
+      line.className = 'subtask-line';
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.className = 'subtask-edit-input sub-edit-input';
+      input.value = sub.text;
+      input.maxLength = 100;
+      input.dataset.subId = sub.id;
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
+        else if (e.key === 'Escape') { e.preventDefault(); input.value = sub.text; exitFocusSubEdit(boardId, taskId); }
+      });
+      input.addEventListener('blur', () => commitFocusSubInputs(boardId, taskId));
+      const del = document.createElement('button');
+      del.type = 'button';
+      del.className = 'sub-edit-del';
+      del.setAttribute('aria-label', '하위 항목 삭제');
+      del.textContent = '×';
+      del.addEventListener('click', () => {
+        commitFocusSubInputs(boardId, taskId);
+        task.subtasks = task.subtasks.filter(x => x.id !== sub.id);
+        refreshAfterFocusSubChange(boardId);
+      });
+      const mover = document.createElement('button');
+      mover.type = 'button';
+      mover.className = 'sub-edit-move';
+      mover.setAttribute('aria-label', '순서 바꾸기 (끌거나 ← → 키)');
+      mover.textContent = '⇄';
+      const ctx = { commit: (ids) => commitFocusSubReorder(boardId, taskId, ids) };
+      mover.addEventListener('pointerdown', (e) => {
+        if (e.button != null && e.button !== 0) return;
+        mover.focus({ preventScroll: true });
+        startSubDrag(e, sli, ctx);
+      });
+      mover.addEventListener('keydown', (e) => {
+        if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+        e.preventDefault();
+        const ids = task.subtasks.map(x => x.id);
+        const i = ids.indexOf(sub.id), j = i + (e.key === 'ArrowLeft' ? -1 : 1);
+        if (j < 0 || j >= ids.length) return;
+        ids.splice(i, 1); ids.splice(j, 0, sub.id);
+        commitFocusSubReorder(boardId, taskId, ids);
+        const nh = focusBodyEl.querySelector('li.sub-draggable[data-id="' + sub.id + '"] .sub-edit-move');
+        if (nh) nh.focus({ preventScroll: true });
+      });
+      const lb = document.createElement('span');
+      lb.className = 'sub-br';
+      lb.textContent = '[';
+      const rb = document.createElement('span');
+      rb.className = 'sub-br';
+      rb.textContent = ']';
+      line.appendChild(lb);
+      line.appendChild(input);
+      line.appendChild(rb);
+      line.appendChild(del);
+      line.appendChild(mover);
+      sli.appendChild(line);
+      list.appendChild(sli);
+      fitSubtaskEditInput(input, null, 2); // 대괄호 `]`가 글자 바로 옆에 붙게 여백을 최소로
+    });
+    list.appendChild(makeFocusAddSubtaskItem(boardId, taskId));
+    const doneLi = document.createElement('li');
+    doneLi.className = 'subtask-item sub-complete-all';
+    const doneBtn = document.createElement('button');
+    doneBtn.type = 'button';
+    doneBtn.className = 'subtask-chip complete-all-btn';
+    doneBtn.setAttribute('aria-label', '하위 항목 수정 끝내기');
+    doneBtn.textContent = '[✓ 수정 완료]';
+    // 누르는 순간 입력창이 포커스를 잃어 줄 배치가 바뀌면 클릭이 빗나감 — 포커스를 뺏지 않음
+    doneBtn.addEventListener('mousedown', (e) => e.preventDefault());
+    doneBtn.addEventListener('click', () => exitFocusSubEdit(boardId, taskId));
+    doneLi.appendChild(doneBtn);
+    list.appendChild(doneLi);
+  }
+
   function appendFocusSubtasks(container, boardId, taskId) {
     const task = boards[boardId] && boards[boardId].find(t => t.id === taskId);
     if (!task) return;
     const list = document.createElement('ul');
     list.className = 'subtask-list focus-subtask-list';
+    if (focusSubEditId === taskId && (task.subtasks || []).length) {
+      buildFocusSubEditList(list, boardId, task);
+      container.appendChild(list);
+      return;
+    }
+    focusSubEditId = null;
     (task.subtasks || []).forEach(sub => {
+      // 보드의 renderSubtaskItem과 같은 구조(li > .subtask-line > span.subtask-chip)
       const li = document.createElement('li');
       li.className = 'subtask-item' + (sub.done ? ' done' : '');
-      const chip = document.createElement('button');
-      chip.type = 'button';
+      li.dataset.id = sub.id;
+      const line = document.createElement('div');
+      line.className = 'subtask-line';
+      const chip = document.createElement('span');
       chip.className = 'subtask-chip';
+      chip.setAttribute('role', 'button');
+      chip.tabIndex = 0;
+      chip.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); chip.click(); }
+      });
       chip.setAttribute('aria-label', sub.done ? '완료 취소' : '완료 표시');
       chip.textContent = '[' + sub.text + ']';
       // 원본 subtask-chip과 같은 규칙(400ms — 실제 더블클릭 속도보다 짧으면
@@ -6970,24 +7120,20 @@
         clearTimeout(chipClickTimer);
         startEditFocusSubtask(boardId, taskId, sub.id, chip);
       });
-
-      // 호버하면 뜨는 명시적 수정 버튼 — 더블클릭 타이밍과 헷갈리지 않는
-      // 기본 경로(메인 리스트의 subtask-edit-btn과 동일).
-      const editBtn = document.createElement('button');
-      editBtn.type = 'button';
-      editBtn.className = 'subtask-edit-btn';
-      editBtn.setAttribute('aria-label', '수정');
-      editBtn.textContent = '✎';
-      editBtn.addEventListener('click', () => startEditFocusSubtask(boardId, taskId, sub.id, chip));
-
-      li.appendChild(chip);
-      li.appendChild(editBtn);
+      line.appendChild(chip);
+      li.appendChild(line);
       list.appendChild(li);
     });
-    // 하위 항목이 하나도 없어도 이 [+추가]는 항상 마지막 칩 자리에 보임 —
-    // 별도 줄로 뺀 add-row는 없앰.
     const completeAll = makeCompleteAllItem(boardId, task);
     if (completeAll) list.appendChild(completeAll);
+    const editItem = makeEditSubtasksItem(boardId, task, () => {
+      focusSubEditId = taskId;
+      focusSubEditStep = focusState ? focusState.step : null;
+      renderFocusPanel();
+    });
+    if (editItem) list.appendChild(editItem);
+    // 하위 항목이 하나도 없어도 이 [+추가]는 항상 마지막 칩 자리에 보임 —
+    // 별도 줄로 뺀 add-row는 없앰.
     list.appendChild(makeFocusAddSubtaskItem(boardId, taskId));
     container.appendChild(list);
   }
@@ -7280,6 +7426,7 @@
     if (!trimmed) return;
     const task = boards[boardId] && boards[boardId].find(t => t.id === taskId);
     if (!task) return;
+    commitFocusSubInputs(boardId, taskId); // 편집 모드에서 고치던 글자가 새로 그리면서 날아가지 않게
     task.subtasks.push({ id: Date.now(), text: trimmed, done: false });
     saveBoards();
     render(boardId);
@@ -7370,6 +7517,7 @@
 
   function renderFocusPanel() {
     if (!focusState) return;
+    if (focusSubEditId != null && focusState.step !== focusSubEditStep) focusSubEditId = null;
     updateFocusDocumentTitle();
     clearEl(focusBodyEl);
     clearEl(focusFooterEl);
@@ -7793,6 +7941,8 @@
   function exitFocusMode(focusInputAfter) {
     if (focusState && focusState.intervalId) clearInterval(focusState.intervalId);
     focusState = null;
+    focusSubEditId = null;
+    focusSubEditStep = null;
     clearFocusState();
     updateFocusDocumentTitle();
     if (sideColEl) sideColEl.classList.remove('focus-blurred');
