@@ -371,7 +371,7 @@
   }
 
   // 깃발은 하나(좁은 화면은 gotta do, 700px부터는 waiting). 누르면 검색 패드.
-  // not my problem... yet 리갈패드는 pray later 카드의 같은 이름 줄로 연다.
+  // not my problem... yet 리갈패드는 pray later를 펼친 목록 맨 아래 줄로 연다.
   const archivePanelEl = document.getElementById('archivePanel');
   const archiveUpcomingEl = document.getElementById('archiveUpcoming');
   const upcomingOpenBtn = document.getElementById('upcomingOpen');
@@ -1422,10 +1422,14 @@
     });
   }
 
+  // 줄은 pray later 접힘 안에 있음. 접혀 있으면 안 보이고, 7일째 이후 항목이 없어도 숨김.
+  // 있으면 "not my problem... yet (N)"과 얇은 아래 꺾쇠 — N은 그 항목 수.
   function updateUpcomingEntry() {
     if (!upcomingOpenBtn) return;
     const n = boards.scheduled.filter(t => !t.done && t.scheduledDate && daysUntilDue(t.scheduledDate) > PRAY_LATER_DAYS).length;
     upcomingOpenBtn.hidden = n === 0;
+    const countEl = upcomingOpenBtn.querySelector('.upcoming-open-count');
+    if (countEl) countEl.textContent = '(' + n + ')';
   }
 
   function purgeTrashTask(id) {
