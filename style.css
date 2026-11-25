@@ -752,21 +752,37 @@
     }
   }
 
-  /* 7일째 이후 예정. pray later를 펼쳤을 때만 목록 맨 아래에 작게. 없으면 숨김. 누르면 리갈패드. */
+  /* 7일째 이후 예정. pray later를 펼쳤을 때만 목록 맨 아래 메뉴 줄. 없으면 숨김. 누르면 리갈패드. */
   .upcoming-open {
-    display: block;
+    display: flex;
+    align-items: center;
     width: 100%;
-    margin: 10px 0 2px;
+    margin: 6px 0 0;
     padding: 0 2px;
+    min-height: 44px;
     text-align: left;
     font-family: var(--font-hand);
     font-size: 15px;
     line-height: 1.3;
     color: var(--ink-soft);
+    cursor: pointer;
+    border-radius: 3px;
   }
 
   .upcoming-open[hidden] {
     display: none;
+  }
+
+  .upcoming-open-text {
+    min-width: 0;
+  }
+
+  .upcoming-open-chevron {
+    flex: 0 0 auto;
+    margin-left: auto;
+    padding-left: 10px;
+    font-size: 18px;
+    line-height: 1;
   }
 
   .upcoming-open:hover,
@@ -774,10 +790,15 @@
     color: var(--ink);
   }
 
+  .upcoming-open:hover .upcoming-open-text,
+  .upcoming-open:focus-visible .upcoming-open-text {
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+
   .upcoming-open:focus-visible {
-    outline: 2px solid var(--accent);
+    outline: 2px solid var(--ink);
     outline-offset: 2px;
-    border-radius: 2px;
   }
 
   .board-wrap {
