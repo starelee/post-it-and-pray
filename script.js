@@ -28,7 +28,6 @@
   const DONE_OPEN_MS = 30 * 1000;     // waiting 완료 하위 항목을 펼쳐둔 채로 두는 시간
   const COLLAPSE_AUTO_CLOSE_MS = 15 * 60 * 1000;      // pray later / someday 펼침
   const COLLAPSE_AUTO_CLOSE_RETRY_MS = 60 * 1000;     // 그 안에서 고치는 중이면 이만큼 뒤에 다시 확인
-  const TRASH_VIEW_TIMEOUT_MS = 3 * 60 * 1000;        // 휴지통 보기 → 원래대로
   const LUPIN_AWAY_CLOSE_MS = 3 * 60 * 1000;          // 월급루팡 모드, 창을 떠나 자리를 비운 뒤 자동 복귀
   // ── 진동 (navigator.vibrate — 안드로이드 크롬 등. iOS 사파리는 지원하지 않아 조용히 무시됨)
   const HAPTIC_TAP = 8;               // 버튼/항목 탭
@@ -182,6 +181,8 @@
   // pray later 카드에 보이는 마지막 날(오늘 기준 D+6) — 7일째는 오늘과 같은 요일이라 머리글이 헷갈려서 6일까지만.
   // 그 뒤는 리갈패드 "not my problem... yet".
   const PRAY_LATER_DAYS = 6;
+  const TRASH_KEEP_DAYS = 7; // 지운 항목 보관 일수. 지나면 migrateArchive가 버림
+  const STALE_DAYS = 14;     // someday/waiting을 오래 그대로 둔 기준(검색 이유·하루 시작하기 공통)
 
   // pray later 카드/리갈패드 "다가오는 일" 사이의 경계(PRAY_LATER_DAYS)를 실시간으로
   // 가르는 데 씀 — 저장 시점 플래그가 아니라 매 렌더링마다 오늘 날짜
@@ -369,42 +370,37 @@
     });
   }
 
-  // Two flag buttons exist (one stuck to the today card, one to waiting) —
-  // only one is visible at a time per the mobile/desktop media query, both
-  // drive the same panel.
-  const archiveFlagBtns = document.querySelectorAll('.archive-flag');
+  // 깃발은 하나(좁은 화면은 gotta do, 700px부터는 waiting). 누르면 검색 패드.
+  // not my problem... yet 리갈패드는 pray later 카드의 같은 이름 줄로 연다.
   const archivePanelEl = document.getElementById('archivePanel');
-  const archiveGroupsEl = document.getElementById('archiveGroups');
   const archiveUpcomingEl = document.getElementById('archiveUpcoming');
-  const archiveTrashEl = document.getElementById('archiveTrash');
-  const upcomingFrontEl = archivePanelEl.querySelector('[data-upcoming-front]');
-  const upcomingBackEl = archivePanelEl.querySelector('[data-upcoming-back]');
-  const trashToggleBtn = document.getElementById('trashToggleBtn');
-  const trashToggleBackBtn = document.getElementById('trashToggleBackBtn');
+  const upcomingOpenBtn = document.getElementById('upcomingOpen');
 
   function toggleArchivePanel() {
     const open = !archivePanelEl.classList.contains('open');
-    archivePanelEl.classList.toggle('open', open);
     if (open) {
-      closeSearchPanel(); // 두 리갈패드는 같은 자리를 덮으니 한쪽을 열면 다른 쪽은 닫음
-      renderArchive();
+      closeSearchPanel();
+      if (dayStartOpen) closeDayStart();
+      archivePanelEl.classList.add('open');
       renderUpcoming();
     } else {
-      setTrashViewOpen(false);
+      archivePanelEl.classList.remove('open');
     }
   }
-  archiveFlagBtns.forEach(btn => btn.addEventListener('click', toggleArchivePanel));
 
   function closeArchivePanel() {
     archivePanelEl.classList.remove('open');
-    setTrashViewOpen(false);
   }
+
+  if (upcomingOpenBtn) upcomingOpenBtn.addEventListener('click', () => {
+    if (isFocusLocked() || isConfirmModalOpen()) return;
+    toggleArchivePanel();
+  });
 
   const archiveCloseBtn = document.getElementById('archiveCloseBtn');
   if (archiveCloseBtn) archiveCloseBtn.addEventListener('click', closeArchivePanel);
 
-  // Esc — 입력 중이 아니고 확인 모달도 안 떠 있을 때만 done 리갈패드 닫기.
-  // (입력칸/모달의 Esc는 각자 먼저 처리하므로 건드리지 않음.)
+  // Esc — 입력 중이 아니고 확인 모달도 안 떠 있을 때만 not my problem 리갈패드 닫기.
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape' || e.defaultPrevented) return;
     if (!archivePanelEl.classList.contains('open')) return;
@@ -417,10 +413,9 @@
   });
 
   // ─────────────────────────────
-  // 검색 — done 리갈패드와 같은 모양의 패드. 열려 있는 항목(gotta do/waiting/
-  // someday/pray later)과 done 기록의 제목·하위 항목·메모에서 찾음.
-  // lupin(월급루팡)과 gone(삭제 기록)은 일부러 검색 대상에서 뺌.
-  // 읽기 전용이라 데이터는 건드리지 않고, 결과를 누르면 메모 모달(읽기 모드)이 뜸.
+  // 검색 — 열어 둔 프로젝트의 할 일(제목·하위 항목·메모). 완료 기록도 찾고,
+  // 검색어가 있을 때만 최근 지운 항목(지운 것)을 맨 아래에 붙임.
+  // lupin(월급루팡)은 검색하지 않음. 빈 검색에는 제안 목록을 올리지 않음.
   // ─────────────────────────────
   const searchPanelEl = document.getElementById('searchPanel');
   const searchInputEl = document.getElementById('searchInput');
@@ -428,6 +423,7 @@
   const searchFlagBtns = document.querySelectorAll('.search-flag');
   const searchCloseBtn = document.getElementById('searchCloseBtn');
   const SEARCH_GROUP_LIMIT = 20;
+  const SEARCH_EDIT_MAX = 800; // 이보다 긴 글은 오타 비교를 앞부분만(그대로 포함·초성·자모는 전체)
 
   function isConfirmModalOpen() {
     const modal = document.getElementById('confirmModal');
@@ -437,10 +433,9 @@
   function openSearchPanel() {
     if (isFocusLocked() || isConfirmModalOpen()) return;
     if (archivePanelEl.classList.contains('open')) closeArchivePanel();
-    staleSampleIds = null; // 열 때마다 새로 뽑음
+    if (dayStartOpen) closeDayStart();
     searchPanelEl.classList.add('open');
     renderSearchResults();
-    // 패널이 접힌 상태에서 막 펼쳐지는 중이라 한 프레임 뒤에 포커스
     requestAnimationFrame(() => {
       searchInputEl.focus({ preventScroll: true });
       searchInputEl.select();
@@ -450,28 +445,26 @@
   function closeSearchPanel() {
     if (!searchPanelEl.classList.contains('open')) return;
     searchPanelEl.classList.remove('open');
-    // 다시 열었을 때 지난 검색어/결과가 남아 있으면 헷갈리니 초기화
     searchInputEl.value = '';
     searchInputEl.blur();
     clearEl(searchResultsEl);
   }
 
-  searchFlagBtns.forEach(btn => btn.addEventListener('click', () => {
+  function toggleSearchPanel() {
     if (searchPanelEl.classList.contains('open')) closeSearchPanel();
     else openSearchPanel();
-  }));
+  }
+
+  searchFlagBtns.forEach(btn => btn.addEventListener('click', toggleSearchPanel));
   if (searchCloseBtn) searchCloseBtn.addEventListener('click', closeSearchPanel);
   searchInputEl.addEventListener('input', renderSearchResults);
   searchInputEl.addEventListener('keydown', (e) => {
-    // Enter — 첫 결과를 바로 열기
     if (e.key === 'Enter' && !e.isComposing) {
       const first = searchResultsEl.querySelector('.search-item');
       if (first) { e.preventDefault(); first.click(); }
     }
   });
 
-  // Esc — 메모 모달이 떠 있으면 그쪽이 먼저(캡처 단계에서 처리) 닫히고,
-  // 모달이 없을 때만 검색 패드를 닫음. 입력칸에 포커스가 있어도 닫힘.
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape' || e.defaultPrevented) return;
     if (!searchPanelEl.classList.contains('open') || isConfirmModalOpen()) return;
@@ -479,8 +472,6 @@
     closeSearchPanel();
   });
 
-  // Ctrl+K / Cmd+K — 입력창에 포커스가 있어도 열림(브라우저 기본 동작은 막음).
-  // 물리 키(e.code) 기준이라 한글 자판에서도 동작.
   document.addEventListener('keydown', (e) => {
     if (!(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey || e.code !== 'KeyK') return;
     e.preventDefault();
@@ -495,21 +486,249 @@
     return query.toLowerCase().split(/\s+/).filter(Boolean);
   }
 
-  // 검색어를 전부 포함하면(제목·하위 항목·메모 어디에 흩어져 있어도) 결과.
-  // 어디서 걸렸는지(하위 항목/메모)도 함께 돌려줘서 한 줄 미리보기에 씀.
-  function matchSearchTask(task, tokens) {
-    const subs = task.subtasks || [];
-    const hay = [task.text || ''].concat(subs.map(s => s.text || ''), task.note || '').join('\n').toLowerCase();
-    if (!tokens.every(t => hay.includes(t))) return null;
-    const hasAny = (txt) => { const l = (txt || '').toLowerCase(); return tokens.some(t => l.includes(t)); };
-    return {
-      sub: subs.find(s => hasAny(s.text)) || null,
-      note: hasAny(task.note) ? task.note : null
-    };
+  // 한글 음절 ↔ 자모. 초성 검색과 부분 입력(메ㅇ)을 같은 비교로 처리.
+  const HANGUL_CHO = ['ㄱ','ㄲ','ㄴ','ㄷ','ㄸ','ㄹ','ㅁ','ㅂ','ㅃ','ㅅ','ㅆ','ㅇ','ㅈ','ㅉ','ㅊ','ㅋ','ㅌ','ㅍ','ㅎ'];
+  const HANGUL_JUNG = ['ㅏ','ㅐ','ㅑ','ㅒ','ㅓ','ㅔ','ㅕ','ㅖ','ㅗ','ㅘ','ㅙ','ㅚ','ㅛ','ㅜ','ㅝ','ㅞ','ㅟ','ㅠ','ㅡ','ㅢ','ㅣ'];
+  const HANGUL_JONG = ['','ㄱ','ㄲ','ㄳ','ㄴ','ㄵ','ㄶ','ㄷ','ㄹ','ㄺ','ㄻ','ㄼ','ㄽ','ㄾ','ㄿ','ㅀ','ㅁ','ㅂ','ㅄ','ㅅ','ㅆ','ㅇ','ㅈ','ㅊ','ㅋ','ㅌ','ㅍ','ㅎ'];
+  const CHO_SET = new Set(HANGUL_CHO);
+
+  function foldSearchText(str) {
+    return String(str || '').toLowerCase();
   }
 
-  function appendHighlighted(el, text, tokens) {
-    const re = new RegExp('(' + tokens.slice().sort((a, b) => b.length - a.length).map(escapeRegExp).join('|') + ')', 'gi');
+  function hangulParts(ch) {
+    const code = ch.charCodeAt(0);
+    if (code >= 0xAC00 && code <= 0xD7A3) {
+      const s = code - 0xAC00;
+      const cho = HANGUL_CHO[Math.floor(s / 588)];
+      const jung = HANGUL_JUNG[Math.floor((s % 588) / 28)];
+      const jong = HANGUL_JONG[s % 28];
+      return jong ? cho + jung + jong : cho + jung;
+    }
+    return ch;
+  }
+
+  function isChoseongQuery(token) {
+    if (!token) return false;
+    let saw = false;
+    for (let i = 0; i < token.length; i++) {
+      if (CHO_SET.has(token[i])) saw = true;
+      else return false;
+    }
+    return saw;
+  }
+
+  function spanFromUnits(units, at, len) {
+    if (at < 0 || !units.length) return null;
+    const endUnit = units[at + len - 1];
+    if (!endUnit) return null;
+    return { start: units[at].start, length: endUnit.end - units[at].start };
+  }
+
+  function jamoMatch(hay, token) {
+    const units = [];
+    let seq = '';
+    for (let i = 0; i < hay.length; i++) {
+      const parts = hangulParts(hay[i]);
+      for (let k = 0; k < parts.length; k++) {
+        units.push({ start: i, end: i + 1 });
+        seq += parts[k];
+      }
+    }
+    let tokJ = '';
+    for (let i = 0; i < token.length; i++) tokJ += hangulParts(token[i]);
+    if (!tokJ) return null;
+    return spanFromUnits(units, seq.indexOf(tokJ), tokJ.length);
+  }
+
+  function choseongMatch(hay, token) {
+    const units = [];
+    let seq = '';
+    for (let i = 0; i < hay.length; i++) {
+      const ch = hay[i];
+      const code = ch.charCodeAt(0);
+      let cho = '';
+      if (code >= 0xAC00 && code <= 0xD7A3) cho = HANGUL_CHO[Math.floor((code - 0xAC00) / 588)];
+      else if (CHO_SET.has(ch)) cho = ch;
+      else if (/[a-z0-9]/.test(ch)) cho = ch;
+      else continue;
+      units.push({ start: i, end: i + 1 });
+      seq += cho;
+    }
+    return spanFromUnits(units, seq.indexOf(token), token.length);
+  }
+
+  function compactMatch(hay, token) {
+    const compactToken = token.replace(/\s+/g, '');
+    if (!compactToken) return null;
+    const map = [];
+    let compact = '';
+    for (let i = 0; i < hay.length; i++) {
+      if (/\s/.test(hay[i])) continue;
+      map.push(i);
+      compact += hay[i];
+    }
+    const at = compact.indexOf(compactToken);
+    if (at < 0) return null;
+    const start = map[at];
+    const end = map[at + compactToken.length - 1] + 1;
+    return { start, length: end - start };
+  }
+
+  function levenshteinLimit(a, b, limit) {
+    const n = a.length;
+    const m = b.length;
+    if (Math.abs(n - m) > limit) return limit + 1;
+    if (!n) return m;
+    if (!m) return n;
+    let prev = new Array(m + 1);
+    let cur = new Array(m + 1);
+    for (let j = 0; j <= m; j++) prev[j] = j;
+    for (let i = 1; i <= n; i++) {
+      cur[0] = i;
+      let rowMin = cur[0];
+      const ai = a[i - 1];
+      for (let j = 1; j <= m; j++) {
+        const cost = ai === b[j - 1] ? 0 : 1;
+        const v = prev[j - 1] + cost;
+        const del = prev[j] + 1;
+        const ins = cur[j - 1] + 1;
+        cur[j] = v < del ? (v < ins ? v : ins) : (del < ins ? del : ins);
+        if (cur[j] < rowMin) rowMin = cur[j];
+      }
+      if (rowMin > limit) return limit + 1;
+      const swap = prev;
+      prev = cur;
+      cur = swap;
+    }
+    return prev[m];
+  }
+
+  function editMatch(hay, token) {
+    const tlen = token.length;
+    if (tlen < 2) return null;
+    const limit = tlen >= 6 ? 2 : 1;
+    const capped = hay.length > SEARCH_EDIT_MAX ? hay.slice(0, SEARCH_EDIT_MAX) : hay;
+    let best = null;
+    for (let len = Math.max(1, tlen - 1); len <= tlen + 1; len++) {
+      for (let i = 0; i + len <= capped.length; i++) {
+        let overlap = false;
+        for (let k = 0; k < len; k++) {
+          if (token.indexOf(capped[i + k]) !== -1) { overlap = true; break; }
+        }
+        if (!overlap) continue;
+        const d = levenshteinLimit(capped.slice(i, i + len), token, limit);
+        if (d <= limit && d < tlen) {
+          const closer = best && d === best.dist && Math.abs(len - tlen) < Math.abs(best.length - tlen);
+          if (!best || d < best.dist || closer) best = { dist: d, start: i, length: len };
+          if (d === 1 && len === tlen) return best;
+        }
+      }
+    }
+    return best;
+  }
+
+  // 점수 0 = 그대로 포함(공백 무시 포함). 그 다음 자모, 초성, 오타. 낮을수록 위.
+  function fuzzyTokenScore(raw, tokenRaw) {
+    const hay = foldSearchText(raw);
+    const token = foldSearchText(tokenRaw);
+    if (!token || !hay) return null;
+    const aligned = hay.length === String(raw).length;
+    const pack = (score, span) => {
+      if (!span) return null;
+      const index = aligned ? span.start : -1;
+      const length = span.length;
+      const windowText = index >= 0 ? String(raw).slice(index, index + length) : '';
+      return { score, index, length, window: windowText };
+    };
+    const at = hay.indexOf(token);
+    if (at !== -1) return pack(0, { start: at, length: token.length });
+    const compact = compactMatch(hay, token);
+    if (compact && compact.length) return pack(0, compact);
+    const jamo = jamoMatch(hay, token);
+    if (jamo) return pack(1, jamo);
+    if (isChoseongQuery(token)) {
+      const cho = choseongMatch(hay, token);
+      if (cho) return pack(2, cho);
+    }
+    const ed = editMatch(hay, token);
+    if (ed) return pack(3 + ed.dist, { start: ed.start, length: ed.length });
+    return null;
+  }
+
+  // 검색어를 전부 포함하면(제목·하위 항목·메모 어디에 흩어져 있어도) 결과.
+  // 정확히 들어 있는 항목이 오타·초성 매치보다 위로 가도록 score를 남김.
+  function matchSearchTask(task, tokens) {
+    const fields = [{ kind: 'title', text: task.text || '' }];
+    (task.subtasks || []).forEach(s => fields.push({ kind: 'sub', text: s.text || '', sub: s }));
+    if (task.note) fields.push({ kind: 'note', text: task.note });
+    const parts = [];
+    let score = 0;
+    for (let ti = 0; ti < tokens.length; ti++) {
+      let best = null;
+      for (let fi = 0; fi < fields.length; fi++) {
+        const field = fields[fi];
+        if (!field.text) continue;
+        const found = fuzzyTokenScore(field.text, tokens[ti]);
+        if (!found) continue;
+        if (!best || found.score < best.score) {
+          best = {
+            score: found.score,
+            index: found.index,
+            length: found.length,
+            window: found.window,
+            kind: field.kind,
+            sub: field.sub || null,
+            fieldText: field.text
+          };
+        }
+      }
+      if (!best) return null;
+      score += best.score;
+      parts.push(best);
+    }
+    let sub = null;
+    let note = null;
+    parts.forEach(p => {
+      if (p.kind === 'sub' && !sub) sub = p.sub;
+      if (p.kind === 'note' && !note) note = p.fieldText;
+    });
+    return { score, exact: score === 0, sub, note, parts };
+  }
+
+  function appendHighlighted(el, text, tokens, spans) {
+    if (spans && spans.length) {
+      const sorted = [];
+      spans.forEach(s => {
+        if (!s || s.start < 0 || s.length <= 0 || s.start >= text.length) return;
+        sorted.push({ start: s.start, end: Math.min(text.length, s.start + s.length) });
+      });
+      sorted.sort((a, b) => a.start - b.start);
+      const merged = [];
+      sorted.forEach(s => {
+        const last = merged[merged.length - 1];
+        if (last && s.start <= last.end) last.end = Math.max(last.end, s.end);
+        else merged.push({ start: s.start, end: s.end });
+      });
+      let cursor = 0;
+      merged.forEach(s => {
+        if (s.start < cursor) return;
+        if (s.start > cursor) el.appendChild(document.createTextNode(text.slice(cursor, s.start)));
+        const mark = document.createElement('mark');
+        mark.className = 'search-mark';
+        mark.textContent = text.slice(s.start, s.end);
+        el.appendChild(mark);
+        cursor = s.end;
+      });
+      if (cursor < text.length) el.appendChild(document.createTextNode(text.slice(cursor)));
+      return;
+    }
+    const usable = (tokens || []).filter(Boolean);
+    if (!usable.length) {
+      el.appendChild(document.createTextNode(text));
+      return;
+    }
+    const re = new RegExp('(' + usable.slice().sort((a, b) => b.length - a.length).map(escapeRegExp).join('|') + ')', 'gi');
     text.split(re).forEach((part, i) => {
       if (!part) return;
       if (i % 2 === 1) {
@@ -523,18 +742,12 @@
     });
   }
 
-  // 메모처럼 긴 글은 걸린 곳 주변만 잘라서 보여줌
-  function makeSearchSnippet(text, tokens) {
-    const flat = text.replace(/\s+/g, ' ');
-    const lower = flat.toLowerCase();
-    let idx = -1;
-    tokens.forEach(t => {
-      const i = lower.indexOf(t);
-      if (i !== -1 && (idx === -1 || i < idx)) idx = i;
-    });
-    const start = Math.max(0, idx - 12);
-    const end = start + 60;
-    return (start > 0 ? '…' : '') + flat.slice(start, end) + (end < flat.length ? '…' : '');
+  function makeSearchSnippet(text, index) {
+    const src = String(text || '');
+    const at = index >= 0 ? index : 0;
+    const start = Math.max(0, at - 14);
+    const end = Math.min(src.length, at + 46);
+    return (start > 0 ? '…' : '') + src.slice(start, end).replace(/\s+/g, ' ') + (end < src.length ? '…' : '');
   }
 
   function collectSearchGroups(tokens) {
@@ -543,7 +756,6 @@
       if (a.task.doneAt !== b.task.doneAt) return (b.task.doneAt || '').localeCompare(a.task.doneAt || '');
       return b.task.id - a.task.id;
     }).map(e => ({ task: e.task, boardId: e.source }));
-    // 오늘 체크한 항목은 아직 today/scheduled 배열에 있어도 done 쪽에서만 보여줌(중복 방지)
     const groups = [
       { key: 'today', label: 'gotta do', entries: wrap(boards.today.filter(t => !t.done), 'today') },
       { key: 'waiting', label: 'waiting', entries: wrap(boards.waiting, 'waiting') },
@@ -551,30 +763,37 @@
       { key: 'scheduled', label: 'pray later', entries: wrap(boards.scheduled.filter(t => !t.done), 'scheduled') },
       { key: 'done', label: 'done', entries: doneEntries }
     ];
-    groups.forEach(g => {
-      g.hits = g.entries
-        .map(e => ({ task: e.task, boardId: e.boardId, match: matchSearchTask(e.task, tokens) }))
-        .filter(h => h.match);
-    });
-    return groups.filter(g => g.hits.length);
+    const scoreOf = (entries) => {
+      const hits = [];
+      entries.forEach(e => {
+        const match = matchSearchTask(e.task, tokens);
+        if (match) hits.push({ task: e.task, boardId: e.boardId, match });
+      });
+      hits.sort((a, b) => a.match.score - b.match.score);
+      return hits;
+    };
+    groups.forEach(g => { g.hits = scoreOf(g.entries); });
+    const out = groups.filter(g => g.hits.length);
+    // 지운 것은 검색어가 맞을 때만, 항상 맨 아래. 빈 검색에는 넣지 않음.
+    const trashHits = scoreOf(wrap(boards.trash || [], 'trash'));
+    if (trashHits.length) out.push({ key: 'trash', label: '지운 것', hits: trashHits });
+    return out;
   }
 
-  // 검색 결과를 누르면 원래 항목으로 이동 — 검색 패드를 닫고, 접힌 구역(someday/pray later/
-  // waiting의 ⋯)이나 done 패널(완료 기록, 7일째부터인 "not my problem... yet") 안에 있으면
-  // 먼저 펼친 뒤 스크롤하고, 항목에 포커스를 주고 잠깐 강조함.
   function goToTask(boardId, taskId) {
     closeSearchPanel();
     revealTask(boardId, taskId);
   }
 
-  // 항목 위치로 이동해서 보여줌(검색 결과 이동과, 손댈 항목으로 옮겼을 때 공용).
-  // 포커스는 주지 않음 — 항목에 포커스가 있으면 :focus-within 때문에 아이콘 줄이 계속 펼쳐져 있고,
-  // 이 앱의 항목은 포커스만으로는 수정이 시작되지도 않음. 포커스는 사용자가 클릭/Tab으로 직접 정함.
+  function farScheduledTask(taskId) {
+    const task = boards.scheduled.find(t => t.id === taskId);
+    return task && !task.done && task.scheduledDate && daysUntilDue(task.scheduledDate) > PRAY_LATER_DAYS;
+  }
+
   function revealTask(boardId, taskId) {
-    if (isLupinOpen()) setLupinOpen(false); // waiting 뒷면(lupin)이 보이는 중이면 앞면으로
+    if (isLupinOpen()) setLupinOpen(false);
     let el = findTaskLi(taskId);
     let delay = 150;
-    // 보드 안에 있는 항목: 보이거나, 접힌 구역 안에 숨어 있는 경우
     if (el && (el.offsetParent !== null || el.closest('[data-collapse-body]'))) {
       const body = el.closest('[data-collapse-body]');
       if (body && body.hidden) {
@@ -582,28 +801,27 @@
           if (collapseSections[key].body === body) collapseSections[key].setOpen(true);
         });
       }
-    } else {
-      // 보드에는 없는 항목 — done 패널 안에 있음
+    } else if (boardId === 'scheduled' && farScheduledTask(taskId)) {
       if (!archivePanelEl.classList.contains('open')) toggleArchivePanel();
       el = archivePanelEl.querySelector('.archive-item[data-id="' + taskId + '"]');
-      if (!el) {
-        // 못 찾으면 이동 대신 메모 모달(읽기)로라도 보여줌
-        openNoteModal(boardId, taskId, { view: true });
-        return;
-      }
-      const monthBody = el.closest('.collapsible-body');
-      if (monthBody && monthBody.hidden && monthBody.previousElementSibling) monthBody.previousElementSibling.click();
-      delay = 420; // 패드가 펼쳐지는 애니메이션이 끝난 뒤 스크롤해야 위치가 맞음
+      delay = 420;
+    } else {
+      // 보드에 안 보이는 완료 기록 등 — 읽기 모달
+      const noteBoard = boardId === 'done' ? 'archive' : boardId;
+      openNoteModal(noteBoard, taskId, { view: true });
+      return;
+    }
+    if (!el) {
+      openNoteModal(boardId === 'done' ? 'archive' : boardId, taskId, { view: true });
+      return;
     }
     setTimeout(() => {
       if (!el.isConnected) return;
       el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      // 스크롤이 끝난 뒤에 흔들어야 눈에 들어옴 — 보드 이동의 도착 흔들림과 같은 효과
       setTimeout(() => wiggleElement(el), WIGGLE_AFTER_SCROLL_MS);
     }, delay);
   }
 
-  // 항목을 한 번 흔듦(.move-arrive-wiggle). 연달아 불러도 처음부터 다시 돌도록 클래스를 뗐다 붙임.
   function wiggleElement(el) {
     if (!el.isConnected) return;
     el.classList.remove('move-arrive-wiggle');
@@ -612,9 +830,7 @@
     setTimeout(() => el.classList.remove('move-arrive-wiggle'), WIGGLE_CLEAR_MS);
   }
 
-  // 카드 제목에 붙은 그 아이콘(✿ gotta do, ⏳ waiting, 🌙 someday, 📅 pray later)과
-  // 같은 기호 — done 기록은 done 패널 제목의 📋. 항목이 어느 보드 것인지 알려줌.
-  const BOARD_ICONS = { today: '✿', waiting: '⏳', someday: '🌙', scheduled: '📅', archive: '📋', done: '📋', new: '➕' };
+  const BOARD_ICONS = { today: '✿', waiting: '⏳', someday: '🌙', scheduled: '📅', archive: '📋', done: '📋', trash: '🗑️', new: '➕' };
 
   function makeBoardIcon(key) {
     const icon = document.createElement('span');
@@ -631,50 +847,103 @@
     return chip;
   }
 
+  function refreshSearchIfOpen() {
+    if (searchPanelEl.classList.contains('open')) renderSearchResults();
+  }
+
+  function deleteDoneHit(hit) {
+    if (hit.boardId === 'archive') deleteArchivedTask(hit.task.id);
+    else deleteTask(hit.boardId, hit.task.id);
+  }
+
   function renderSearchItem(groupKey, hit, tokens) {
     const task = hit.task;
     const li = document.createElement('li');
     li.className = 'search-item' + (groupKey === 'done' ? ' search-item-done' : '');
-    li.tabIndex = 0;
-    li.setAttribute('role', 'button');
 
     const row = document.createElement('div');
     row.className = 'search-item-row';
-    row.appendChild(makeBoardIcon(groupKey));
+    row.appendChild(makeBoardIcon(groupKey === 'trash' ? 'trash' : groupKey));
     const title = document.createElement('span');
     title.className = 'search-item-text';
-    appendHighlighted(title, task.text || '', tokens);
+    const titleSpans = (hit.match.parts || []).filter(p => p.kind === 'title').map(p => ({ start: p.index, length: p.length }));
+    appendHighlighted(title, task.text || '', tokens, titleSpans);
     row.appendChild(title);
+
     const dateKey = dateFieldOf(hit.boardId);
-    if (groupKey === 'done') {
-      if (task.doneAt) row.appendChild(makeSearchChip(task.doneAt.slice(5).replace('-', '/')));
+    if (groupKey === 'done' && task.doneAt) {
+      row.appendChild(makeSearchChip(task.doneAt.slice(5).replace('-', '/')));
+    } else if (groupKey === 'trash' && task.deletedAt) {
+      row.appendChild(makeSearchChip(task.deletedAt.slice(5).replace('-', '/')));
     } else if (task[dateKey]) {
       row.appendChild(makeSearchChip(formatDueDateRelative(task[dateKey])));
     }
-    if (task.note) row.appendChild(makeSearchChip('메모'));
-    if (groupKey !== 'done' && isGrouped(task)) {
-      const chip = makeSearchChip('🔗');
-      chip.title = '다른 항목과 묶여 있어요';
-      row.appendChild(chip);
+
+    if (groupKey !== 'done' && groupKey !== 'trash') {
+      const reason = attentionReason(task, hit.boardId);
+      if (reason) {
+        const chip = makeSearchChip(reason.label);
+        chip.classList.add('search-chip-reason');
+        row.appendChild(chip);
+      }
     }
+
+    const actions = document.createElement('div');
+    actions.className = 'search-actions';
+    if (groupKey === 'done') {
+      actions.appendChild(makeSearchAction('↻ 또 하기', () => openReviveModal(task, li)));
+      const del = makeSearchAction('🗑️', () => deleteDoneHit(hit));
+      del.setAttribute('aria-label', '삭제');
+      actions.appendChild(del);
+    } else if (groupKey === 'trash') {
+      actions.appendChild(makeSearchAction('↩ 되살리기', () => restoreFromTrash(task.id)));
+      const del = makeSearchAction('🗑️', () => purgeTrashTask(task.id));
+      del.setAttribute('aria-label', '완전히 삭제');
+      actions.appendChild(del);
+    }
+    if (actions.childNodes.length) row.appendChild(actions);
     li.appendChild(row);
 
-    const addSnippet = (label, text) => {
+    const addSnippet = (label, text, part) => {
       const line = document.createElement('div');
       line.className = 'search-snippet';
       line.appendChild(document.createTextNode(label));
-      appendHighlighted(line, text, tokens);
+      const snippet = makeSearchSnippet(text, part && part.index >= 0 ? part.index : 0);
+      const markToken = part && part.window ? part.window.replace(/\s+/g, ' ') : '';
+      if (markToken && snippet.toLowerCase().indexOf(markToken.toLowerCase()) !== -1) appendHighlighted(line, snippet, [markToken]);
+      else appendHighlighted(line, snippet, tokens);
       li.appendChild(line);
     };
-    if (hit.match.sub) addSnippet('하위: ', hit.match.sub.text);
-    if (hit.match.note) addSnippet('메모: ', makeSearchSnippet(hit.match.note, tokens));
+    const subPart = (hit.match.parts || []).find(p => p.kind === 'sub');
+    const notePart = (hit.match.parts || []).find(p => p.kind === 'note');
+    if (subPart && subPart.sub) addSnippet('하위: ', subPart.sub.text, subPart);
+    if (notePart) addSnippet('메모: ', notePart.fieldText, notePart);
 
-    const open = () => goToTask(hit.boardId, task.id);
-    li.addEventListener('click', open);
-    li.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); }
+    const open = () => {
+      if (groupKey === 'trash') {
+        openNoteModal('trash', task.id, { view: true });
+        return;
+      }
+      goToTask(hit.boardId, task.id);
+    };
+    li.addEventListener('click', (e) => {
+      if (e.target.closest('button')) return;
+      open();
     });
     return li;
+  }
+
+  function makeSearchAction(label, onClick) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'search-action';
+    btn.textContent = label;
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      e.preventDefault();
+      onClick();
+    });
+    return btn;
   }
 
   // ─────────────────────────────
@@ -988,21 +1257,11 @@
   }
 
   // ─────────────────────────────
-  // 검색어가 없을 때의 제안 — 네 섹션, 각각 최대 4개(넘는 건 그냥 안 보여줌).
-  //  · 챙길 것: 기한/회신 예정일이 오늘이거나 지남, 하위 항목이 거의 끝남.
-  //    이유를 태그로 달아 한 줄로 합침(지난 것 → 오늘 → 마무리만 남은 것 순).
-  //  · 오래 묵은 것: someday/waiting 중 2주 넘게 손 안 댄 것.
-  //  · 최근 완료: 최근 3일 안에 끝낸 것.
-  //  · 자주 한 것: 최근 30일 안에 2일 이상 끝냈고 지금 열려 있지 않은 것.
-  // 한 항목은 위 섹션에만 나옴. lupin/gone은 여기서도 제외.
+  // 챙길 것 / 오래 묵은 것 — 하루 시작하기(정하기)가 질문을 만드는 기준.
+  // 검색 빈 화면에는 올리지 않고, 검색 결과 줄에는 같은 기준에서 이유 하나만 붙임.
   // ─────────────────────────────
-  const SUGGEST_LIMIT = 4;
-  let staleSampleIds = null; // '오래 묵은 것'으로 뽑은 항목 id(패드가 열려 있는 동안 고정)
-  const STALE_DAYS = 14;
-  const RECENT_DONE_DAYS = 3;
 
   // 며칠째인지 정확한 숫자 대신 단계로 보여줌(19일/20일은 의미 있는 차이가 아니라서).
-  // 60일 넘으면 전부 '두 달째'.
   function staleLabel(days) {
     if (days >= 60) return '두 달째';
     if (days >= 30) return '한 달째';
@@ -1017,52 +1276,82 @@
     return [];
   }
 
-  // 최근 30일 안에 2일 이상 끝냈고 같은 제목이 열려 있지 않은 일(많이 한 순)
-  function collectRepeatedTasks() {
-    const norm = (text) => String(text || '').replace(/\s+/g, ' ').trim().toLowerCase();
-    const openTexts = new Set();
-    BOARD_IDS.forEach(b => boards[b].forEach(t => { if (!t.done) openTexts.add(norm(t.text)); }));
-    const groups = new Map();
-    collectArchiveEntries().forEach(e => {
-      const t = e.task;
-      if (!t.doneAt || -daysUntilDue(t.doneAt) > 30) return;
-      const k = norm(t.text);
-      if (!k || openTexts.has(k)) return;
-      const g = groups.get(k) || { dates: new Set(), task: t, source: e.source };
-      g.dates.add(t.doneAt);
-      if (t.doneAt >= g.task.doneAt) { g.task = t; g.source = e.source; }
-      groups.set(k, g);
-    });
-    return Array.from(groups.values())
-      .filter(g => g.dates.size >= 2)
-      .sort((a, b) => b.dates.size - a.dates.size)
-      .map(g => ({ task: g.task, source: g.source, count: g.dates.size }));
+  function untouchedDays(task) {
+    const touched = task.updatedAt || (task.id > 1e12 ? task.id : 0);
+    if (!touched) return 0;
+    return Math.floor((Date.now() - touched) / 86400000);
   }
 
-  // opts.all — 하루 시작하기(정비하기)용: 개수 제한/무작위 선정 없이 전부, '최근 완료'는 뺌.
-  function collectSuggestions(opts) {
-    const all = !!(opts && opts.all);
-    const limit = all ? Infinity : SUGGEST_LIMIT;
+  // 수행 예정일/회신 예정일이 지났거나 오늘인 경우. 화면 문구(tag)와 하루 시작하기 종류(kind)를 같이 줌.
+  function watchDateInfo(task, boardId) {
+    const dateKey = boardId === 'waiting' ? 'replyDate' : 'scheduledDate';
+    if (!task[dateKey]) return null;
+    const past = -daysUntilDue(task[dateKey]);
+    const label = boardId === 'waiting' ? '회신' : '예정';
+    if (past > 0) {
+      return {
+        kind: boardId === 'waiting' ? 'replyLate' : 'scheduledLate',
+        days: past,
+        tag: label + ' ' + past + '일 지남',
+        overdue: past,
+        isToday: false
+      };
+    }
+    if (past === 0) {
+      return {
+        kind: boardId === 'waiting' ? 'replyToday' : 'scheduledToday',
+        days: 0,
+        tag: '오늘 ' + label,
+        overdue: 0,
+        isToday: true
+      };
+    }
+    return null;
+  }
+
+  function isStaleCandidate(task, boardId) {
+    if (task.done) return false;
+    if (boardId !== 'someday' && boardId !== 'waiting') return false;
+    if (boardId === 'waiting' && task.replyDate && task.replyDate > todayStr()) return false;
+    if (isSnoozed(task)) return false;
+    return untouchedDays(task) >= STALE_DAYS;
+  }
+
+  // 검색 결과용. 가장 급한 이유 하나만. 해당 없으면 null. 완료·지운 항목에는 붙이지 않음.
+  function attentionReason(task, boardId) {
+    if (!task || task.done || boardId === 'archive' || boardId === 'trash' || boardId === 'done') return null;
+    const date = watchDateInfo(task, boardId);
+    if (date && date.kind === 'scheduledLate') return { kind: date.kind, label: date.tag };
+    if (date && date.kind === 'replyLate') return { kind: date.kind, label: date.tag };
+    if (date && date.kind === 'replyToday') return { kind: date.kind, label: '오늘 회신' };
+    const checklist = suggestChecklistTags(task);
+    if (checklist.length) return { kind: 'checklist', label: checklist[0] };
+    if (isStaleCandidate(task, boardId)) {
+      const label = staleLabel(untouchedDays(task)) + ' 그대로';
+      return { kind: 'stale', label };
+    }
+    return null;
+  }
+
+  // 하루 시작하기(정비하기)용. 개수 제한 없이 전부. '최근 완료'·'자주 한 것'은 검색에서만 쓰이던 제안이라 만들지 않음.
+  function collectSuggestions() {
     const today = todayStr();
     const seen = new Set();
-
-    // 1) 챙길 것
     const watch = [];
     const consider = (task, boardId) => {
       const tags = [];
-      const reasons = []; // 하루 시작하기가 질문 그룹을 가르는 근거 — tags는 화면에 보이는 글자일 뿐 키로 쓰지 않음
+      const reasons = [];
       let overdue = 0;
       let isToday = false;
-      const dateKey = boardId === 'waiting' ? 'replyDate' : 'scheduledDate';
-      const label = boardId === 'waiting' ? '회신' : '예정';
-      if (task[dateKey]) {
-        const past = -daysUntilDue(task[dateKey]);
-        if (past > 0) { tags.push(label + ' ' + past + '일 지남'); reasons.push({ kind: boardId === 'waiting' ? 'replyLate' : 'scheduledLate', days: past }); overdue = past; }
-        else if (past === 0) { tags.push('오늘 ' + label); reasons.push({ kind: boardId === 'waiting' ? 'replyToday' : 'scheduledToday' }); isToday = true; }
+      const date = watchDateInfo(task, boardId);
+      if (date) {
+        tags.push(date.tag);
+        reasons.push(date.days ? { kind: date.kind, days: date.days } : { kind: date.kind });
+        overdue = date.overdue;
+        isToday = date.isToday;
       }
-      // 하루 시작하기에서만: 하위 항목 마무리는 지금 신경 쓸 때만 묻기(someday는 안 묻고, pray later는 마감이 내일 이내일 때만). 검색 제안은 그대로
-      const checklistDue = !all ? true
-        : boardId === 'someday' ? false
+      // 하위 항목 마무리는 지금 신경 쓸 때만 묻기(someday는 안 묻고, pray later는 예정일이 내일 이내일 때만).
+      const checklistDue = boardId === 'someday' ? false
         : boardId === 'scheduled' ? !!task.scheduledDate && daysUntilDue(task.scheduledDate) <= 1
         : true;
       if (checklistDue) {
@@ -1078,113 +1367,22 @@
     boards.someday.filter(t => !t.done).forEach(t => consider(t, 'someday'));
     boards.scheduled.filter(t => !t.done).forEach(t => consider(t, 'scheduled'));
     watch.sort((a, b) => a.rank - b.rank || b.overdue - a.overdue || b.tags.length - a.tags.length);
-    const watchTop = watch.slice(0, limit);
-    watch.forEach(w => seen.add(w.task.id)); // 4개를 넘겨 안 보이는 것도 다른 섹션에 중복해 올리지 않음
+    watch.forEach(w => seen.add(w.task.id));
 
-    // 2) 오래 묵은 것 — 마지막으로 손댄 시각(없으면 만든 시각=id)이 2주 넘은 someday/waiting
     const stale = [];
     const considerStale = (task, boardId) => {
-      if (seen.has(task.id)) return;
-      if (boardId === 'waiting' && task.replyDate && task.replyDate > today) return; // 일부러 미뤄 둔 것
-      if (isSnoozed(task)) return; // 방금 '그대로 두기'로 미룬 것
-      const touched = task.updatedAt || (task.id > 1e12 ? task.id : 0);
-      if (!touched) return;
-      const days = Math.floor((Date.now() - touched) / 86400000);
-      if (days >= STALE_DAYS) stale.push({ task, boardId, tags: [staleLabel(days)], days });
+      if (seen.has(task.id) || !isStaleCandidate(task, boardId)) return;
+      const days = untouchedDays(task);
+      stale.push({ task, boardId, tags: [staleLabel(days)], days });
     };
     boards.someday.filter(t => !t.done).forEach(t => considerStale(t, 'someday'));
     boards.waiting.forEach(t => considerStale(t, 'waiting'));
-    // 후보가 4개보다 많으면 무작위로 뽑음 — 오래된 순으로 자르면 같은 4개만 계속 보이기 때문.
-    // 패드를 열 때 한 번 뽑고(openSearchPanel에서 초기화) 열려 있는 동안은 고정해서,
-    // 메모를 저장하는 등 다시 그릴 때마다 목록이 바뀌지 않게 함. 뽑은 뒤 더는 묵은 게
-    // 아니게 된 항목은 빼고 남은 후보에서 채움.
-    let staleTop;
-    if (all) {
-      staleTop = stale.slice().sort((a, b) => b.days - a.days);
-    } else {
-      const byId = new Map(stale.map(st => [st.task.id, st]));
-      if (!staleSampleIds) staleSampleIds = [];
-      staleSampleIds = staleSampleIds.filter(id => byId.has(id));
-      const pool = stale.filter(st => !staleSampleIds.includes(st.task.id));
-      while (staleSampleIds.length < SUGGEST_LIMIT && pool.length) {
-        const i = Math.floor(Math.random() * pool.length);
-        staleSampleIds.push(pool.splice(i, 1)[0].task.id);
-      }
-      staleTop = staleSampleIds.map(id => byId.get(id)).sort((a, b) => b.days - a.days);
-    }
-
-    // 3) 최근 완료 — 최근 3일(오늘 포함) 안에 끝낸 것
-    const recent = all ? [] : collectArchiveEntries()
-      .filter(e => e.task.doneAt && -daysUntilDue(e.task.doneAt) < RECENT_DONE_DAYS)
-      .sort((a, b) => {
-        if (a.task.doneAt !== b.task.doneAt) return b.task.doneAt.localeCompare(a.task.doneAt);
-        return b.task.id - a.task.id;
-      })
-      .slice(0, SUGGEST_LIMIT)
-      .map(e => ({ task: e.task, boardId: e.source, tags: [e.task.doneAt.slice(5).replace('-', '/')], done: true }));
-
-    // 4) 자주 한 것 — 최근 한 달 사이 여러 날 끝냈고 지금은 열려 있지 않은 일(하루 시작하기에서 묻지 않고 여기서만 보여줌)
-    const recentIds = new Set(recent.map(r => r.task.id));
-    const repeated = all ? [] : collectRepeatedTasks()
-      .filter(r => !recentIds.has(r.task.id))
-      .slice(0, SUGGEST_LIMIT)
-      .map(r => ({ task: r.task, boardId: r.source, tags: [r.count + '번'], done: true }));
+    const staleTop = stale.slice().sort((a, b) => b.days - a.days);
 
     return [
-      { label: '챙길 것', items: watchTop },
-      { label: '오래 묵은 것', items: staleTop },
-      { label: '최근 완료', items: recent },
-      { label: '자주 한 것', items: repeated }
+      { label: '챙길 것', items: watch },
+      { label: '오래 묵은 것', items: staleTop }
     ].filter(sec => sec.items.length);
-  }
-
-  function renderSuggestionItem(item) {
-    const task = item.task;
-    const li = document.createElement('li');
-    li.className = 'search-item' + (item.done ? ' search-item-done' : '');
-    li.tabIndex = 0;
-    li.setAttribute('role', 'button');
-    const row = document.createElement('div');
-    row.className = 'search-item-row';
-    row.appendChild(makeBoardIcon(item.done ? 'done' : item.boardId));
-    const title = document.createElement('span');
-    title.className = 'search-item-text';
-    title.textContent = task.text || '';
-    row.appendChild(title);
-    item.tags.forEach(tag => {
-      const chip = makeSearchChip(tag);
-      if (/지남/.test(tag)) chip.classList.add('search-chip-alert');
-      row.appendChild(chip);
-    });
-    if (task.note) row.appendChild(makeSearchChip('메모'));
-    li.appendChild(row);
-    const open = () => goToTask(item.boardId, task.id);
-    li.addEventListener('click', open);
-    li.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); }
-    });
-    return li;
-  }
-
-  function renderSearchSuggestions() {
-    const sections = collectSuggestions();
-    if (sections.length === 0) {
-      const hint = document.createElement('p');
-      hint.className = 'empty-hint';
-      hint.textContent = '지금 챙길 게 없어요';
-      searchResultsEl.appendChild(hint);
-      return;
-    }
-    sections.forEach(sec => {
-      const heading = document.createElement('h3');
-      heading.className = 'search-group-title';
-      heading.textContent = sec.label;
-      searchResultsEl.appendChild(heading);
-      const list = document.createElement('ul');
-      list.className = 'search-list';
-      sec.items.forEach(item => list.appendChild(renderSuggestionItem(item)));
-      searchResultsEl.appendChild(list);
-    });
   }
 
   function renderSearchResults() {
@@ -1197,7 +1395,7 @@
     };
     const query = searchInputEl.value.trim();
     if (!query) {
-      renderSearchSuggestions();
+      addHint('적는 대로 찾아요');
       return;
     }
     const tokens = searchTokens(query);
@@ -1224,27 +1422,18 @@
     });
   }
 
-  // "not my problem... yet" 자리가 Ctrl+Z(휴지통)로 통째로 바뀌는 lupin
-  // 모드 방식 — 목록 아래에 덧붙이지 않고 같은 자리를 갈아끼움. lupin처럼
-  // 계속 열어둔 채 잊어버리지 않도록 3분 뒤 자동으로 되돌리고, done
-  // 리갈패드를 닫았다 다시 열면 항상 "not my problem"부터 다시 보여줌.
-  let trashViewOpen = false;
-  let trashViewTimer = null;
-
-  function setTrashViewOpen(open) {
-    if (!upcomingFrontEl || !upcomingBackEl) return;
-    trashViewOpen = open;
-    upcomingFrontEl.hidden = open;
-    upcomingBackEl.hidden = !open;
-    clearTimeout(trashViewTimer);
-    if (open) {
-      renderTrash();
-      trashViewTimer = setTimeout(() => setTrashViewOpen(false), TRASH_VIEW_TIMEOUT_MS);
-    }
+  function updateUpcomingEntry() {
+    if (!upcomingOpenBtn) return;
+    const n = boards.scheduled.filter(t => !t.done && t.scheduledDate && daysUntilDue(t.scheduledDate) > PRAY_LATER_DAYS).length;
+    upcomingOpenBtn.hidden = n === 0;
   }
 
-  if (trashToggleBtn) trashToggleBtn.addEventListener('click', () => setTrashViewOpen(true));
-  if (trashToggleBackBtn) trashToggleBackBtn.addEventListener('click', () => setTrashViewOpen(false));
+  function purgeTrashTask(id) {
+    if (!boards.trash.some(t => t.id === id)) return;
+    boards.trash = boards.trash.filter(t => t.id !== id);
+    saveBoards();
+    refreshSearchIfOpen();
+  }
 
   // 순서 바꾸기 모드 — 지금 모드에 들어가 있는 보드 id(today/waiting/someday) 또는 null.
   // updateCounter가 모든 렌더 끝에서 불리므로, 거기서 모서리 버튼/손잡이를 다시 맞춤.
@@ -1450,10 +1639,10 @@
     ['today', 'scheduled', 'someday'].forEach(id => {
       b[id].forEach(t => { delete t.replyDate; delete t.waitingAt; });
     });
-    // 휴지통은 3일이 지나면 완전히 사라짐 — 매 normalizeBoards마다
-    // (초기 로드/클라우드 동기화 모두) 다시 걸러내므로 하루 지나 기한을
-    // 넘기면 다음 렌더링에서 자연스럽게 빠짐.
-    b.trash = (b.trash || []).filter(t => -daysUntilDue(t.deletedAt) <= 3);
+    // 휴지통은 7일이 지나면 완전히 사라짐 — 매 normalizeBoards마다
+    // (초기 로드/클라우드 동기화 모두) 다시 걸러내므로 기한을 넘기면
+    // 다음 렌더링에서 자연스럽게 빠짐.
+    b.trash = (b.trash || []).filter(t => -daysUntilDue(t.deletedAt) <= TRASH_KEEP_DAYS);
     // lupin은 다른 보드처럼 archive로 넘어가는 대신, 오늘 이전에 체크한
     // 항목은 완전히 삭제됨 — 숨겨진 개인 메모라 지난 완료 기록을 쌓아두지
     // 않고 매일 조용히 비워짐.
@@ -2424,7 +2613,6 @@
     logoEl.addEventListener('click', () => {
       archivePanelEl.classList.remove('open');
       closeSearchPanel();
-      setTrashViewOpen(false);
       if (isLupinOpen()) setLupinOpen(false);
       if (collapseSections.someday) collapseSections.someday.setOpen(false);
       if (collapseSections.scheduled) collapseSections.scheduled.setOpen(false);
@@ -2746,6 +2934,8 @@
     renderMemos();
     updateCounter();
     renderProjectUI();
+    if (archivePanelEl.classList.contains('open')) renderUpcoming();
+    refreshSearchIfOpen();
   }
 
   // 수동 순서(task.order)대로 정렬 — order가 없는 항목은 원래 순서를 지킨 채 맨 뒤로 감.
@@ -3133,6 +3323,7 @@
 
     markGroupRuns(listEl);
     layoutStrikeLines(listEl);
+    updateUpcomingEntry();
   }
 
   // "oops, still here"(지난 수행일) 아래 미완료 항목들의 수행일을 지움 — 확인창을 거침.
@@ -3845,95 +4036,9 @@
     return archived.concat(liveToday, liveScheduledToday);
   }
 
-  function renderArchive() {
-    archiveGroupsEl.innerHTML = '';
-
-    const items = collectArchiveEntries().sort((a, b) => {
-      if (a.task.doneAt !== b.task.doneAt) return (b.task.doneAt || '').localeCompare(a.task.doneAt || '');
-      return b.task.id - a.task.id;
-    });
-
-    if (items.length === 0) {
-      const hint = document.createElement('p');
-      hint.className = 'empty-hint';
-      hint.textContent = '아직 다 한 일 없음';
-      archiveGroupsEl.appendChild(hint);
-      return;
-    }
-
-    const curMonth = todayStr().slice(0, 7);
-    const byMonth = new Map();
-    items.forEach(entry => {
-      const m = (entry.task.doneAt || '').slice(0, 7);
-      if (!byMonth.has(m)) byMonth.set(m, []);
-      byMonth.get(m).push(entry);
-    });
-
-    Array.from(byMonth.keys()).sort().reverse().forEach(month => {
-      const toggle = document.createElement('button');
-      toggle.className = 'sticky-title sticky-title-toggle';
-      toggle.type = 'button';
-      toggle.innerHTML = month + ' <span class="toggle-arrow" data-toggle-arrow>▾</span>';
-
-      const body = document.createElement('div');
-      body.className = 'collapsible-body';
-
-      const byDate = new Map();
-      byMonth.get(month).forEach(entry => {
-        const d = entry.task.doneAt;
-        if (!byDate.has(d)) byDate.set(d, []);
-        byDate.get(d).push(entry);
-      });
-
-      const list = document.createElement('ul');
-      list.className = 'task-list';
-      Array.from(byDate.keys()).sort().reverse().forEach(dateStr => {
-        const d = new Date(dateStr + 'T00:00:00');
-        const group = document.createElement('li');
-        group.className = 'archive-date-group';
-
-        const heading = document.createElement('span');
-        heading.className = 'archive-date-heading';
-        heading.textContent = d.getDate() + '일 (' + WEEKDAY_KO[d.getDay()] + ')';
-        group.appendChild(heading);
-
-        const dateItems = document.createElement('ul');
-        dateItems.className = 'archive-date-items';
-        byDate.get(dateStr).forEach(entry => dateItems.appendChild(renderArchivedItem(entry)));
-        group.appendChild(dateItems);
-
-        list.appendChild(group);
-      });
-      body.appendChild(list);
-
-      archiveGroupsEl.appendChild(toggle);
-      archiveGroupsEl.appendChild(body);
-      wireCollapseToggle(toggle, body, month === curMonth);
-    });
-  }
-
-  function renderArchivedItem(entry) {
-    const task = entry.task;
-    const li = document.createElement('li');
-    li.className = 'archive-item';
-    li.dataset.id = task.id;
-
-    const text = document.createElement('span');
-    text.className = 'archive-item-text';
-    text.textContent = task.text;
-    li.appendChild(text);
-
-    const controls = document.createElement('div');
-    controls.className = 'archive-item-controls';
-
-    const reviveBtn = document.createElement('button');
-    reviveBtn.className = 'archive-revive-btn';
-    reviveBtn.type = 'button';
-    reviveBtn.textContent = '↻ 또 하기';
-
-    // "또 하기"를 누르면 상위 항목 + 하위 항목을 통째로 고칠 수
-    // 있는 모달이 뜸 — 여기서 고쳐도 원래 지난 기록(archive의 task)은
-    // 그대로 두고, "완료"를 눌렀을 때만 지금 초안 그대로 새 카드가 만들어짐.
+  // "또 하기" — 지난 기록은 그대로 두고, 완료를 눌렀을 때만 새 항목을 만듦.
+  async function openReviveModal(task, anchorEl) {
+    // 여기서 고쳐도 원래 지난 기록은 그대로 두고, 완료를 눌렀을 때만 새 항목이 생김.
     let draftSubtasks = (task.subtasks || []).map(s => s.text);
     let draftDueDate = '';
 
@@ -4048,56 +4153,30 @@
       reviveDateInput.value = '';
     }
 
-    // "또 하기"는 리갈 패드 안에 카드를 펼치는 대신 모달로 물어봄 —
-    // 완료를 누르면 지금 초안 그대로 새 카드를 만들고, 취소/Esc/바깥 클릭이면
+    // 완료를 누르면 지금 초안 그대로 새 항목을 만들고, 취소/Esc/바깥 클릭이면
     // 아무것도 안 함(지난 기록은 어느 쪽이든 그대로).
-    reviveBtn.addEventListener('click', async () => {
-      resetReviveDraft();
-      reviveCard.hidden = false;
-      const ok = await showConfirm({
-        title: '어떻게 기억해둘까요?',
-        content: reviveCard,
-        confirmLabel: '완료',
-        cancelLabel: '취소',
-        anchorEl: li,
-        focusEl: reviveTextInput,
-        beforeConfirm: () => {
-          if (!reviveTextInput.value.trim()) {
-            reviveTextInput.focus();
-            return false;
-          }
+    resetReviveDraft();
+    reviveCard.hidden = false;
+    const ok = await showConfirm({
+      title: '어떻게 기억해둘까요?',
+      content: reviveCard,
+      confirmLabel: '완료',
+      cancelLabel: '취소',
+      anchorEl: anchorEl,
+      focusEl: reviveTextInput,
+      beforeConfirm: () => {
+        if (!reviveTextInput.value.trim()) {
+          reviveTextInput.focus();
+          return false;
         }
-      });
-      if (ok) {
-        // 지정한 날짜가 있으면 그 날짜로 예정(scheduled), 없으면 today로
-        // 바로 되살림 — 날짜는 선택 사항.
-        reviveTask(task, { text: reviveTextInput.value.trim(), subtasks: draftSubtasks.slice(), scheduledDate: draftDueDate });
-      }
-      reviveCard.hidden = true;
-      resetReviveDraft();
-    });
-
-    const del = document.createElement('button');
-    del.className = 'delete-btn';
-    del.type = 'button';
-    del.setAttribute('aria-label', '삭제');
-    del.textContent = '🗑️';
-    del.addEventListener('click', () => {
-      // A today/scheduled entry here is still live on its real board (see
-      // collectArchiveEntries) — delete it there; only entries already
-      // swept into boards.archive get deleted from that array.
-      if (entry.source === 'archive') {
-        deleteArchivedTask(task.id);
-      } else {
-        deleteTask(entry.source, task.id);
-        renderArchive();
       }
     });
-
-    controls.appendChild(reviveBtn);
-    controls.appendChild(del);
-    li.appendChild(controls);
-    return li;
+    if (ok) {
+      // 지정한 날짜가 있으면 그 날짜로 예정(scheduled), 없으면 today로.
+      reviveTask(task, { text: reviveTextInput.value.trim(), subtasks: draftSubtasks.slice(), scheduledDate: draftDueDate });
+    }
+    reviveCard.hidden = true;
+    resetReviveDraft();
   }
 
   // "다가오는 일" — pray later 카드에 안 보이는(7일째부터인) scheduled
@@ -4106,6 +4185,7 @@
   // pray later 쪽에 나타남.
   function renderUpcoming() {
     if (!archiveUpcomingEl) return;
+    updateUpcomingEntry();
     archiveUpcomingEl.innerHTML = '';
 
     const items = boards.scheduled
@@ -4367,69 +4447,6 @@
     return li;
   }
 
-  // Ctrl+Z 패널 — 최근 3일 안에 지운 항목만 보여줌(오래된 건 migrateArchive가
-  // 이미 걸러냄). doneAt이 아니라 deletedAt 기준으로 정렬해 방금 지운
-  // 게 맨 위로 오게 함.
-  function renderTrash() {
-    if (!archiveTrashEl) return;
-    archiveTrashEl.innerHTML = '';
-
-    const items = boards.trash
-      .slice()
-      .sort((a, b) => (b.deletedAt || '').localeCompare(a.deletedAt || '') || b.id - a.id);
-
-    if (items.length === 0) {
-      const hint = document.createElement('li');
-      hint.className = 'empty-hint';
-      hint.textContent = '최근 3일간 지운 항목 없음';
-      archiveTrashEl.appendChild(hint);
-      return;
-    }
-
-    items.forEach(task => archiveTrashEl.appendChild(renderTrashItem(task)));
-  }
-
-  function renderTrashItem(task) {
-    const li = document.createElement('li');
-    li.className = 'archive-item';
-    li.dataset.id = task.id;
-
-    const text = document.createElement('span');
-    text.className = 'archive-item-text upcoming-item-text';
-    text.textContent = task.text;
-    li.appendChild(text);
-
-    const badge = document.createElement('span');
-    badge.className = 'due-badge';
-    badge.textContent = formatDueDateRelative(task.deletedAt);
-    li.appendChild(badge);
-
-    const controls = document.createElement('div');
-    controls.className = 'archive-item-controls';
-
-    const restoreBtn = document.createElement('button');
-    restoreBtn.className = 'archive-revive-btn';
-    restoreBtn.type = 'button';
-    restoreBtn.textContent = '↩ 되살리기';
-    restoreBtn.addEventListener('click', () => restoreFromTrash(task.id));
-    controls.appendChild(restoreBtn);
-
-    const del = document.createElement('button');
-    del.className = 'delete-btn';
-    del.type = 'button';
-    del.setAttribute('aria-label', '완전히 삭제');
-    del.textContent = '🗑️';
-    del.addEventListener('click', () => {
-      boards.trash = boards.trash.filter(t => t.id !== task.id);
-      saveBoards();
-      renderTrash();
-    });
-    controls.appendChild(del);
-
-    li.appendChild(controls);
-    return li;
-  }
-
   function reviveTask(archivedTask, opts) {
     opts = opts || {};
     const text = (opts.text || '').trim() || archivedTask.text;
@@ -4456,6 +4473,7 @@
     render('today');
     render('scheduled');
     if (archivePanelEl.classList.contains('open')) renderUpcoming();
+    refreshSearchIfOpen();
   }
 
   function deleteArchivedTask(id) {
@@ -4466,8 +4484,7 @@
     task.deletedAt = todayStr();
     boards.trash.push(task);
     saveBoards();
-    renderArchive();
-    if (archivePanelEl.classList.contains('open')) renderTrash();
+    refreshSearchIfOpen();
   }
 
   const TRASH_RESTORE_TARGETS = ['today', 'waiting', 'someday', 'scheduled', 'lupin', 'archive'];
@@ -4481,13 +4498,12 @@
     delete task.from;
     boards[target].push(task);
     saveBoards();
-    if (target === 'archive') {
-      renderArchive();
-    } else {
+    if (target !== 'archive') {
       render(target);
       if (target === 'scheduled') render('today');
     }
-    renderTrash();
+    if (archivePanelEl.classList.contains('open')) renderUpcoming();
+    refreshSearchIfOpen();
   }
 
   function openAddSubtaskRow(boardId, taskId, open) {
@@ -5213,7 +5229,7 @@
     if (typeof gid === 'number') renderGroupBoards();
     render(boardId);
     if (boardId === 'scheduled') render('today');
-    if (archivePanelEl.classList.contains('open')) renderArchive();
+    refreshSearchIfOpen();
   }
 
   function deleteTask(boardId, id) {
@@ -5233,7 +5249,7 @@
       render('today');
       if (archivePanelEl.classList.contains('open')) renderUpcoming();
     }
-    if (archivePanelEl.classList.contains('open')) renderTrash();
+    refreshSearchIfOpen();
   }
 
   // ─────────────────────────────
@@ -5287,7 +5303,7 @@
     const arrival = moveArrivalList(toBoardId, task);
     if (arrival === 'upcoming') {
       // 리갈패드 "not my problem... yet" — 패널이 열려 있고 그 목록이 화면 안일 때만
-      if (!archivePanelEl || !archivePanelEl.classList.contains('open') || (upcomingBackEl && !upcomingBackEl.hidden)) return false;
+      if (!archivePanelEl || !archivePanelEl.classList.contains('open')) return false;
       const listEl = archiveUpcomingEl;
       if (!listEl || listEl.offsetParent === null) return false;
       const r = listEl.getBoundingClientRect();
@@ -8058,7 +8074,7 @@
 
     if (e.code === 'KeyD') {
       e.preventDefault();
-      toggleArchivePanel(); // 플래그 버튼 클릭과 같은 토글 함수 재사용
+      toggleSearchPanel();
       return;
     }
 
@@ -10104,7 +10120,7 @@
       case 'top':
         break; // 순서만 바뀌고(초안의 order) 항목 자체는 그대로
       case 'merge': {
-        // 같은 제목 중 나중에 만든 쪽을 휴지통으로 보내고(3일 복구), 하위 항목은 먼저 만든 쪽에 합침
+        // 같은 제목 중 나중에 만든 쪽을 휴지통으로 보내고(7일 보관), 하위 항목은 먼저 만든 쪽에 합침
         const found = dsFind(d.intoId);
         if (found) {
           const have = new Set(found.task.subtasks.map(x => dsNorm(x.text)));

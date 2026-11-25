@@ -28,7 +28,7 @@ type Project = {
 - **메모리에서는** 나머지 코드가 전부 `boards`(= 열어 둔 프로젝트의 `Boards` + 공통 `lupin`) 하나만 봄. 저장할 때 `serializeStore`가 열어 둔 프로젝트의 `boards`에서 `lupin`을 빼 그 프로젝트 자리에 넣고, `lupin`은 `Store.lupin`으로 올림. 불러올 때 `applyStore`가 반대로 합침.
 - **열어 둔 프로젝트(`activeProject`)는 저장소에 없음**: 이 기기의 `localStorage['postit-active-project']`(프로젝트 id)에만 기억하는 기기별 값. 목록에 없는 id면 첫 프로젝트로 열림.
 - **프로젝트 전환 규칙**: 지금 프로젝트의 `boards`를 목록에 갈무리하고 다음 프로젝트의 `boards` + 공통 `lupin`을 `boards`로 삼은 뒤, 되돌리기 기록을 비우고 새 프로젝트에 `migrateArchive`를 한 번 적용(켜 둔 채 날짜가 바뀐 경우를 위해). 하루 시작하기·포커스가 진행 중이거나 확인 모달이 떠 있으면 전환하지 않음.
-- **프로젝트 지우기**: 항목이 하나라도 있으면(done·gone 포함) 프로젝트 이름을 직접 입력해야 함. 지우면 `projects`에서 빠지고 id가 `removed`에 들어감(복구 없음). 마지막 프로젝트는 지울 수 없음. 열어 둔 프로젝트를 지우면 먼저 다른(첫) 프로젝트로 옮겨 감.
+- **프로젝트 지우기**: 항목이 하나라도 있으면(완료 기록·삭제 기록 포함) 프로젝트 이름을 직접 입력해야 함. 지우면 `projects`에서 빠지고 id가 `removed`에 들어감(복구 없음). 마지막 프로젝트는 지울 수 없음. 열어 둔 프로젝트를 지우면 먼저 다른(첫) 프로젝트로 옮겨 감.
 - **프로젝트별 기기 값**: 하루 시작하기 초안/확정 날짜 키(`postit-daystart-draft-v1`, `postit-daystart-confirmed-v1`)는 `main`이면 그대로, 다른 프로젝트는 뒤에 `:<프로젝트 id>`가 붙음. 구글 캘린더 연결·테마·포커스 세션 키는 프로젝트와 무관한 공통 값.
 - **병합(`mergeStores`)**: 프로젝트 id별로 `mergeBoards`(아래 항목 단위 규칙)를 적용하고 `lupin`도 같은 규칙으로 따로 병합함. `removed`는 양쪽의 합집합이고, 거기 있는 id의 프로젝트는 결과에서 빠짐. 이름은 이 기기 쪽이 이김. 프로젝트를 한쪽에서 새로 만들었으면 합집합으로 남음. 지운 프로젝트에 다른 기기가 나중에 더한 항목은 지운 것과 함께 사라짐.
 - **백업 파일(v2)**: `{ app: 'post-it-and-pray', version: 2, exportedAt, projects, lupin }`. 복구하면 프로젝트 전체가 파일 내용으로 바뀌고(파일에 없는 지금 프로젝트는 지운 것으로 기록, 이미 지운 id가 파일에 있으면 새 id로 되살림), 되돌리기 기록은 비워서 `Ctrl+Z`로 되돌릴 수 없음.
@@ -115,7 +115,7 @@ type Memo = {
 
 ## 필드별 의미
 
-- **`snoozedAt`**: 하루 시작하기에서 `아니오`로 미룬 날짜. 쉬는 기간은 **`snoozeKind`**가 정함: 없음 = 3일(`SNOOZE_DAYS`, `오래 묵은 것`·같은 제목·긴급 묵음 등의 `아니오`, 검색 제안의 `오래 묵은 것`도 같음), `'week'` = 미룬 날 **다음 주 월요일 전까지**(`nextMondayAfter` — 대안 버튼 `다음 주에 다시 묻기`), `'rest'` = 오늘과 내일(`SNOOZE_REST_DAYS` 2일)만 쉬고 모레 다시 물음(날짜 기반 질문 — 예정일·회신·마감일 — 의 `아니오`). 단 마감이 D-1 이내이거나 지난 마감 질문은 `snoozedAt`과 무관하게 계속 물음. `snoozeKind`는 `snoozedAt`과 함께 생기고(`updatedAt` 서명에서도 같이 뺌), 보드를 옮기면 같이 지워짐. '마지막으로 손댄 때'(`updatedAt`)와 '미룬 때'를 따로 관리하려고 별도 필드로 두었고, 변경 감지 서명(`stampChangedTasks`)에서 빼서 미루기만으로는 `updatedAt`이 올라가지 않음(올라가면 묵은 시계가 리셋돼 미루기가 곧 2주가 됨). 클라우드 병합에서 `updatedAt`이 같을 때는 더 나중에 미룬 쪽이 이김(`mergeBoards`). 보드를 옮기면 지워짐.
+- **`snoozedAt`**: 하루 시작하기에서 `아니오`로 미룬 날짜. 쉬는 기간은 **`snoozeKind`**가 정함: 없음 = 3일(`SNOOZE_DAYS`, `오래 묵은 것`·같은 제목·긴급 묵음 등의 `아니오`, 하루 시작하기의 `오래 묵은 것`도 같음), `'week'` = 미룬 날 **다음 주 월요일 전까지**(`nextMondayAfter` — 대안 버튼 `다음 주에 다시 묻기`), `'rest'` = 오늘과 내일(`SNOOZE_REST_DAYS` 2일)만 쉬고 모레 다시 물음(날짜 기반 질문 — 예정일·회신·마감일 — 의 `아니오`). 단 마감이 D-1 이내이거나 지난 마감 질문은 `snoozedAt`과 무관하게 계속 물음. `snoozeKind`는 `snoozedAt`과 함께 생기고(`updatedAt` 서명에서도 같이 뺌), 보드를 옮기면 같이 지워짐. '마지막으로 손댄 때'(`updatedAt`)와 '미룬 때'를 따로 관리하려고 별도 필드로 두었고, 변경 감지 서명(`stampChangedTasks`)에서 빼서 미루기만으로는 `updatedAt`이 올라가지 않음(올라가면 묵은 시계가 리셋돼 미루기가 곧 2주가 됨). 클라우드 병합에서 `updatedAt`이 같을 때는 더 나중에 미룬 쪽이 이김(`mergeBoards`). 보드를 옮기면 지워짐.
 
 - **`scheduledDate`**: **"그날 하겠다"고 정한 날(수행 예정일)이지 마감일이 아님.** 그날이 되면 today에 나타나고, 지났는데 안 했으면 "기한 초과"가 아니라 "그날 못 한 일이 오늘로 이월된 것"(`oops, still here`)이다. 옛 이름은 `dueDate`(마감으로 오독되어 바꿈) — 불러올 때 `normalizeTasks`가 옛 이름(`dueDate`/`dueSetAt`)을 새 이름으로 읽어 주고, 저장하면 새 이름으로만 기록됨(옛 앱 버전은 새 이름을 못 읽음). `scheduled` 배열에 들어있는 항목만 가짐. `today`/`someday`/`waiting`/`archive`에 있는 동안엔 존재하지 않음(today/someday에서 날짜를 지정하는 순간 그 항목 자체가 `scheduled` 배열로 옮겨감).
 - **`deadline`** (`YYYY-MM-DD`, 선택): **마감일 — "그날까지 해야 한다".** 수행일과 완전히 별개라 한 항목이 둘 다 가질 수 있고(예: 11/20에 하고 마감은 11/25), 값을 붙이거나 지워도 항목이 보드를 옮기지 않음(`today`/`someday`/`waiting`/`scheduled` 어디서나, 날짜 행의 둘째 줄 "마감" 칸 또는 새 항목 입력창의 미리 정하기). 어떤 스윕·이동·정렬도 이 필드를 근거로 자동 처리하지 않음(표시 전용). 라벨은 평소엔 숨겨 두고 호버/포커스/탭으로 연 항목에서만 보이며, D-4 이내(지난 것 포함)부터 평소에도 보임: D-4는 날짜(`11/20(금)`, 단 금요일에는 D-4도 `D-4`), D-3~D-day와 지난 것은 `D-3`·`D-day`·`D+2`. 완료한 항목에는 표시하지 않음. 없으면 필드 자체가 없음.
@@ -139,7 +139,7 @@ type Memo = {
 | `someday` | 직접 입력 | 날짜 지정(→ `scheduled`), 체크(→ 즉시 `archive`, 유예 없음) |
 | `scheduled` | today/someday 항목에 날짜 지정, 아카이브 항목 "다시 쓰기" | 날짜 지움(→ 원래 보드), 오늘 할 날짜인 항목은 체크 후 다음날 스윕(→ `archive`), 오늘이 아닌 항목은 체크 즉시(→ `archive`) |
 | `archive` | 위 스윕/즉시 아카이브 경로 | 🗑️ 삭제만 가능(원본 삭제, 복구 없음). "다시 쓰기"는 원본은 그대로 두고 `scheduled`에 완전히 새로운 독립 항목을 생성 |
-| `lupin` | 직접 입력만(waiting 스티키를 뒤집었을 때 나오는 개인용 숨김 메모장 UI에서) | 🗑️ 삭제, 또는 체크한 날 자정이 지나면 다음 `migrateArchive` 때 완전히 삭제(archive로 넘어가지 않고 그냥 사라짐). 체크한 당일에는 취소선만 그어진 채 그대로 남음 — `today`/`waiting`/`someday` 등 다른 보드로도 옮겨지지 않음(이동 버튼 자체가 없음), `BOARD_IDS`/`collectArchiveEntries`에서 의도적으로 제외되어 있어 done 아카이브 패널에도 절대 노출되지 않음 |
+| `lupin` | 직접 입력만(waiting 스티키를 뒤집었을 때 나오는 개인용 숨김 메모장 UI에서) | 🗑️ 삭제, 또는 체크한 날 자정이 지나면 다음 `migrateArchive` 때 완전히 삭제(archive로 넘어가지 않고 그냥 사라짐). 체크한 당일에는 취소선만 그어진 채 그대로 남음 — `today`/`waiting`/`someday` 등 다른 보드로도 옮겨지지 않음(이동 버튼 자체가 없음), `BOARD_IDS`/`collectArchiveEntries`에서 의도적으로 제외되어 있어 완료 기록 검색에도 절대 나오지 않음 |
 
 ## `today`'s list에 표시되는데 `boards.today`엔 없는 항목들
 
@@ -153,9 +153,11 @@ type Memo = {
 
 "oops, still here" 구분선을 누르면 확인 뒤 그 항목들의 수행일을 오늘로 다시 잡지 않고 지운다(`clearOopsDates`). 각 항목은 `scheduled`에서 빠지고 `scheduledDate`와 `from`이 삭제된 채 `today`로 들어가, 날짜 없는 일반 할 일로 gotta do 본목록에 남는다. `setDueDateCore`가 오늘 카드에 보이던 항목의 날짜를 지울 때와 같고, `saveBoards`가 `scheduledDate`가 없으면 `scheduledSetAt`도 지운다.
 
-## 완료 아카이브(`archive`) 패널에 표시되는데 `boards.archive`엔 아직 없는 항목들
+## 완료 기록(`archive`)과 삭제 기록(`trash`)
 
-완료 아카이브 패널도 같은 방식(`collectArchiveEntries()`)으로, 아직 다음날 스윕이 안 된 "오늘 완료한 today/scheduled 항목"을 `boards.today`/`boards.scheduled`에서 그대로 읽어와서 `boards.archive`의 항목들과 합쳐서 보여줌. 실제로 배열이 옮겨지는 건 다음날 앱을 열 때(`migrateArchive()`)뿐.
+완료한 항목을 월별로 펼쳐 보는 화면은 없다. `collectArchiveEntries()`는 검색이 완료 항목을 찾을 때 쓴다. 아직 다음날 스윕이 안 된 "오늘 완료한 today/scheduled 항목"을 `boards.today`/`boards.scheduled`에서 그대로 읽어 `boards.archive`와 합친다. 배열이 옮겨지는 건 다음날 앱을 열 때(`migrateArchive()`)뿐이다. 검색 결과의 done 줄에서 `↻ 또 하기`는 원본을 두지 않고 새 항목을 만들고, 삭제는 `trash`로 보낸다.
+
+`boards.trash`는 지운 항목이다. `deletedAt`은 지운 날(`YYYY-MM-DD`), `from`은 지우기 전 보드 id. 불러올 때마다 `migrateArchive`가 지운 날로부터 **7일**이 지난 항목을 버린다(예전 3일). 따로 목록으로 보여 주지 않고, 검색어가 제목·하위 항목·메모와 맞을 때만 결과 맨 아래 `지운 것`에 나온다. 빈 검색에는 나오지 않는다. `↩ 되살리기`는 `from` 보드로 되돌리고 `deletedAt`을 지운다. 그 줄에서 완전히 지우면 기록에서도 빠진다.
 
 ## 마이그레이션/정규화
 
