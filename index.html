@@ -43,28 +43,9 @@
       <div class="archive-panel" id="archivePanel">
         <div class="archive-panel-inner">
           <button class="archive-close-btn" id="archiveCloseBtn" type="button" aria-label="닫기">✕</button>
-          <h2 class="archive-title">done 📋</h2>
-
+          <h2 class="archive-title">not my problem... yet 😮‍💨</h2>
           <div class="archive-section-divider"></div>
-          <div class="archive-groups" id="archiveGroups"></div>
-
-          <div data-upcoming-front>
-            <h2 class="archive-title archive-section-title-spaced">
-              not my problem... yet 😮‍💨
-              <button class="trash-toggle-btn" id="trashToggleBtn" type="button" aria-label="최근 지운 항목 보기">↺ gone...</button>
-            </h2>
-            <div class="archive-section-divider"></div>
-            <ul class="archive-upcoming" id="archiveUpcoming"></ul>
-          </div>
-
-          <div data-upcoming-back hidden>
-            <h2 class="archive-title archive-section-title-spaced">
-              gone... 👻
-              <button class="trash-toggle-btn" id="trashToggleBackBtn" type="button" aria-label="원래대로">↩ 되돌아가기</button>
-            </h2>
-            <div class="archive-section-divider"></div>
-            <ul class="archive-upcoming" id="archiveTrash"></ul>
-          </div>
+          <ul class="archive-upcoming" id="archiveUpcoming"></ul>
         </div>
       </div>
 
@@ -100,8 +81,7 @@
 
       <div class="board-row">
       <div class="sticky" data-board="today" id="todaySticky" style="--rot: -1.4deg;">
-        <button class="archive-flag archive-flag-mobile" type="button" aria-label="다 한 일 보기" title="done ( d )">📋</button>
-        <button class="search-flag search-flag-mobile" type="button" aria-label="검색" title="검색 ( / 또는 Ctrl+K )">🔍</button>
+        <button class="search-flag search-flag-mobile" type="button" aria-label="검색" title="검색 ( / · d · Ctrl+K )">🔍</button>
         <div class="tape"></div>
 
         <div data-today-list>
@@ -137,8 +117,7 @@
 
       <div class="side-col">
         <div class="sticky" data-board="waiting" id="waitingSticky" style="--rot: -0.6deg; --paper: var(--paper-waiting);">
-          <button class="archive-flag archive-flag-desktop" type="button" aria-label="다 한 일 보기" title="done ( d )">📋</button>
-          <button class="search-flag search-flag-desktop" type="button" aria-label="검색" title="검색 ( / 또는 Ctrl+K )">🔍</button>
+          <button class="search-flag search-flag-desktop" type="button" aria-label="검색" title="검색 ( / · d · Ctrl+K )">🔍</button>
           <div data-lupin-front>
             <div class="tape"></div>
             <h2 class="sticky-title">waiting... <span class="flower">⏳</span>
@@ -198,6 +177,7 @@
           <div class="collapsible-body" data-collapse-body hidden>
             <ul class="task-list" data-tasklist="scheduled"></ul>
           </div>
+          <button class="upcoming-open" id="upcomingOpen" type="button" hidden>not my problem... yet</button>
 
           <button class="sticky-title sticky-title-toggle sticky-title-toggle-spaced" type="button" data-collapse-toggle>
             someday... <span class="flower">🌙</span>
