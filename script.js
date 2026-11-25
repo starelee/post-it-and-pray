@@ -1423,7 +1423,7 @@
   }
 
   // 줄은 pray later 접힘 안에 있음. 접혀 있으면 안 보이고, 7일째 이후 항목이 없어도 숨김.
-  // 있으면 "not my problem... yet (N) ›" — N은 그 항목 수.
+  // 있으면 "not my problem... yet (N)"과 얇은 아래 꺾쇠 — N은 그 항목 수.
   function updateUpcomingEntry() {
     if (!upcomingOpenBtn) return;
     const n = boards.scheduled.filter(t => !t.done && t.scheduledDate && daysUntilDue(t.scheduledDate) > PRAY_LATER_DAYS).length;

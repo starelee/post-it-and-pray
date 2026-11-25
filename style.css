@@ -777,12 +777,16 @@
     min-width: 0;
   }
 
+  /* 섹션 접힘의 채워진 ▾와 다르게, 두 변으로 만든 얇은 아래 꺾쇠. */
   .upcoming-open-chevron {
     flex: 0 0 auto;
+    align-self: center;
     margin-left: auto;
-    padding-left: 10px;
-    font-size: 18px;
-    line-height: 1;
+    width: 7px;
+    height: 7px;
+    border-right: 1.5px solid currentColor;
+    border-bottom: 1.5px solid currentColor;
+    transform: translateY(-2px) rotate(45deg);
   }
 
   .upcoming-open:hover,
