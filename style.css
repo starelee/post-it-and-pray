@@ -4666,7 +4666,7 @@ body.reorder-mode .sticky:not(.reorder-active) {
   pointer-events: none;
 }
 
-/* "오늘 할 일로 바꿀까요?" 확인창 안의 항목 목록 */
+/* "날짜를 지울까요?" 확인창 안의 항목 목록 */
 .oops-confirm-list {
   list-style: none;
   margin: 0;

@@ -3135,12 +3135,14 @@
     layoutStrikeLines(listEl);
   }
 
-  // "oops, still here"(지난 마감) 아래 미완료 항목들의 마감일을 오늘로 — 확인창을 거침.
-  async function moveOopsToToday(anchorEl) {
+  // "oops, still here"(지난 수행일) 아래 미완료 항목들의 수행일을 지움 — 확인창을 거침.
+  // 어제 못 했다고 오늘 하기로 다시 잡지는 않는다. 날짜를 지우면 setDueDateCore에서
+  // 오늘 카드에 보이던 항목의 날짜를 지울 때와 같이 scheduled에서 빠져 today의 날짜 없는 항목이 된다.
+  async function clearOopsDates(anchorEl) {
     const today = todayStr();
     const overdue = boards.scheduled.filter(t => !t.done && t.scheduledDate && t.scheduledDate < today);
     if (!overdue.length) return;
-    // 어떤 항목이 바뀌는지 제목과 원래 마감일(○일 지남)을 보여줌
+    // 어떤 항목이 바뀌는지 제목과 원래 수행일(○일 지남)을 보여줌
     const list = document.createElement('ul');
     list.className = 'oops-confirm-list';
     overdue.slice().sort(byDueDate).forEach(t => {
@@ -3154,25 +3156,34 @@
       list.appendChild(li);
     });
     const ok = await showConfirm({
-      title: '오늘 할 일로 바꿀까요?',
-      message: '날짜가 지난 항목 ' + overdue.length + '개의 날짜를 오늘로 바꿔서, 오늘 할 일로 옮겨요.',
+      title: '날짜를 지울까요?',
+      message: '날짜가 지난 항목 ' + overdue.length + '개의 날짜를 지워요. 날짜 없는 할 일로 gotta do에 남아요.',
       content: list,
-      confirmLabel: '오늘로 변경',
+      confirmLabel: '날짜 지우기',
       cancelLabel: '취소',
       anchorEl
     });
     if (!ok) return;
-    // 확인창이 떠 있던 사이 상태가 바뀌었을 수 있어 다시 골라 반영
-    let changed = 0;
-    boards.scheduled.forEach(t => {
-      if (!t.done && t.scheduledDate && t.scheduledDate < today) { t.scheduledDate = today; changed++; }
+    // 확인창이 떠 있던 사이 상태가 바뀌었을 수 있어 다시 골라 반영.
+    // 짝: setDueDateCore — 오늘 카드에 보이던(지난 수행일) 항목의 날짜를 지울 때와 같음.
+    const ids = boards.scheduled
+      .filter(t => !t.done && t.scheduledDate && t.scheduledDate < today)
+      .map(t => t.id);
+    if (!ids.length) return;
+    ids.forEach(id => {
+      const idx = boards.scheduled.findIndex(t => t.id === id);
+      if (idx === -1) return;
+      const task = boards.scheduled[idx];
+      boards.scheduled.splice(idx, 1);
+      delete task.scheduledDate;
+      delete task.from;
+      boards.today.push(task);
     });
-    if (!changed) return;
     saveBoards();
     render('today');
     render('scheduled');
     if (archivePanelEl.classList.contains('open')) renderUpcoming();
-    showToast('오늘 할 일로 바꿨어요');
+    showToast('날짜를 지웠어요');
   }
 
   function renderToday() {
@@ -3218,14 +3229,14 @@
       const divider = document.createElement('li');
       divider.className = 'divider divider-oops';
       divider.textContent = 'oops, still here';
-      // 누르면 아래 지난 항목들을 한꺼번에 오늘로 옮길지 물어봄
+      // 누르면 아래 지난 항목들의 수행일을 지울지 물어봄
       divider.setAttribute('role', 'button');
       divider.tabIndex = 0;
-      divider.title = '눌러서 아래 항목을 오늘 할 일로 바꾸기';
-      const askMoveOopsToToday = () => moveOopsToToday(divider);
-      divider.addEventListener('click', askMoveOopsToToday);
+      divider.title = '눌러서 아래 항목의 날짜를 지우기';
+      const askClearOopsDates = () => clearOopsDates(divider);
+      divider.addEventListener('click', askClearOopsDates);
       divider.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); askMoveOopsToToday(); }
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); askClearOopsDates(); }
       });
       listEl.appendChild(divider);
       oops.forEach(t => listEl.appendChild(renderItem('scheduled', t, { showFocusBtn: true })));
@@ -5237,6 +5248,30 @@
   // ─────────────────────────────
   const MOVE_TO_LABEL = { today: 'gotta do로', waiting: 'waiting으로', someday: 'someday로', scheduled: 'pray later로' };
 
+  // scheduled 배열로 옮긴 항목이 실제로 그려지는 목록.
+  // 수행일이 오늘이거나 지났으면 gotta do(today), 6일 안이면 pray later, 그 뒤는 리갈패드.
+  function moveArrivalList(toBoardId, task) {
+    if (toBoardId === 'scheduled' && task && task.scheduledDate) {
+      const today = todayStr();
+      if (task.scheduledDate <= today) return 'today';
+      if (daysUntilDue(task.scheduledDate) > PRAY_LATER_DAYS) return 'upcoming';
+    }
+    return toBoardId;
+  }
+
+  // 토스트의 "○○로/으로". 저장 보드가 아니라 화면에 그려지는 곳.
+  // 날짜가 없으면(지운 뒤) 도착 보드의 날짜 없는 항목으로 간다.
+  function moveArrivalPhrase(toBoardId, task) {
+    if (toBoardId === 'scheduled' && task && task.scheduledDate) {
+      const today = todayStr();
+      if (task.scheduledDate < today) return 'oops, still here로';
+      if (task.scheduledDate === today) return 'gotta do로';
+      if (daysUntilDue(task.scheduledDate) > PRAY_LATER_DAYS) return 'not my problem... yet으로';
+      return 'pray later로';
+    }
+    return MOVE_TO_LABEL[toBoardId];
+  }
+
   function wantsEditAfterMove(fromBoardId, toBoardId) {
     return toBoardId === 'today' && (fromBoardId === 'waiting' || fromBoardId === 'someday' || fromBoardId === 'scheduled');
   }
@@ -5247,15 +5282,25 @@
   }
 
   // 도착 자리가 지금 사용자 눈에 보이나 — 목록이 펼쳐져 있고(접힌 구역/lupin 뒷면/focus 화면이
-  // 아님) 화면 안에 있어야 함. 새 항목은 목록 맨 아래에 붙으므로 목록 아래쪽이 보이는지로 판단.
+  // 아님) 화면 안에 있어야 함. 그려지는 곳은 저장 보드와 다를 수 있다(moveArrivalList).
   function isMoveDestinationVisible(toBoardId, task) {
-    if (toBoardId === 'scheduled' && task.scheduledDate && daysUntilDue(task.scheduledDate) > PRAY_LATER_DAYS) return false; // done 패널에만 있음
-    if (toBoardId === 'waiting' && isLupinOpen()) return false;
-    const listEl = getListEl(toBoardId);
+    const arrival = moveArrivalList(toBoardId, task);
+    if (arrival === 'upcoming') {
+      // 리갈패드 "not my problem... yet" — 패널이 열려 있고 그 목록이 화면 안일 때만
+      if (!archivePanelEl || !archivePanelEl.classList.contains('open') || (upcomingBackEl && !upcomingBackEl.hidden)) return false;
+      const listEl = archiveUpcomingEl;
+      if (!listEl || listEl.offsetParent === null) return false;
+      const r = listEl.getBoundingClientRect();
+      return r.width > 0 && r.bottom > 40 && r.top < window.innerHeight - 40;
+    }
+    if (arrival === 'waiting' && isLupinOpen()) return false;
+    const listEl = getListEl(arrival);
     if (!listEl || listEl.offsetParent === null) return false;
-    // 새 항목은 목록 맨 아래에 붙으니, 목록이 보이는 것만으로는 부족하고 그 아래에 항목 하나
-    // 들어갈 자리(약 70px)까지 화면 안이어야 함.
     const r = listEl.getBoundingClientRect();
+    // 수행일이 오늘인 항목은 gotta do 위쪽 본목록에 섞인다. 그 외(지난 수행일의 oops,
+    // 새 항목)는 목록 아래에 붙으므로 아래쪽에 한 줄 들어갈 자리가 보여야 한다.
+    const atTop = arrival === 'today' && task && task.scheduledDate === todayStr();
+    if (atTop) return r.width > 0 && r.top < window.innerHeight - 70 && r.bottom > 40;
     return r.width > 0 && r.bottom > 40 && r.bottom + 70 < window.innerHeight;
   }
 
@@ -5272,7 +5317,7 @@
       srcLi.style.setProperty('--move-out-dur', outMs + 'ms');
       srcLi.classList.add('move-out');
     }
-    const toastText = MOVE_TO_LABEL[toBoardId] + ' 옮겼어요';
+    const toastText = moveArrivalPhrase(toBoardId, task) + ' 옮겼어요';
     if (!visible) showToast(toastText);
     setTimeout(() => {
       if (visible && !edit) moveHighlight = { id, mode: 'wiggle' };
@@ -5281,8 +5326,9 @@
       if (edit) {
         revealTask(toBoardId, id);
       } else if (visible) {
-        // 보일 거라고 봤는데 실제로 안 보이면(화면 밖 등) 알림으로 대신 알림
-        const li = findTaskLi(id);
+        // 보일 거라고 봤는데 실제로 안 보이면(화면 밖 등) 알림으로 대신 알림.
+        // 7일째부터인 항목은 .task-item이 아니라 리갈패드의 .archive-item으로 그려진다.
+        const li = findTaskLi(id) || document.querySelector('.archive-item[data-id="' + id + '"]');
         if (!li || li.offsetParent === null || !isElementInViewport(li)) showToast(toastText);
       }
     }, outMs);
